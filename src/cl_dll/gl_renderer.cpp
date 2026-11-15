@@ -83,6 +83,7 @@ cvar_t *rc_gpumodels;	// ReCoF (B287 step 4): studio models moved and lit by a v
 cvar_t *rc_dlightcull;	// ReCoF (B291): skip dynamic lights that cannot reach the screen
 cvar_t *rc_bmodelcull;	// ReCoF (B354): skip the faces of brush entities outside the view
 cvar_t *rc_worldbatch;	// ReCoF (B195): draw runs of world polygons in one call
+cvar_t *rc_worldsort;	// ReCoF (B355): the world's first pass grouped by texture and lightmap
 cvar_t *rc_lightshader;	// ReCoF (B195 step 2): one pass dynamic lights on the world through a vertex shader
 
 int		norm_cubemap_id = 0;
@@ -353,6 +354,66 @@ int IsEntityTransparent(cl_entity_t *e)
 
 bool RcFaceOutsideView (msurface_t *s, const float *origin);	// gl_rsurf.cpp (B354)
 
+//=========================
+// ReCoF (B355): rc_worldsort 1 keeps the faces of the world's first pass (the BSP walk and the static brush entities
+// drawn with it) and draws them at the end of it grouped by what they bind: bumped or not, their texture, their
+// lightmap page. In the walk's order texture and lightmap change from almost one face to the next, and each change
+// ends a batch of B195 and costs the driver a draw. The faces are opaque or alpha tested and are drawn with the
+// depth test, so the picture is the same; only the order the card fills them in changes. The world's faces never
+// overlap, nor do one entity's, but an entity's face can lie on a world face or another entity's (a sign flush on a
+// wall), and then the one drawn last wins the equal depth: the world comes first and the entities after it in the
+// order they were drawn, each sorted within itself, as before
+//=========================
+#define RC_WORLDSORT_MAX	16384
+
+struct RcWorldSort_t
+{
+	unsigned __int64	key;
+	msurface_t			*surf;
+	cl_entity_t			*ent;	// R_TextureAnimation reads the entity's frame
+};
+
+static RcWorldSort_t	s_RcWorldSort[RC_WORLDSORT_MAX];
+static int				s_iRcWorldSort;
+static int				s_iRcWorldSorting;
+static int				s_iRcWorldSortEnt;	// 0 for the world, then each static entity in turn
+
+static int RcWorldSortCompare( const void *a, const void *b )
+{
+	unsigned __int64 x = ( (const RcWorldSort_t *)a )->key, y = ( (const RcWorldSort_t *)b )->key;
+	return ( x < y ) ? -1 : ( x > y ) ? 1 : 0;
+}
+
+static void RcWorldSortAdd( msurface_t *surf )
+{
+	if ( !s_iRcWorldSorting || s_iRcWorldSort >= RC_WORLDSORT_MAX )
+	{
+		DrawPolyFirstPass( surf );
+		return;
+	}
+
+	unsigned __int64 bumped = ( surf->flags & SURF_BUMPREADY ) ? 0 : 1;
+	RcWorldSort_t *e = &s_RcWorldSort[s_iRcWorldSort++];
+	e->key = ( (unsigned __int64)s_iRcWorldSortEnt << 41 ) | ( bumped << 40 ) |
+		( (unsigned __int64)(DWORD)surf->texinfo->texture << 8 ) | ( surf->lightmaptexturenum & 0xFF );
+	e->surf = surf;
+	e->ent = currententity;
+}
+
+static void RcWorldSortDraw( void )
+{
+	cl_entity_t *saved = currententity;
+	if ( s_iRcWorldSort > 1 )
+		qsort( s_RcWorldSort, s_iRcWorldSort, sizeof( s_RcWorldSort[0] ), RcWorldSortCompare );
+	for ( int i = 0; i < s_iRcWorldSort; i++ )
+	{
+		currententity = s_RcWorldSort[i].ent;
+		DrawPolyFirstPass( s_RcWorldSort[i].surf );
+	}
+	s_iRcWorldSort = 0;
+	currententity = saved;
+}
+
 void R_DrawBrushModel (cl_entity_t *e, int onlyfirstpass)
 {
 //	int			j, k;
@@ -466,6 +527,11 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 	int cullfaces = !rotated && rc_bmodelcull && rc_bmodelcull->value && clmodel->nummodelsurfaces >= 8 &&
 		e->curstate.renderfx != 70 && e->curstate.renderfx != 137 && e->curstate.renderfx != 184;
 
+	// ReCoF (B355): a static entity drawn with the world's first pass, with no state of its own, joins its sort
+	int sortfaces = onlyfirstpass && s_iRcWorldSorting && e->curstate.rendermode == kRenderNormal;
+	if (sortfaces && s_iRcWorldSortEnt < 0xFFFF)
+		s_iRcWorldSortEnt++;
+
 	RcBatchBegin();	// ReCoF (B195)
 	for (i=0 ; i<clmodel->nummodelsurfaces ; i++, psurf++)
 	{
@@ -478,7 +544,10 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 			if (cullfaces && RcFaceOutsideView(psurf, e->origin))	// ReCoF (B354)
 				continue;
 			psurf->visframe = framecount;
-			DrawPolyFirstPass(psurf);
+			if (sortfaces)
+				RcWorldSortAdd(psurf);	// ReCoF (B355): drawn with the world's at the end of its first pass
+			else
+				DrawPolyFirstPass(psurf);
 		}
 	}
 	RcBatchEnd();	// ReCoF (B195)
@@ -636,7 +705,7 @@ void RecursiveDrawWorld (mnode_t *node)
 					continue;
 				}
 
-				DrawPolyFirstPass(surf);
+				RcWorldSortAdd(surf);	// ReCoF (B355): DrawPolyFirstPass now or at the end of the first pass
 			}
 		}
 	}
@@ -755,6 +824,9 @@ void DrawBump()
 	s_bWallhack = RcWallhack( &s_flWallhackAlpha, &s_bWallhackAdditive );	// ReCoF (B317)
 	s_pWallhackChain = NULL;
 	PrepareFirstPass();
+	s_iRcWorldSorting = rc_worldsort && rc_worldsort->value;	// ReCoF (B355)
+	s_iRcWorldSort = 0;
+	s_iRcWorldSortEnt = 0;
 	RcBatchBegin();	// ReCoF (B195)
 	RecursiveDrawWorld (world->nodes);
 	RcBatchEnd();	// ReCoF (B195)
@@ -766,8 +838,23 @@ void DrawBump()
 	for (k = 0; k < numrenderents; k++)
 	{
 		if (!IsEntityMoved(renderents[k])/* && !IsEntityTransparent(renderents[k])*/)
+		{
+			// ReCoF (B355): an alpha tested entity draws at once, so the faces kept before it are drawn first
+			if (s_iRcWorldSort && renderents[k]->curstate.rendermode != kRenderNormal)
+			{
+				RcBatchBegin();
+				RcWorldSortDraw();
+				RcBatchEnd();
+			}
 			R_DrawBrushModel (renderents[k], TRUE);
+		}
 	}
+
+	// ReCoF (B355): the faces kept by rc_worldsort
+	RcBatchBegin();
+	RcWorldSortDraw();
+	RcBatchEnd();
+	s_iRcWorldSorting = 0;
 	RcProf_Pop();
 
 	RcProf_Push( RCP_WORLD_BUMP );
@@ -1410,6 +1497,7 @@ void RendererInit()
 	rc_dlightcull = gEngfuncs.pfnRegisterVariable( "rc_dlightcull", "1", FCVAR_ARCHIVE );	// ReCoF (B291)
 	rc_bmodelcull = gEngfuncs.pfnRegisterVariable( "rc_bmodelcull", "1", FCVAR_ARCHIVE );	// ReCoF (B354)
 	rc_worldbatch = gEngfuncs.pfnRegisterVariable( "rc_worldbatch", "1", FCVAR_ARCHIVE );	// ReCoF (B195)
+	rc_worldsort = gEngfuncs.pfnRegisterVariable( "rc_worldsort", "1", FCVAR_ARCHIVE );	// ReCoF (B355)
 	rc_lightshader = gEngfuncs.pfnRegisterVariable( "rc_lightshader", "1", FCVAR_ARCHIVE );	// ReCoF (B195 step 2)
 
 	gEngfuncs.pfnAddCommand ("dumptextures", DumpTextures);
