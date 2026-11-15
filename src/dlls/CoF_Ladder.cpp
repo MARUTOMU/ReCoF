@@ -73,7 +73,8 @@ IMPLEMENT_SAVERESTORE( CRcHLLadder, CBaseEntity );
 
 LINK_ENTITY_TO_CLASS( rc_hl_ladder, CRcHLLadder );
 
-// the test of PM_InRcLadder
+// the test of PM_InRcLadder: on the climber's side, only the last unit before their column, 8 units before the
+// near side (B358)
 BOOL CRcHLLadder::Holds( CBaseEntity *pPlayer )
 {
 	Vector vecDelta = pPlayer->pev->origin - pev->origin;
@@ -82,7 +83,9 @@ BOOL CRcHLLadder::Holds( CBaseEntity *pPlayer )
 
 	UTIL_MakeVectorsPrivate( pev->angles, vecForward, vecRight, NULL );
 
-	return fabs( DotProduct( vecDelta, vecForward ) ) < pev->controller[0] + pPlayer->pev->maxs.x
+	float flDepth = DotProduct( vecDelta, vecForward );
+
+	return flDepth > -( pev->controller[0] + 8 + 1 ) && flDepth < pev->controller[0] + pPlayer->pev->maxs.x
 		&& fabs( DotProduct( vecDelta, vecRight ) ) < pev->controller[1] + pPlayer->pev->maxs.y
 		&& vecDelta.z + pPlayer->pev->maxs.z > -flHalfHeight && vecDelta.z + pPlayer->pev->mins.z < flHalfHeight;
 }
