@@ -1572,6 +1572,9 @@ void Host_SaveAgeList( const char *pName, int count )
 	}
 }
 
+// ReCoF (B361): the physinfo key of Half-Life movement (rc_hlmovement, hl.dll), const so it goes to .rdata (B252)
+static const char rc_szHLMovementKey[] = "hlm";
+
 /*
 ==================
 Host_ValidSave
@@ -1583,7 +1586,10 @@ int Host_ValidSave( void )
 	if ( cmd_source != src_command )
 		return 0;
 
-	if ( !g_bSaveAllowed_guess )
+	// ReCoF (B361): in Half-Life movement (the player's physinfo "hlm", which pm_shared moves by) the game saves
+	// anywhere, as Half-Life does: save <name>, and the quick save. BunnymodXT finds this function by the test of
+	// cmd_source above, which stays as it was
+	if ( !g_bSaveAllowed_guess && !( sv.active && svs.clients && Q_atoi( Info_ValueForKey( svs.clients->physinfo, rc_szHLMovementKey ) ) ) )
 	{
 		Con_Printf( "Use save points to save your progress.\n" );
 		return 0;
