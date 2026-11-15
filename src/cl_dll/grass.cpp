@@ -272,6 +272,22 @@ void UpdateGrassSpritePosition( grass_type_t *t, grass_sprite_t *s, const vec3_t
 	}
 }
 
+// ReCoF (B356): rc_fxbatch 1 draws a grass type's visible sprites in one Begin/End, opened before the first one
+// (RcGrassBegin) and closed after the last, instead of a Begin/End and a color between them for each sprite. The same
+// calls in the same order, the colors set inside the block
+extern cvar_t *rc_fxbatch;	// gl_renderer.cpp
+static int s_iRcGrassBatch;		// drawing a type with rc_fxbatch
+static int s_iRcGrassBegun;		// its Begin has been issued
+
+static void RcGrassBegin( void )
+{
+	if (s_iRcGrassBatch && !s_iRcGrassBegun)
+	{
+		gEngfuncs.pTriAPI->Begin( TRI_QUADS );
+		s_iRcGrassBegun = 1;
+	}
+}
+
 void DrawSpriteFacingPlayer( grass_sprite_t *s, grass_type_t *t, const vec3_t &playerpos, float alpha )
 {
 	vec3_t toPlayer; 
@@ -283,8 +299,10 @@ void DrawSpriteFacingPlayer( grass_sprite_t *s, grass_type_t *t, const vec3_t &p
 	toPlayer[1] *= t->sprhalfwidth * s->hscale;
 	float sprheight = t->sprheight * s->vscale;
 
+	RcGrassBegin();	// ReCoF (B356)
 	gEngfuncs.pTriAPI->Color4f( s->lightcolor[0], s->lightcolor[1], s->lightcolor[2], alpha );
-	gEngfuncs.pTriAPI->Begin( TRI_QUADS );
+	if (!s_iRcGrassBatch)
+		gEngfuncs.pTriAPI->Begin( TRI_QUADS );
 
 		gEngfuncs.pTriAPI->TexCoord2f( 0, 0 );
 		gEngfuncs.pTriAPI->Vertex3f( s->pos[0]-toPlayer[1], s->pos[1]+toPlayer[0], s->pos[2]+sprheight );
@@ -298,7 +316,8 @@ void DrawSpriteFacingPlayer( grass_sprite_t *s, grass_type_t *t, const vec3_t &p
 		gEngfuncs.pTriAPI->TexCoord2f( 1, 0 );
 		gEngfuncs.pTriAPI->Vertex3f( s->pos[0]+toPlayer[1], s->pos[1]-toPlayer[0], s->pos[2]+sprheight );
 	
-	gEngfuncs.pTriAPI->End();
+	if (!s_iRcGrassBatch)
+		gEngfuncs.pTriAPI->End();
 }
 
 void DrawSpriteParallel( grass_sprite_t *s, grass_type_t *t, const vec3_t &vecside, float alpha )
@@ -306,8 +325,10 @@ void DrawSpriteParallel( grass_sprite_t *s, grass_type_t *t, const vec3_t &vecsi
 	vec3_t temp = vecside * (t->sprhalfwidth * s->hscale);
 	float sprheight = t->sprheight * s->vscale;
 
+	RcGrassBegin();	// ReCoF (B356)
 	gEngfuncs.pTriAPI->Color4f( s->lightcolor[0], s->lightcolor[1], s->lightcolor[2], alpha );
-	gEngfuncs.pTriAPI->Begin( TRI_QUADS );
+	if (!s_iRcGrassBatch)
+		gEngfuncs.pTriAPI->Begin( TRI_QUADS );
 
 		gEngfuncs.pTriAPI->TexCoord2f( 0, 0 );
 		gEngfuncs.pTriAPI->Vertex3f( s->pos[0]-temp[0], s->pos[1]-temp[1], s->pos[2]+sprheight );
@@ -321,7 +342,8 @@ void DrawSpriteParallel( grass_sprite_t *s, grass_type_t *t, const vec3_t &vecsi
 		gEngfuncs.pTriAPI->TexCoord2f( 1, 0 );
 		gEngfuncs.pTriAPI->Vertex3f( s->pos[0]+temp[0], s->pos[1]+temp[1], s->pos[2]+sprheight );
 	
-	gEngfuncs.pTriAPI->End();
+	if (!s_iRcGrassBatch)
+		gEngfuncs.pTriAPI->End();
 }
 
 void GrassDraw()
@@ -362,6 +384,8 @@ void GrassDraw()
 
 			grass_sprite_t *s = &grass_sprites[t->startindex];
 
+			s_iRcGrassBatch = rc_fxbatch && rc_fxbatch->value;	// ReCoF (B356)
+			s_iRcGrassBegun = 0;
 			switch(t->mode)
 			{
 			default:
@@ -392,6 +416,9 @@ void GrassDraw()
 				}
 				break;
 			}
+			if (s_iRcGrassBegun)
+				gEngfuncs.pTriAPI->End();	// ReCoF (B356)
+			s_iRcGrassBatch = s_iRcGrassBegun = 0;
 		}
 	} // grass types
 }

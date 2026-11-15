@@ -84,6 +84,7 @@ cvar_t *rc_dlightcull;	// ReCoF (B291): skip dynamic lights that cannot reach th
 cvar_t *rc_bmodelcull;	// ReCoF (B354): skip the faces of brush entities outside the view
 cvar_t *rc_worldbatch;	// ReCoF (B195): draw runs of world polygons in one call
 cvar_t *rc_worldsort;	// ReCoF (B355): the world's first pass grouped by texture and lightmap
+cvar_t *rc_fxbatch;	// ReCoF (B356): rain, snow and grass in one Begin/End each
 cvar_t *rc_lightshader;	// ReCoF (B195 step 2): one pass dynamic lights on the world through a vertex shader
 
 int		norm_cubemap_id = 0;
@@ -1498,6 +1499,7 @@ void RendererInit()
 	rc_bmodelcull = gEngfuncs.pfnRegisterVariable( "rc_bmodelcull", "1", FCVAR_ARCHIVE );	// ReCoF (B354)
 	rc_worldbatch = gEngfuncs.pfnRegisterVariable( "rc_worldbatch", "1", FCVAR_ARCHIVE );	// ReCoF (B195)
 	rc_worldsort = gEngfuncs.pfnRegisterVariable( "rc_worldsort", "1", FCVAR_ARCHIVE );	// ReCoF (B355)
+	rc_fxbatch = gEngfuncs.pfnRegisterVariable( "rc_fxbatch", "1", FCVAR_ARCHIVE );	// ReCoF (B356)
 	rc_lightshader = gEngfuncs.pfnRegisterVariable( "rc_lightshader", "1", FCVAR_ARCHIVE );	// ReCoF (B195 step 2)
 
 	gEngfuncs.pfnAddCommand ("dumptextures", DumpTextures);

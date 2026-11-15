@@ -429,11 +429,19 @@ extern MemBlock<cl_drip>	g_dripsArray;
 extern MemBlock<cl_rainfx>	g_fxArray;
 extern rain_properties Rain;
 
+// ReCoF (B356): rc_fxbatch 1 puts all the drops in one Begin/End. Each drop was a Begin/End of its own with a Color4f
+// in front of it, and a color set between primitives is what AMD's OpenGL driver charges most for: with the 10000
+// drops a second of c_cof_lake the rain took a fifth of an i3 laptop's frame. The same calls in the same order, the
+// colors now set inside the block (OpenGL allows it), so the same triangles get the same colors
+extern cvar_t *rc_fxbatch;	// gl_renderer.cpp
+
 void DrawRain( void )
 {
 //	if (FirstChainDrip.p_Next == NULL)
 	if (g_dripsArray.IsClear())
 		return; // no drips to draw
+
+	int batch = rc_fxbatch && rc_fxbatch->value;	// ReCoF (B356)
 
 	HSPRITE hsprTexture;
 	const model_s *pTexture;
@@ -464,6 +472,8 @@ void DrawRain( void )
 
 	if ( Rain.weatherMode == 0 )
 	{ // draw rain
+		if (batch && Drip != NULL)
+			gEngfuncs.pTriAPI->Begin( TRI_TRIANGLES );	// ReCoF (B356)
 		while (Drip != NULL)
 		{
 		//	cl_drip* nextdDrip = Drip->p_Next;
@@ -481,7 +491,8 @@ void DrawRain( void )
 
 		// --- draw triangle --------------------------
 			gEngfuncs.pTriAPI->Color4f( 1.0, 1.0, 1.0, Drip->alpha );
-			gEngfuncs.pTriAPI->Begin( TRI_TRIANGLES );
+			if (!batch)
+				gEngfuncs.pTriAPI->Begin( TRI_TRIANGLES );
 
 				gEngfuncs.pTriAPI->TexCoord2f( 0, 0 );
 				gEngfuncs.pTriAPI->Vertex3f( Drip->origin[0]-toPlayer.y - shiftX, Drip->origin[1]+toPlayer.x - shiftY,
@@ -495,13 +506,16 @@ void DrawRain( void )
 				gEngfuncs.pTriAPI->Vertex3f( Drip->origin[0]+toPlayer.y - shiftX, Drip->origin[1]-toPlayer.x - shiftY,
 					Drip->origin[2]+DRIP_SPRITE_HALFHEIGHT);
 	
-			gEngfuncs.pTriAPI->End();
+			if (!batch)
+				gEngfuncs.pTriAPI->End();
 		// --- draw triangle end ----------------------
 
 		//	Drip = nextdDrip;
 			g_dripsArray.MoveNext();
 			Drip = g_dripsArray.GetCurrent();
 		}
+		if (batch)
+			gEngfuncs.pTriAPI->End();	// ReCoF (B356)
 	}
 	else
 	{ // draw snow
@@ -511,6 +525,8 @@ void DrawRain( void )
 		float matrix[3][4];
 		AngleMatrix (normal, matrix);	// calc view matrix
 
+		if (batch && Drip != NULL)
+			gEngfuncs.pTriAPI->Begin( TRI_QUADS );	// ReCoF (B356)
 		while (Drip != NULL)
 		{
 		//	cl_drip* nextdDrip = Drip->p_Next;
@@ -525,7 +541,8 @@ void DrawRain( void )
 					
 		// --- draw quad --------------------------
 			gEngfuncs.pTriAPI->Color4f( 1.0, 1.0, 1.0, alpha );
-			gEngfuncs.pTriAPI->Begin( TRI_QUADS );
+			if (!batch)
+				gEngfuncs.pTriAPI->Begin( TRI_QUADS );
 
 				gEngfuncs.pTriAPI->TexCoord2f( 0, 0 );
 				SetPoint(0, SNOW_SPRITE_HALFSIZE ,SNOW_SPRITE_HALFSIZE, matrix);
@@ -539,13 +556,16 @@ void DrawRain( void )
 				gEngfuncs.pTriAPI->TexCoord2f( 1, 0 );
 				SetPoint(0, -SNOW_SPRITE_HALFSIZE ,SNOW_SPRITE_HALFSIZE, matrix);
 				
-			gEngfuncs.pTriAPI->End();
+			if (!batch)
+				gEngfuncs.pTriAPI->End();
 		// --- draw quad end ----------------------
 
 		//	Drip = nextdDrip;
 			g_dripsArray.MoveNext();
 			Drip = g_dripsArray.GetCurrent();
 		}
+		if (batch)
+			gEngfuncs.pTriAPI->End();	// ReCoF (B356)
 	}
 }
 
