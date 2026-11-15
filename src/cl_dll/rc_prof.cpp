@@ -322,6 +322,7 @@ static void RcProfLogLine( void )
 //-----------------------------------------------------------------------------
 #include "rc_version.h"
 #include <intrin.h>
+#include <stdarg.h>
 #include <time.h>
 
 typedef struct
@@ -378,14 +379,13 @@ static DWORD		s_dwPerfSecFaults;
 #define RC_STALL_WORDS		1024	// 4 KB: a driver's wait sits deep under the game's code
 #define RC_STALL_PER_FRAME	6
 
+#define RC_STALL_TEXT		1024
+
 struct RcStallSample_t
 {
 	volatile LONG	seq;		// the frame it was taken in, written last
 	float			ms;			// how long the frame had run
-	float			stopMs;		// B350: how long the main thread took to stop
-	DWORD			eip;
-	DWORD			stack[RC_STALL_WORDS];
-	DWORD			words;
+	char			text[RC_STALL_TEXT];	// B353: where the main thread was, named by the sampler
 };
 
 static RcStallSample_t		s_Stall[RC_STALL_SLOTS];
@@ -403,6 +403,138 @@ static volatile float		s_flLateMs;
 static volatile LONG		s_lLateCount;		// late wakes since the last second's line
 static volatile float		s_flLateMax;
 
+// B353: a sample is named by the sampler thread as soon as it is taken, and the main thread only prints the text when
+// the frame turns out a STUTTER. Naming it there meant asking Windows about up to 1024 stack words a sample
+// (VirtualQuery), up to six samples a stutter, and on slow computers that took 10 to 40 ms, as the query waits while a
+// driver's thread changes the process's memory: the time went into the next frame, which then stuttered as well. The
+// sampler keeps what Windows said of each region met in a sample, sorted by address, as most words fall in the same
+// hundred or so regions (the stack, the heaps, the modules' sections, the empty space between them)
+#define RC_STALL_REGIONS	256
+#define RC_STALL_NAMES		32
+
+struct RcStallRegion_t
+{
+	DWORD	base, end;
+	DWORD	module;		// the base of the image whose code it is, or 0
+};
+
+static RcStallRegion_t	s_StallRegion[RC_STALL_REGIONS];
+static int				s_iStallRegions;
+static DWORD			s_dwStallNameBase[RC_STALL_NAMES];
+static char				s_szStallName[RC_STALL_NAMES][32];
+static int				s_iStallNames;
+
+// the base of the module whose code holds an address, or 0, as rc_crash.cpp tests the candidates on a stack
+static DWORD RcStallModule( DWORD dwAddress )
+{
+	int lo = 0, hi = s_iStallRegions - 1;
+	while ( lo <= hi )
+	{
+		int mid = ( lo + hi ) / 2;
+		const RcStallRegion_t *r = &s_StallRegion[mid];
+		if ( dwAddress < r->base )
+			hi = mid - 1;
+		else if ( dwAddress > r->end - 1 )
+			lo = mid + 1;
+		else
+			return r->module;
+	}
+
+	MEMORY_BASIC_INFORMATION mbi;
+	if ( !VirtualQuery( (LPCVOID)dwAddress, &mbi, sizeof( mbi ) ) )
+		return 0;
+	DWORD module = 0;
+	if ( mbi.State == MEM_COMMIT && mbi.Type == MEM_IMAGE &&
+		( mbi.Protect & ( PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY ) ) )
+		module = (DWORD)mbi.AllocationBase;
+
+	// lo is where it goes; the regions Windows gives do not overlap
+	DWORD base = (DWORD)mbi.BaseAddress, end = base + (DWORD)mbi.RegionSize;
+	if ( s_iStallRegions < RC_STALL_REGIONS && end > base && dwAddress >= base && dwAddress < end )
+	{
+		memmove( &s_StallRegion[lo + 1], &s_StallRegion[lo], ( s_iStallRegions - lo ) * sizeof( s_StallRegion[0] ) );
+		s_StallRegion[lo].base = base;
+		s_StallRegion[lo].end = end;
+		s_StallRegion[lo].module = module;
+		s_iStallRegions++;
+	}
+	return module;
+}
+
+static void RcStallName( DWORD dwAddress, DWORD dwModule, char *pszOut, size_t size )
+{
+	const char *pszName = NULL;
+	for ( int i = 0; dwModule && i < s_iStallNames; i++ )
+	{
+		if ( s_dwStallNameBase[i] == dwModule )
+		{
+			pszName = s_szStallName[i];
+			break;
+		}
+	}
+
+	char szPath[MAX_PATH];
+	if ( dwModule && !pszName && GetModuleFileNameA( (HMODULE)dwModule, szPath, sizeof( szPath ) ) )
+	{
+		pszName = strrchr( szPath, '\\' );
+		pszName = pszName ? pszName + 1 : szPath;
+		if ( s_iStallNames < RC_STALL_NAMES )
+		{
+			s_dwStallNameBase[s_iStallNames] = dwModule;
+			strncpy( s_szStallName[s_iStallNames], pszName, sizeof( s_szStallName[0] ) - 1 );
+			s_szStallName[s_iStallNames][sizeof( s_szStallName[0] ) - 1] = 0;
+			s_iStallNames++;
+		}
+	}
+
+	if ( pszName )
+		_snprintf( pszOut, size, "%s+0x%X", pszName, dwAddress - dwModule );
+	else
+		_snprintf( pszOut, size, "0x%08X", dwAddress );
+	pszOut[size - 1] = 0;
+}
+
+static void RcStallAdd( char *pszOut, size_t size, const char *pszFormat, ... )
+{
+	size_t len = strlen( pszOut );
+	if ( len + 1 >= size )
+		return;
+	va_list args;
+	va_start( args, pszFormat );
+	_vsnprintf( pszOut + len, size - len - 1, pszFormat, args );
+	va_end( args );
+	pszOut[size - 1] = 0;
+}
+
+// the text of a sample: the instruction the main thread was at and the code addresses found on its stack
+static void RcStallDescribe( char *pszOut, size_t size, DWORD eip, const DWORD *stack, DWORD words, float stopMs )
+{
+	char name[64];
+
+	// modules can come and go between samples
+	s_iStallRegions = s_iStallNames = 0;
+	pszOut[0] = 0;
+
+	RcStallName( eip, RcStallModule( eip ), name, sizeof( name ) );
+	RcStallAdd( pszOut, size, "%s", name );
+	if ( stopMs >= 1.0f )	// B350
+		RcStallAdd( pszOut, size, " (stopped after %.0f ms, inside Windows or a driver)", (double)stopMs );
+	int found = 0;
+	DWORD last = eip;
+	for ( DWORD w = 0; w < words && found < 20; w++ )
+	{
+		if ( stack[w] == last )
+			continue;
+		DWORD module = RcStallModule( stack[w] );
+		if ( !module )
+			continue;
+		last = stack[w];
+		RcStallName( stack[w], module, name, sizeof( name ) );
+		RcStallAdd( pszOut, size, " < %s", name );
+		found++;
+	}
+}
+
 static DWORD WINAPI RcStallThread( LPVOID )
 {
 	LARGE_INTEGER freq;
@@ -411,6 +543,7 @@ static DWORD WINAPI RcStallThread( LPVOID )
 	LONG lastSeq = -1;
 	int taken = 0;
 	LONGLONG lastQpc = 0;
+	DWORD stack[RC_STALL_WORDS];
 
 	while ( !s_lStallQuit )
 	{
@@ -471,15 +604,15 @@ static DWORD WINAPI RcStallThread( LPVOID )
 		{
 			// returns once the thread has really stopped
 			if ( GetThreadContext( s_hStallMain, &context ) )
-				ReadProcessMemory( GetCurrentProcess(), (LPCVOID)context.Esp, s->stack, sizeof( s->stack ), &read );
+				ReadProcessMemory( GetCurrentProcess(), (LPCVOID)context.Esp, stack, sizeof( stack ), &read );
 			QueryPerformanceCounter( &stopped );
 			ResumeThread( s_hStallMain );
 		}
 
 		s->ms = (float)ms;
-		s->stopMs = (float)( ( stopped.QuadPart - now.QuadPart ) * tickMs );
-		s->eip = context.Eip;
-		s->words = (DWORD)( read / sizeof( DWORD ) );
+		// B353: named here, with the main thread running again (Windows' loader is never asked while it is stopped)
+		RcStallDescribe( s->text, sizeof( s->text ), context.Eip, stack, (DWORD)( read / sizeof( DWORD ) ),
+			(float)( ( stopped.QuadPart - now.QuadPart ) * tickMs ) );
 		InterlockedExchange( &s->seq, seq );
 		taken++;
 		lastQpc = now.QuadPart;
@@ -524,35 +657,9 @@ static void RcStallStop( void )
 	}
 }
 
-// an address inside the code of a loaded module, as rc_crash.cpp tests the candidates on a stack
-static bool RcStallIsCode( DWORD dwAddress )
-{
-	MEMORY_BASIC_INFORMATION mbi;
-	if ( !VirtualQuery( (LPCVOID)dwAddress, &mbi, sizeof( mbi ) ) || mbi.State != MEM_COMMIT || mbi.Type != MEM_IMAGE )
-		return false;
-	return ( mbi.Protect & ( PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY ) ) != 0;
-}
-
-static void RcStallName( DWORD dwAddress, char *pszOut, size_t size )
-{
-	HMODULE hModule = NULL;
-	char szPath[MAX_PATH];
-	if ( GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		(LPCSTR)dwAddress, &hModule ) && GetModuleFileNameA( hModule, szPath, sizeof( szPath ) ) )
-	{
-		const char *pszName = strrchr( szPath, '\\' );
-		_snprintf( pszOut, size, "%s+0x%X", pszName ? pszName + 1 : szPath, dwAddress - (DWORD)hModule );
-	}
-	else
-		_snprintf( pszOut, size, "0x%08X", dwAddress );
-	pszOut[size - 1] = 0;
-}
-
 // the samples of the frame that just ended, under its STUTTER line; the others are let go
 static void RcStallWrite( LONG seq, bool bPrint )
 {
-	char name[MAX_PATH];
-
 	for ( int i = 0; i < RC_STALL_SLOTS; i++ )
 	{
 		RcStallSample_t *s = &s_Stall[i];
@@ -560,24 +667,7 @@ static void RcStallWrite( LONG seq, bool bPrint )
 			continue;
 
 		if ( bPrint )
-		{
-			RcStallName( s->eip, name, sizeof( name ) );
-			fprintf( s_pPerf, "    at %.1f ms: %s", s->ms, name );
-			if ( s->stopMs >= 1.0f )	// B350
-				fprintf( s_pPerf, " (stopped after %.0f ms, inside Windows or a driver)", (double)s->stopMs );
-			int found = 0;
-			DWORD last = s->eip;
-			for ( DWORD w = 0; w < s->words && found < 20; w++ )
-			{
-				if ( s->stack[w] == last || !RcStallIsCode( s->stack[w] ) )
-					continue;
-				last = s->stack[w];
-				RcStallName( s->stack[w], name, sizeof( name ) );
-				fprintf( s_pPerf, " < %s", name );
-				found++;
-			}
-			fprintf( s_pPerf, "\n" );
-		}
+			fprintf( s_pPerf, "    at %.1f ms: %s\n", s->ms, s->text );	// B353: named by the sampler
 		InterlockedExchange( &s->seq, -1 );
 	}
 }
