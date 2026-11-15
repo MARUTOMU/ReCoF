@@ -382,6 +382,7 @@ struct RcStallSample_t
 {
 	volatile LONG	seq;		// the frame it was taken in, written last
 	float			ms;			// how long the frame had run
+	float			stopMs;		// B350: how long the main thread took to stop
 	DWORD			eip;
 	DWORD			stack[RC_STALL_WORDS];
 	DWORD			words;
@@ -394,7 +395,9 @@ static LONGLONG				s_llPerfFrameStartQpc;	// when the frame now running began
 static volatile LONG		s_lStallQuit;
 static HANDLE				s_hStallThread, s_hStallMain;
 // B349: the sampler, at the highest priority, sleeps 2 ms at a time; when it wakes 8 ms or more late the system (a
-// driver's interrupt or DPC, or the BIOS) held the processors, and the main thread was most likely held with it
+// driver's interrupt or DPC, or the BIOS) held the processors, and the main thread was most likely held with it. B350: the
+// late wake is timed from the Sleep call itself, as the sampler can wait long for the main thread to stop when that thread
+// is inside Windows or a driver (a suspend only lands where the kernel allows it), and that wait is not the system's
 static volatile LONG		s_lLateSeq = -1;		// the frame of the longest late wake below
 static volatile float		s_flLateMs;
 static volatile LONG		s_lLateCount;		// late wakes since the last second's line
@@ -407,31 +410,28 @@ static DWORD WINAPI RcStallThread( LPVOID )
 	double tickMs = 1000.0 / (double)freq.QuadPart;
 	LONG lastSeq = -1;
 	int taken = 0;
-	LONGLONG lastQpc = 0, prevWake = 0;
+	LONGLONG lastQpc = 0;
 
 	while ( !s_lStallQuit )
 	{
+		LARGE_INTEGER slept, woke;
+		QueryPerformanceCounter( &slept );
 		Sleep( 2 );
-
-		LARGE_INTEGER woke;
 		QueryPerformanceCounter( &woke );
-		if ( prevWake )
+
+		double late = ( woke.QuadPart - slept.QuadPart ) * tickMs - 2.0;
+		if ( late >= 8.0 )
 		{
-			double late = ( woke.QuadPart - prevWake ) * tickMs - 2.0;
-			if ( late >= 8.0 )
+			LONG frame = s_lPerfFrameGen / 2;
+			if ( s_lLateSeq != frame || late > s_flLateMs )
 			{
-				LONG frame = s_lPerfFrameGen / 2;
-				if ( s_lLateSeq != frame || late > s_flLateMs )
-				{
-					s_flLateMs = (float)late;
-					s_lLateSeq = frame;
-				}
-				InterlockedIncrement( &s_lLateCount );
-				if ( late > s_flLateMax )
-					s_flLateMax = (float)late;
+				s_flLateMs = (float)late;
+				s_lLateSeq = frame;
 			}
+			InterlockedIncrement( &s_lLateCount );
+			if ( late > s_flLateMax )
+				s_flLateMax = (float)late;
 		}
-		prevWake = woke.QuadPart;
 
 		// the 64-bit start is read between two equal even generations, so never half written
 		LONG gen = s_lPerfFrameGen;
@@ -465,14 +465,19 @@ static DWORD WINAPI RcStallThread( LPVOID )
 		memset( &context, 0, sizeof( context ) );
 		context.ContextFlags = CONTEXT_CONTROL;
 		SIZE_T read = 0;
+		LARGE_INTEGER stopped;
+		stopped.QuadPart = now.QuadPart;
 		if ( SuspendThread( s_hStallMain ) != (DWORD)-1 )
 		{
+			// returns once the thread has really stopped
 			if ( GetThreadContext( s_hStallMain, &context ) )
 				ReadProcessMemory( GetCurrentProcess(), (LPCVOID)context.Esp, s->stack, sizeof( s->stack ), &read );
+			QueryPerformanceCounter( &stopped );
 			ResumeThread( s_hStallMain );
 		}
 
 		s->ms = (float)ms;
+		s->stopMs = (float)( ( stopped.QuadPart - now.QuadPart ) * tickMs );
 		s->eip = context.Eip;
 		s->words = (DWORD)( read / sizeof( DWORD ) );
 		InterlockedExchange( &s->seq, seq );
@@ -558,6 +563,8 @@ static void RcStallWrite( LONG seq, bool bPrint )
 		{
 			RcStallName( s->eip, name, sizeof( name ) );
 			fprintf( s_pPerf, "    at %.1f ms: %s", s->ms, name );
+			if ( s->stopMs >= 1.0f )	// B350
+				fprintf( s_pPerf, " (stopped after %.0f ms, inside Windows or a driver)", (double)s->stopMs );
 			int found = 0;
 			DWORD last = s->eip;
 			for ( DWORD w = 0; w < s->words && found < 20; w++ )
@@ -727,7 +734,9 @@ static void RcPerfHeader( void )
 		"them the main thread was running, its disk reads and page faults, and the parts that took 0.5 ms or more in it. "
 		"Then the buffer swap (average and longest ms) and the share of frames another program's window was in front, "
 		"when the engine sleeps up to 20 ms a frame. System stalls: times the log's own highest-priority thread woke 8 ms "
-		"or more late, when drivers or the BIOS held the processors whatever the game did. "
+		"or more late, when drivers or the BIOS held the processors whatever the game did. Under a STUTTER line, each "
+		"\"at\" line is where the main thread was at that moment of the frame and the code under it; \"stopped after\" "
+		"means it was inside Windows or a driver and could only be looked at once it came out. "
 		"PAUSE lines: a time of pictures without HUD frames (a menu, the inventory, a note, a cutscene or a load), left out "
 		"of the numbers.\n\n" );
 	fflush( s_pPerf );
