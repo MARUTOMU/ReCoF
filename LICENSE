@@ -1,15 +1,19 @@
-DeCoF license
+ReCoF license
 =============
 
-DeCoF holds three kinds of material, each under its own terms.
+ReCoF is built on the source of DeCoF (https://github.com/caixax/DeCoF) and
+keeps DeCoF's license in parts 1 to 3. Part 4 covers the code written for
+ReCoF. The repository holds these kinds of material, each under its own
+terms.
 
 
-1. Tools and documentation written for DeCoF
---------------------------------------------
+1. Tools and documentation written for DeCoF and ReCoF
+------------------------------------------------------
 
-The scripts in tools/ (except the data in tools/symbols/), the documentation
-in docs/ (except the tables of retail names and addresses named in part 3),
-README.md, objdiff.json and tools/units.json are under the MIT License:
+The scripts in tools/ (except the data in tools/symbols/), the files in
+tools/dist_extra/, the documentation in docs/ (except the tables of retail
+names and addresses named in part 3), README.md, objdiff.json and
+tools/units.json are under the MIT License:
 
     MIT License
 
@@ -53,7 +57,8 @@ files (see docs/refs.md).
 3. Code and data reconstructed from the Cry of Fear binaries
 ------------------------------------------------------------
 
-The rest of src/, and the names and addresses of retail functions and data
+The rest of src/ (apart from the code of part 4 and the third-party code
+named there), and the names and addresses of retail functions and data
 in tools/symbols/ and docs/*.csv, reproduce code and facts of the retail
 Cry of Fear binaries. Their copyright belongs to their original authors:
 Team Psykskallar (Cry of Fear), Valve Corporation (the GoldSrc engine, VGUI2
@@ -63,5 +68,29 @@ published for research, preservation and interoperability with a legally
 owned copy of the game.
 
 
-DeCoF is not affiliated with or endorsed by Team Psykskallar or Valve. No
-game assets or retail binaries are part of this repository.
+4. Code written for ReCoF
+-------------------------
+
+The code ReCoF adds to the game is under the MIT License of part 1,
+Copyright (c) 2026 caixax:
+
+  - the files written for ReCoF: src/cl_dll/rc_*, src/dlls/rc_*,
+    src/gameui/Rc*, and any other file whose header says it was written
+    for ReCoF;
+  - every change ReCoF made to the other files of src/ after it was forked
+    from DeCoF. The git history shows each one, and most are marked with a
+    "ReCoF" comment.
+
+Such a change may be reused on its own under the MIT License. A file that
+descends from the Half-Life SDK or Paranoia keeps the terms of part 2 as a
+whole, with ReCoF's changes in it, and code reconstructed from the retail
+binaries stays under part 3 however much of it ReCoF changed.
+
+src/external/ holds third-party code under the licenses that come with it:
+the discord-rpc fork of YaLTeR (Discord's discord-rpc, MIT) and RapidJSON
+(Tencent and Milo Yip, MIT), both submodules, and the Khronos OpenGL headers
+in GL/ and KHR/ (The Khronos Group, MIT).
+
+
+ReCoF and DeCoF are not affiliated with or endorsed by Team Psykskallar or
+Valve. No game assets or retail binaries are part of this repository.

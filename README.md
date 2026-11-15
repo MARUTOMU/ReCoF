@@ -1,5 +1,7 @@
 # ReCoF
 
+[![Downloads](https://img.shields.io/github/downloads/caixax/ReCoF/total?label=downloads&color=blue)](https://github.com/caixax/ReCoF/releases) [![Stable](https://img.shields.io/github/v/release/caixax/ReCoF?label=stable)](https://github.com/caixax/ReCoF/releases/latest) [![Beta](https://img.shields.io/github/v/release/caixax/ReCoF?include_prereleases&label=beta&color=orange)](https://github.com/caixax/ReCoF/releases) [![Launcher](https://img.shields.io/github/v/release/caixax/ReCoF-Launcher?label=launcher&color=blueviolet)](https://github.com/caixax/ReCoF-Launcher/releases/latest) [![Cry of Fear 1.6a](https://img.shields.io/badge/Cry%20of%20Fear-1.6a-8b0000?logo=steam)](https://store.steampowered.com/app/223710/) ![Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+
 Cry of Fear improved version.
 
 ReCoF fixes the bugs of **Cry of Fear** (Steam release, version string `1.6a`) and improves the game, starting from the source of [DeCoF](https://github.com/caixax/DeCoF), the complete matching decompilation of every retail binary: the game DLLs, the engine, the Paranoia renderer, the menus and both launchers.
@@ -93,6 +95,8 @@ The decompilation's own notes (how each compiler was identified, the source work
 
 ## License
 
-See [LICENSE](LICENSE), inherited from DeCoF. The code reconstructed from the Cry of Fear binaries belongs to its original authors, and no rights over it are granted. Code derived from the Half-Life SDK stays under the [Half-Life 1 SDK License](LICENSES/Half-Life-1-SDK.txt), and code derived from Paranoia under Paranoia's terms.
+See [LICENSE](LICENSE), which keeps DeCoF's terms and adds ReCoF's own code. In short: the code written for ReCoF (the `rc_` files, the options and server list pages, and every change ReCoF made to the game's code) and the tools and documentation are under the MIT License. Code derived from the Half-Life SDK stays under the [Half-Life 1 SDK License](LICENSES/Half-Life-1-SDK.txt) (free distribution only), and code derived from Paranoia under Paranoia's terms. The code reconstructed from the Cry of Fear binaries belongs to its original authors, and no rights over it are granted.
+
+If you use ReCoF or DeCoF in your own project, a fork or a mod, please credit them: name ReCoF and DeCoF by caixax and link to https://github.com/caixax/ReCoF in your README or credits. The MIT parts already require that the copyright notice and the license text stay with every copy.
 
 This project is not affiliated with or endorsed by Team Psykskallar or Valve. The repository contains no game assets or retail binaries; you need your own copy of Cry of Fear.
