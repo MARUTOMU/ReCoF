@@ -8,6 +8,7 @@
 #include "util.h"
 #include "cbase.h"
 #include "player.h"
+#include "gamerules.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -38,15 +39,82 @@ static Vector RcVelocityAlong( const Vector &angles, float flSpeed )
 	return gpGlobals->v_forward * flSpeed;
 }
 
+// ReCoF (B359): rc_cutscene_skip. Cry of Fear skips a camera scene when Enter is down (CTriggerCamera::FollowTarget,
+// single player, unless the camera has spawnflag 1024): it sends SkipScene, and client.dll runs the game at
+// host_framerate 2, two seconds a frame behind a black screen, until the view is back on the player (CHud::Redraw).
+// The server reads the key from the keyboard, so it cannot be bound to another; this command does the same for any
+// scene Enter skips, needing nothing. A scene the map keeps from being skipped (1024: 201 of the 458 cameras of the
+// maps, all of c_trainscene's and c_rumpel1's) is fast forwarded instead, with sv_cheats 1 as it is not in the
+// game: host_framerate 0.1, game frames of a tenth of a second as on a computer running at 10 fps (two second
+// frames are what such a scene is kept from), with no frame rate limit, until the camera lets the player go
+#define RC_CUTSCENE_SKIP_FRAME	0.1
+
+extern int gmsgSkipScene;
+bool g_bRcCutsceneSkip = false;	// the fast forward is on (sound.cpp CAmbientGeneric::ToggleUse)
+
+// ends the fast forward: the camera let the player go (CBasePlayer::PostThink), or a map or a save loads
+void RcCutsceneSkipStop( void )
+{
+	if ( !g_bRcCutsceneSkip )
+		return;
+
+	g_bRcCutsceneSkip = false;
+	CVAR_SET_FLOAT( "host_framerate", 0 );
+}
+
+static void RcCutsceneSkip( CBasePlayer *pPlayer )
+{
+	CBaseEntity *pCamera = pPlayer->m_hCurrentCamera;
+	const char *pszMap = STRING( gpGlobals->mapname );
+
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "rc_cutscene_skip works in single player only\n" );
+		return;
+	}
+
+	// the menu's background map runs its cameras as the retail skip leaves them
+	if ( !pCamera || !pPlayer->IsInCutscene() || strstr( pszMap, "game_menu" ) || FStrEq( pszMap, "video_stress_test" ) )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "No camera scene to skip\n" );
+		return;
+	}
+
+	if ( g_bRcCutsceneSkip || CVAR_GET_FLOAT( "host_framerate" ) != 0 )
+		return;	// already skipping
+
+	if ( FClassnameIs( pCamera->pev, "trigger_camera" ) && !( pCamera->pev->spawnflags & 1024 ) )
+	{
+		MESSAGE_BEGIN( MSG_ONE, gmsgSkipScene, NULL, pPlayer->pev );
+		MESSAGE_END();
+		return;
+	}
+
+	if ( !CVAR_GET_FLOAT( "sv_cheats" ) )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "The map keeps this scene from being skipped; with sv_cheats 1, rc_cutscene_skip fast forwards it\n" );
+		return;
+	}
+
+	g_bRcCutsceneSkip = true;
+	CVAR_SET_FLOAT( "host_framerate", RC_CUTSCENE_SKIP_FRAME );
+}
+
 // true when pcmd is one of these commands (run or refused), false to let ClientCommand go on
 bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 {
-	if ( strncmp( pcmd, "rc_ch_", 6 ) && strcmp( pcmd, "rc_set_angles" ) )
+	if ( strncmp( pcmd, "rc_ch_", 6 ) && strcmp( pcmd, "rc_set_angles" ) && strcmp( pcmd, "rc_cutscene_skip" ) )
 		return false;
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)&pEntity->v );
 	if ( !pPlayer )
 		return false;
+
+	if ( FStrEq( pcmd, "rc_cutscene_skip" ) )
+	{
+		RcCutsceneSkip( pPlayer );
+		return true;
+	}
 
 	int argc = CMD_ARGC();
 	entvars_t *pev = pPlayer->pev;

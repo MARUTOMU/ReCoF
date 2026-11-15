@@ -5304,8 +5304,15 @@ void ShiftMonsters( Vector origin )
 	}
 }
 
+extern bool g_bRcCutsceneSkip;	// ReCoF (B359): rc_cutscene_skip, rc_cheats.cpp
+void RcCutsceneSkipStop( void );
+
 void CBasePlayer::PostThink()
 {
+	// ReCoF (B359): the fast forward of rc_cutscene_skip ends when the camera lets the player go
+	if ( g_bRcCutsceneSkip && !IsInCutscene() )
+		RcCutsceneSkipStop();
+
 	if ( m_bInPhoneCall )
 	{
 		if ( m_iPhoneNumberState_guess )
@@ -7260,6 +7267,8 @@ void CBasePlayer::Spawn( void )
 {
 	char CurrentPath[260];
 
+	RcCutsceneSkipStop();	// ReCoF (B359): a new map does not go on fast forwarding
+
 	GetCurrentPath( CurrentPath );
 
 	m_fFaggotTime = gpGlobals->time;
@@ -7606,6 +7615,8 @@ void CBasePlayer::RenewItems(void)
 
 int CBasePlayer::Restore( CRestore &restore )
 {
+	RcCutsceneSkipStop();	// ReCoF (B359): nor does a loaded game
+
 	if ( !CBaseMonster::Restore(restore) )
 		return 0;
 
