@@ -16531,6 +16531,9 @@ bool strstrtolower( char *path, char *convert )
 
 int CBasePlayer::IsDonator( void )
 {
+	if ( rc_dominicanpapi.value )
+		return 1;
+
 	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
 	{
 		if ( m_iNew16a_guess != 0 && m_iNew16a_guess != 3 && m_iNew16a_guess != 4 )
