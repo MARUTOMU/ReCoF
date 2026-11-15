@@ -23,9 +23,11 @@ void RcSpeedrun_Frame( void );
 void RcSpeedrun_Redraw( void );
 
 // rc_crash.cpp (B314): crash and hang reports in crashes\ next to cof.exe. Init installs them (from InitInput, after
-// SteamAPI_Init), Frame is the hang watchdog's heartbeat (from HUD_Frame)
+// SteamAPI_Init), Frame is the hang watchdog's heartbeat (from HUD_Frame), Shutdown ends its threads before client.dll
+// is unloaded (from IN_Shutdown, B351)
 void RcCrash_Init( void );
 void RcCrash_Frame( void );
+void RcCrash_Shutdown( void );
 
 // the run timer's view of the game: the engine's pause flag, the player's health and the map drawn (from
 // V_CalcRefdef), a map loading (from CHud::VidInit)

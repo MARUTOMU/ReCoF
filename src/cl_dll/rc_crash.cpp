@@ -48,6 +48,9 @@ static DWORD				s_dwMainThread;
 static HANDLE				s_hMainThread;
 static DWORD				s_dwReporterThread;
 static HANDLE				s_hCrashEvent;
+static HANDLE				s_hQuitEvent;			// B351: set when the client shuts down
+static HANDLE				s_hReporter, s_hWatchdog;
+static LPTOP_LEVEL_EXCEPTION_FILTER	s_pfnOldFilter;	// the handler before ours, put back at shutdown
 static EXCEPTION_POINTERS	*s_pCrashPointers;
 static DWORD				s_dwCrashThread;
 static volatile LONG		s_lCrashing;
@@ -442,7 +445,10 @@ static void RcReportCrash( void )
 
 static DWORD WINAPI RcReporterThread( LPVOID )
 {
-	WaitForSingleObject( s_hCrashEvent, INFINITE );
+	HANDLE events[2] = { s_hCrashEvent, s_hQuitEvent };
+	if ( WaitForMultipleObjects( 2, events, FALSE, INFINITE ) != WAIT_OBJECT_0 )
+		return 0;	// B351: the client shuts down
+
 	RcReportCrash();
 	TerminateProcess( GetCurrentProcess(), s_pCrashPointers->ExceptionRecord->ExceptionCode );
 	return 0;
@@ -525,7 +531,10 @@ static DWORD WINAPI RcWatchdogThread( LPVOID )
 
 	for ( ;; )
 	{
-		Sleep( 1000 );
+		// B351: ends when the client shuts down, as the engine then unloads client.dll; a thread left asleep here
+		// woke into the unloaded code and crashed the game on its way out
+		if ( WaitForSingleObject( s_hQuitEvent, 1000 ) != WAIT_TIMEOUT )
+			return 0;
 
 		// keep this handler in place: anything that registers another one later (a Steam crash handler) loses it
 		if ( SetUnhandledExceptionFilter( RcCrashFilter ) != RcCrashFilter )
@@ -624,17 +633,53 @@ void RcCrash_Init( void )
 	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &s_hMainThread, 0, FALSE, DUPLICATE_SAME_ACCESS );
 
 	s_hCrashEvent = CreateEventA( NULL, FALSE, FALSE, NULL );
-	HANDLE hReporter = CreateThread( NULL, 256 * 1024, RcReporterThread, NULL, 0, &s_dwReporterThread );
-	HANDLE hWatchdog = CreateThread( NULL, 256 * 1024, RcWatchdogThread, NULL, 0, NULL );
-	if ( !s_hCrashEvent || !hReporter || !hWatchdog )
+	s_hQuitEvent = CreateEventA( NULL, TRUE, FALSE, NULL );	// B351
+	if ( !s_hCrashEvent || !s_hQuitEvent )
 		return;
 
-	CloseHandle( hReporter );
-	CloseHandle( hWatchdog );
+	s_hReporter = CreateThread( NULL, 256 * 1024, RcReporterThread, NULL, 0, &s_dwReporterThread );
+	s_hWatchdog = CreateThread( NULL, 256 * 1024, RcWatchdogThread, NULL, 0, NULL );
+	if ( !s_hReporter || !s_hWatchdog )
+	{
+		RcCrash_Shutdown();
+		return;
+	}
 
-	SetUnhandledExceptionFilter( RcCrashFilter );
+	s_pfnOldFilter = SetUnhandledExceptionFilter( RcCrashFilter );
 	s_bInstalled = true;
 	gEngfuncs.Con_DPrintf( "Crash and hang reports go to %s\n", s_szDir );
+}
+
+// B351: when the client shuts down (IN_Shutdown), before the engine unloads client.dll: the threads end and the crash
+// handler before ours is put back, as nothing may run or point into client.dll once it is gone
+void RcCrash_Shutdown( void )
+{
+	if ( s_hQuitEvent )
+		SetEvent( s_hQuitEvent );
+
+	HANDLE threads[2];
+	int count = 0;
+	if ( s_hReporter )
+		threads[count++] = s_hReporter;
+	if ( s_hWatchdog )
+		threads[count++] = s_hWatchdog;
+
+	// a hang report's message box can keep the watchdog: then client.dll stays loaded until the process ends
+	if ( count && WaitForMultipleObjects( count, threads, TRUE, 2000 ) != WAIT_OBJECT_0 )
+	{
+		HMODULE hSelf;
+		GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN, (LPCSTR)RcCrash_Shutdown, &hSelf );
+	}
+
+	for ( int i = 0; i < count; i++ )
+		CloseHandle( threads[i] );
+	s_hReporter = s_hWatchdog = NULL;
+
+	if ( s_bInstalled )
+	{
+		SetUnhandledExceptionFilter( s_pfnOldFilter );
+		s_bInstalled = false;
+	}
 }
 
 // every client frame (HUD_Frame): the watchdog's heartbeat, and the map for the reports
