@@ -81,6 +81,7 @@ cvar_t *cv_fullbrighttextures_guess;
 cvar_t *rc_modelarrays;	// ReCoF (B287): studio model strips through vertex arrays
 cvar_t *rc_gpumodels;	// ReCoF (B287 step 4): studio models moved and lit by a vertex shader
 cvar_t *rc_dlightcull;	// ReCoF (B291): skip dynamic lights that cannot reach the screen
+cvar_t *rc_bmodelcull;	// ReCoF (B354): skip the faces of brush entities outside the view
 cvar_t *rc_worldbatch;	// ReCoF (B195): draw runs of world polygons in one call
 cvar_t *rc_lightshader;	// ReCoF (B195 step 2): one pass dynamic lights on the world through a vertex shader
 
@@ -350,6 +351,8 @@ int IsEntityTransparent(cl_entity_t *e)
 }
 
 
+bool RcFaceOutsideView (msurface_t *s, const float *origin);	// gl_rsurf.cpp (B354)
+
 void R_DrawBrushModel (cl_entity_t *e, int onlyfirstpass)
 {
 //	int			j, k;
@@ -456,6 +459,13 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 		gl.glColor4ub(255, 255, 255, e->curstate.renderamt);
 	}	
 
+	// ReCoF (B354): an entity is drawn whole when its box touches the view, and half the maps hold more of their
+	// faces in brush entities than in the world (c_stad has a func_illusionary of 3536 faces spread over the whole
+	// map): the faces of one that is not rotated are tested against the view, by the box kept for each face, so the
+	// ones behind or beside the player are not drawn. The sky's entities are seen from elsewhere and keep every face
+	int cullfaces = !rotated && rc_bmodelcull && rc_bmodelcull->value && clmodel->nummodelsurfaces >= 8 &&
+		e->curstate.renderfx != 70 && e->curstate.renderfx != 137 && e->curstate.renderfx != 184;
+
 	RcBatchBegin();	// ReCoF (B195)
 	for (i=0 ; i<clmodel->nummodelsurfaces ; i++, psurf++)
 	{
@@ -465,6 +475,8 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 		if (((psurf->flags & SURF_PLANEBACK) && (dot < -BACKFACE_EPSILON)) ||
 			(!(psurf->flags & SURF_PLANEBACK) && (dot > BACKFACE_EPSILON)))
 		{
+			if (cullfaces && RcFaceOutsideView(psurf, e->origin))	// ReCoF (B354)
+				continue;
 			psurf->visframe = framecount;
 			DrawPolyFirstPass(psurf);
 		}
@@ -1396,6 +1408,7 @@ void RendererInit()
 	rc_modelarrays = gEngfuncs.pfnRegisterVariable( "rc_modelarrays", "1", FCVAR_ARCHIVE );	// ReCoF (B287)
 	rc_gpumodels = gEngfuncs.pfnRegisterVariable( "rc_gpumodels", "1", FCVAR_ARCHIVE );	// ReCoF (B287 step 4)
 	rc_dlightcull = gEngfuncs.pfnRegisterVariable( "rc_dlightcull", "1", FCVAR_ARCHIVE );	// ReCoF (B291)
+	rc_bmodelcull = gEngfuncs.pfnRegisterVariable( "rc_bmodelcull", "1", FCVAR_ARCHIVE );	// ReCoF (B354)
 	rc_worldbatch = gEngfuncs.pfnRegisterVariable( "rc_worldbatch", "1", FCVAR_ARCHIVE );	// ReCoF (B195)
 	rc_lightshader = gEngfuncs.pfnRegisterVariable( "rc_lightshader", "1", FCVAR_ARCHIVE );	// ReCoF (B195 step 2)
 

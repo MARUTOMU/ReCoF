@@ -69,6 +69,7 @@ struct BrushFace
 	vec3_t	normal;
 	vec3_t	s_tangent;
 	vec3_t	t_tangent;
+	vec3_t	mins, maxs;	// ReCoF (B354): the face's box, in its model's space
 };
 
 GLuint	buffer = 0;
@@ -200,8 +201,15 @@ void GenerateVertexArray()
 					VectorInverse(ext->normal);
 				}
 
+				VectorCopy(v, ext->mins);	// ReCoF (B354)
+				VectorCopy(v, ext->maxs);
 				for (int j=0; j<p->numverts; j++, v+= VERTEXSIZE)
 				{
+					for (int c = 0; c < 3; c++)	// ReCoF (B354)
+					{
+						if (v[c] < ext->mins[c]) ext->mins[c] = v[c];
+						if (v[c] > ext->maxs[c]) ext->maxs[c] = v[c];
+					}
 					buffer_data[curvert].pos[0] = v[0];
 					buffer_data[curvert].pos[1] = v[1];
 					buffer_data[curvert].pos[2] = v[2];
@@ -849,6 +857,20 @@ void DrawPolyFromArray (glpoly_t *p)
 void DrawPolyFromArray (msurface_t *s)
 {
 	DrawPolyFromArray(s->polys);
+}
+
+// ReCoF (B354): whether a face of a brush entity drawn at origin, not rotated, lies outside the view. Sky and water
+// faces have no box (the vertex array leaves them out) and are never culled here
+bool RcFaceOutsideView (msurface_t *s, const float *origin)
+{
+	if (!faces_extradata || !s->polys || s->polys->numverts <= 0 || (s->flags & (SURF_DRAWSKY|SURF_DRAWTURB)))
+		return false;
+
+	const BrushFace *ext = &faces_extradata[(s->polys->flags >> 16) & 0xFFFF];
+	vec3_t mins, maxs;
+	VectorAdd(ext->mins, origin, mins);
+	VectorAdd(ext->maxs, origin, maxs);
+	return viewFrustum.R_CullBox(mins, maxs) != 0;
 }
 
 
