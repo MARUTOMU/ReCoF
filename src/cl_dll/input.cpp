@@ -150,6 +150,7 @@ cvar_t	*cl_noiseeffect;
 cvar_t	*cl_noiseamount;
 cvar_t	*cl_subtitles;
 cvar_t	*cl_vignette;
+cvar_t	*rc_vignette;	// ReCoF (B308): draws the vignette (gl_postprocess.cpp RcDrawVignette)
 cvar_t	*cl_fovmultiplier;
 cvar_t	*cl_lazyweapon_force;
 cvar_t	*cl_weapon_idle_dampener;
@@ -1526,6 +1527,9 @@ void InitInput (void)
 	cl_noiseeffect		= gEngfuncs.pfnRegisterVariable ( "cl_noiseeffect", "0", FCVAR_ARCHIVE );
 	cl_noiseamount		= gEngfuncs.pfnRegisterVariable ( "cl_noiseamount", "0.5", FCVAR_ARCHIVE );
 	cl_vignette			= gEngfuncs.pfnRegisterVariable ( "cl_vignette", "1", FCVAR_ARCHIVE );
+	// ReCoF (B308): cl_vignette is read by nothing, as in retail. 1.6a saved it as 1 in every config without it
+	// ever doing anything, so a new name decides whether the vignette shows, off by default
+	rc_vignette			= gEngfuncs.pfnRegisterVariable ( "rc_vignette", "0", FCVAR_ARCHIVE );
 	cl_fovmultiplier	= gEngfuncs.pfnRegisterVariable ( "cl_fovmultiplier", "1", FCVAR_ARCHIVE );
 
 	m_pitch			    = gEngfuncs.pfnRegisterVariable ( "m_pitch","0.022", FCVAR_ARCHIVE );

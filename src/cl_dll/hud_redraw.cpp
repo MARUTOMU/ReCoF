@@ -287,6 +287,7 @@ void OrthoGasMask(void); // buz
 void OrthoScope(void); // buz
 void OrthoVGUI(void); // buz
 void ApplyPostEffects(); // buz
+void RcDrawVignette( void );	// ReCoF (B308), gl_postprocess.cpp
 extern vec3_t g_CrosshairAngle; // buz
 extern int g_HeadShieldState; // buz
 
@@ -308,6 +309,7 @@ int CHud :: Redraw( float flTime, int intermission )
 	char szCmd[32];
 
 	ApplyPostEffects(); // buz
+	RcDrawVignette();	// ReCoF (B308): the corners darkened, under the HUD
 
 	if ( m_bSaveHack_guess && m_iSaveHackSlot_guess )
 	{
