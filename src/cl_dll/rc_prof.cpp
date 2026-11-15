@@ -805,7 +805,8 @@ static void RcPerfHeader( void )
 	static const char *s_szCvars[] =
 	{
 		"fps_max", "developer", "gl_vsync", "rc_vsync", "rc_smoothframes", "rc_smoothframes_fps", "rc_threads",
-		"rc_gpumodels", "rc_worldbatch", "rc_lightshader", "rc_dlightcull", "rc_rawinput", "gl_dynlight", "r_dynamic",
+		"rc_gpumodels", "rc_worldbatch", "rc_lightshader", "rc_dlightcull", "rc_bmodelcull", "rc_worldsort", "rc_fxbatch", "rc_rawinput",
+		"gl_dynlight", "r_dynamic",
 		"cg_water", "gl_bump", "r_weather", "gl_renderer", "cl_himodels", NULL
 	};
 	fprintf( s_pPerf, "settings:" );

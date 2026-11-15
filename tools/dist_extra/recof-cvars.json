@@ -214,6 +214,30 @@
       "desc_en": "A dynamic light that cannot reach anything on screen is not drawn and no longer makes the world draw twice. The picture is the same; off is the retail behaviour, for comparison."
     },
     {
+      "name": "rc_bmodelcull",
+      "type": "bool",
+      "default": "1",
+      "group": "Performance",
+      "label_en": "Skip hidden entity faces",
+      "desc_en": "The faces of doors, walls and other brush entities that are outside the view are not drawn; before, an entity was drawn whole as soon as any part of it could be seen. The picture is the same; off is the retail behaviour, for comparison."
+    },
+    {
+      "name": "rc_worldsort",
+      "type": "bool",
+      "default": "1",
+      "group": "Performance",
+      "label_en": "World grouped by texture",
+      "desc_en": "Draws the world's faces grouped by texture and lightmap, so the graphics driver gets far fewer separate draws. Helps most on slow computers and AMD graphics. The picture is the same; off is the retail order, for comparison."
+    },
+    {
+      "name": "rc_fxbatch",
+      "type": "bool",
+      "default": "1",
+      "group": "Performance",
+      "label_en": "Faster rain and grass",
+      "desc_en": "Sends rain, snow and grass to the graphics driver in one block for each kind instead of one per drop. The picture is the same; off is the retail path, for comparison."
+    },
+    {
       "name": "rc_threads",
       "type": "int",
       "default": "-1",
