@@ -308,6 +308,7 @@ void RcClient_Init( void )
 	RcDiscord_Init();	// rc_discord.cpp (B316): Discord Rich Presence
 	RcPractice_Init();	// rc_practice.cpp (B317): wallhack, novis, disable_vgui
 	RcPrefetch_Start();	// B363: the files the HUD reads during play, once in the background
+	RcMusic_Init();		// mp3.cpp (B364): rc_music_thread
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect
 	// request, and again when it changes); servers take ReCoF players only (hl.dll ClientConnect, rc_require_recof)
