@@ -29,6 +29,10 @@ void RcCrash_Init( void );
 void RcCrash_Frame( void );
 void RcCrash_Shutdown( void );
 
+// rc_client.cpp (B363): the thread that reads the files the HUD reads during play when the game starts ends before
+// client.dll is unloaded (from IN_Shutdown)
+void RcPrefetch_Shutdown( void );
+
 // the run timer's view of the game: the engine's pause flag, the player's health and the map drawn (from
 // V_CalcRefdef), a map loading (from CHud::VidInit)
 void RcSpeedrun_View( int paused, int health );

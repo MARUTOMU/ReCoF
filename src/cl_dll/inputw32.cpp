@@ -262,6 +262,7 @@ void IN_Shutdown (void)
 	RcBones_Shutdown();	// ReCoF (B339): the rc_threads workers end before client.dll goes
 	RcProf_Shutdown();	// ReCoF (B348): the perf log's sampler thread too
 	RcCrash_Shutdown();	// ReCoF (B351): and the crash reporter's threads
+	RcPrefetch_Shutdown();	// ReCoF (B363): and the file prefetch thread
 }
 
 /*

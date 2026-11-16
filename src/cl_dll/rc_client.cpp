@@ -119,6 +119,168 @@ static void RcVidRebuild_f( void )
 	RcWaterResize();
 }
 
+// B363: the files the HUD reads during play are read once in the background when the game starts. The game reads
+// them on the main thread in the frame that needs them: picking up an item reads its file in inventoryitems three
+// times (CHud::CheckItem) and its picture once (vgui_LoadTGA), a hint reads txtfiles/hints.txt, a decal the engine
+// let go of comes back from decals.wad. The first such read of a file since Windows started waits for the disk, and
+// on some PCs for the virus scanner: a player's performance log (0.2.3-beta.7, Ryzen 9 5900X) showed frames of 83 and
+// 92 ms on item pickups with the main thread running 6 ms, the rest waiting in ReadFile under vgui_LoadTGA and
+// CheckItem, and 88 ms under the decal reload. This thread reads those files at low priority and drops what it read,
+// so Windows holds them in memory when the game asks; the game still loads each file itself, as before
+static HANDLE s_hPrefetch;
+static volatile LONG s_lPrefetchStop;		// set by RcPrefetch_Shutdown
+static char s_szPrefetchDir[MAX_PATH];		// the game folder, cryoffear\ next to cof.exe
+static char s_PrefetchBuf[64 * 1024];
+static char s_szPrefetchText[16 * 1024];	// an item file's start (the largest is under 8 KB)
+
+// reads a file of the game folder to its end; with pszText, keeps its start there
+static void RcPrefetchFile( const char *pszRelative, char *pszText = NULL, int iTextSize = 0 )
+{
+	if ( pszText )
+		pszText[0] = 0;
+
+	if ( s_lPrefetchStop )
+		return;
+
+	char szPath[MAX_PATH * 2];
+	_snprintf( szPath, sizeof( szPath ) - 1, "%s%s", s_szPrefetchDir, pszRelative );
+	szPath[sizeof( szPath ) - 1] = 0;
+
+	HANDLE hFile = CreateFileA( szPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL );
+	if ( hFile == INVALID_HANDLE_VALUE )
+		return;
+
+	// low disk priority: the game's own reads, a map loading, go first
+	FILE_IO_PRIORITY_HINT_INFO hint;
+	hint.PriorityHint = IoPriorityHintLow;
+	SetFileInformationByHandle( hFile, FileIoPriorityHintInfo, &hint, sizeof( hint ) );
+
+	int iKept = 0;
+	DWORD dwRead;
+	while ( !s_lPrefetchStop && ReadFile( hFile, s_PrefetchBuf, sizeof( s_PrefetchBuf ), &dwRead, NULL ) && dwRead )
+	{
+		if ( pszText && iKept < iTextSize - 1 )
+		{
+			int iCopy = iTextSize - 1 - iKept;
+			if ( iCopy > (int)dwRead )
+				iCopy = (int)dwRead;
+			memcpy( pszText + iKept, s_PrefetchBuf, iCopy );
+			iKept += iCopy;
+			pszText[iKept] = 0;
+		}
+	}
+
+	CloseHandle( hFile );
+}
+
+// the pictures an item file names: "inventory_picture", "quick_picture" and "check_picture", each a key, then
+// { data "<file>" }
+static void RcPrefetchItemPictures( const char *pszText )
+{
+	const char *p = pszText;
+
+	while ( !s_lPrefetchStop && ( p = strstr( p, "picture\"" ) ) != NULL )
+	{
+		const char *pszData = strstr( p + 8, "data" );
+		const char *pszStart = pszData ? strchr( pszData + 4, '"' ) : NULL;
+		const char *pszEnd = pszStart ? strchr( pszStart + 1, '"' ) : NULL;
+		if ( !pszEnd )
+			return;
+
+		char szFile[MAX_PATH];
+		int iLength = pszEnd - pszStart - 1;
+		if ( iLength > 0 && iLength < MAX_PATH )
+		{
+			memcpy( szFile, pszStart + 1, iLength );
+			szFile[iLength] = 0;
+			RcPrefetchFile( szFile );
+		}
+
+		p = pszEnd + 1;
+	}
+}
+
+// every file under a folder of the game folder, and for the item files the pictures they name
+static void RcPrefetchFolder( const char *pszRelative, bool bItems )
+{
+	char szPattern[MAX_PATH * 2];
+	_snprintf( szPattern, sizeof( szPattern ) - 1, "%s%s\\*", s_szPrefetchDir, pszRelative );
+	szPattern[sizeof( szPattern ) - 1] = 0;
+
+	WIN32_FIND_DATAA fd;
+	HANDLE hFind = FindFirstFileA( szPattern, &fd );
+	if ( hFind == INVALID_HANDLE_VALUE )
+		return;
+
+	do
+	{
+		if ( fd.cFileName[0] == '.' )
+			continue;
+
+		char szChild[MAX_PATH];
+		_snprintf( szChild, sizeof( szChild ) - 1, "%s\\%s", pszRelative, fd.cFileName );
+		szChild[sizeof( szChild ) - 1] = 0;
+
+		if ( fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
+			RcPrefetchFolder( szChild, bItems );
+		else if ( bItems )
+		{
+			RcPrefetchFile( szChild, s_szPrefetchText, sizeof( s_szPrefetchText ) );
+			RcPrefetchItemPictures( s_szPrefetchText );
+		}
+		else
+			RcPrefetchFile( szChild );
+	} while ( !s_lPrefetchStop && FindNextFileA( hFind, &fd ) );
+
+	FindClose( hFind );
+}
+
+static DWORD WINAPI RcPrefetchThread( LPVOID )
+{
+	SetThreadPriority( GetCurrentThread(), THREAD_PRIORITY_LOWEST );
+
+	RcPrefetchFolder( "inventoryitems", true );
+	RcPrefetchFile( "gfx\\vgui\\640_inventory.tga" );	// the inventory's backgrounds, which a pickup can change
+	RcPrefetchFile( "gfx\\vgui\\640_inventory_three.tga" );
+	RcPrefetchFile( "gfx\\vgui\\640_inventory_p.tga" );
+	RcPrefetchFolder( "txtfiles", false );	// hints and the other texts
+	RcPrefetchFile( "decals.wad" );
+	return 0;
+}
+
+static void RcPrefetch_Start( void )
+{
+	char szExe[MAX_PATH];
+	DWORD dwLength = GetModuleFileNameA( NULL, szExe, sizeof( szExe ) );
+	char *pszSlash = dwLength && dwLength < sizeof( szExe ) ? strrchr( szExe, '\\' ) : NULL;
+	if ( !pszSlash || s_hPrefetch )
+		return;
+
+	pszSlash[1] = 0;
+	_snprintf( s_szPrefetchDir, sizeof( s_szPrefetchDir ) - 1, "%s%s\\", szExe, gEngfuncs.pfnGetGameDirectory() );
+	s_szPrefetchDir[sizeof( s_szPrefetchDir ) - 1] = 0;
+
+	s_hPrefetch = CreateThread( NULL, 64 * 1024, RcPrefetchThread, NULL, 0, NULL );
+}
+
+// B363: when the client shuts down (IN_Shutdown), before the engine unloads client.dll: the prefetch thread stops
+// after its current read of up to 64 KB; if it does not end, client.dll stays loaded until the process ends (as B351)
+void RcPrefetch_Shutdown( void )
+{
+	if ( !s_hPrefetch )
+		return;
+
+	InterlockedExchange( &s_lPrefetchStop, 1 );
+	if ( WaitForSingleObject( s_hPrefetch, 2000 ) != WAIT_OBJECT_0 )
+	{
+		HMODULE hSelf;
+		GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN, (LPCSTR)RcPrefetch_Shutdown, &hSelf );
+	}
+
+	CloseHandle( s_hPrefetch );
+	s_hPrefetch = NULL;
+}
+
 void RcClient_Init( void )
 {
 	g_RcAutosplit.version = 1;
@@ -145,6 +307,7 @@ void RcClient_Init( void )
 	RcSmooth_Init();	// rc_smooth.cpp (B315): smooth frames
 	RcDiscord_Init();	// rc_discord.cpp (B316): Discord Rich Presence
 	RcPractice_Init();	// rc_practice.cpp (B317): wallhack, novis, disable_vgui
+	RcPrefetch_Start();	// B363: the files the HUD reads during play, once in the background
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect
 	// request, and again when it changes); servers take ReCoF players only (hl.dll ClientConnect, rc_require_recof)
