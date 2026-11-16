@@ -1038,10 +1038,12 @@ void ResetGlows();
 void CAM_ToFirstPerson( void );
 
 void RcSpeedrun_VidInit( void );	// ReCoF: rc_speedrun.cpp
+void RcPrefetch_Map( const char *pszLevel );	// ReCoF: rc_client.cpp (B365)
 
 void CHud :: VidInit( void )
 {
 	RcSpeedrun_VidInit();	// ReCoF (B312): a map is loading, for the run timer
+	RcPrefetch_Map( gEngfuncs.pfnGetLevelName() );	// ReCoF (B365): its music, read ahead
 	iMenuMode_guess = 1;
 	m_flDamageTime_guess = 0;
 	m_bSaveHack_guess = false;

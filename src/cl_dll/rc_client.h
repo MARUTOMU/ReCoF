@@ -32,6 +32,7 @@ void RcCrash_Shutdown( void );
 // rc_client.cpp (B363): the thread that reads the files the HUD reads during play when the game starts ends before
 // client.dll is unloaded (from IN_Shutdown)
 void RcPrefetch_Shutdown( void );
+void RcPrefetch_Map( const char *pszLevel );	// B365: a map is loading (from CHud::VidInit)
 
 // mp3.cpp (B364): registers rc_music_thread (from RcClient_Init)
 void RcMusic_Init( void );

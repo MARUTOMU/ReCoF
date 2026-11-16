@@ -235,6 +235,74 @@ static void RcPrefetchFolder( const char *pszRelative, bool bItems )
 	FindClose( hFind );
 }
 
+// B365: the models the client loads by name the first time it draws them (StudioModelRenderer.cpp: the head
+// shield's goggles, gas masks, death and telescope views, the book menu, muzzle flashes; the dual weapons and
+// the head shield's own model come from the server and live in models/weapons). A model the server precaches is
+// loaded with the map; these are not, and loading one waited for the disk in the frame (a 28 ms frame under
+// Mod_LoadModel on c_avlopp in a player's performance log)
+static const char *s_szRcLateModels[] =
+{
+	"models\\mask.mdl", "models\\zombie_eyes.mdl", "models\\flash1.mdl", "models\\flash2.mdl", "models\\flash3.mdl",
+	"models\\nv_goggles.mdl", "models\\items\\tv_frame.mdl", "models\\props\\blandat\\v_telescope.mdl", "models\\bookmenu.mdl",
+	"models\\null.mdl",
+};
+
+static HANDLE s_hPrefetchWake;			// a map is loading (RcPrefetch_Map)
+static CRITICAL_SECTION s_csPrefetchMap;
+static char s_szPrefetchMap[MAX_PATH];		// its maps/<name>.bsp, empty once taken
+
+// B365: the music a map names: the mp3 files in its entities (ambient_fmodstream's message, inter_door's music),
+// which the game finds in mp3/. irrKlang reads the whole file at each start of a track (mp3.cpp, B364)
+static void RcPrefetchMapMusic( const char *pszMap )
+{
+	char szPath[MAX_PATH * 2];
+	_snprintf( szPath, sizeof( szPath ) - 1, "%s%s", s_szPrefetchDir, pszMap );
+	szPath[sizeof( szPath ) - 1] = 0;
+
+	HANDLE hFile = CreateFileA( szPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL );
+	if ( hFile == INVALID_HANDLE_VALUE )
+		return;	// a map from another folder (downloads, an addon): nothing read ahead
+
+	// the BSP header: version, then the entities lump's offset and length
+	int header[3];
+	DWORD dwRead = 0;
+	char *pszEnts = NULL;
+	if ( ReadFile( hFile, header, sizeof( header ), &dwRead, NULL ) && dwRead == sizeof( header ) && header[1] > 0 && header[2] > 0 && header[2] < 8 * 1024 * 1024 )
+	{
+		pszEnts = (char *)malloc( header[2] + 1 );
+		if ( pszEnts && ( SetFilePointer( hFile, header[1], NULL, FILE_BEGIN ) == INVALID_SET_FILE_POINTER || !ReadFile( hFile, pszEnts, header[2], &dwRead, NULL ) || dwRead != (DWORD)header[2] ) )
+		{
+			free( pszEnts );
+			pszEnts = NULL;
+		}
+	}
+	CloseHandle( hFile );
+	if ( !pszEnts )
+		return;
+	pszEnts[header[2]] = 0;
+
+	// each quoted value that ends in .mp3
+	for ( char *p = strstr( pszEnts, ".mp3\"" ); p && !s_lPrefetchStop; p = strstr( p + 5, ".mp3\"" ) )
+	{
+		char *pszStart = p;
+		while ( pszStart > pszEnts && pszStart[-1] != '"' && pszStart[-1] != '\n' )
+			pszStart--;
+		int iLength = p + 4 - pszStart;
+		if ( pszStart == pszEnts || pszStart[-1] != '"' || iLength < 5 || iLength > 200 )
+			continue;
+
+		char szFile[256];
+		if ( memchr( pszStart, '/', iLength ) || memchr( pszStart, '\\', iLength ) )
+			szFile[0] = 0;
+		else
+			strcpy( szFile, "mp3\\" );
+		strncat( szFile, pszStart, iLength );
+		RcPrefetchFile( szFile );
+	}
+
+	free( pszEnts );
+}
+
 static DWORD WINAPI RcPrefetchThread( LPVOID )
 {
 	SetThreadPriority( GetCurrentThread(), THREAD_PRIORITY_LOWEST );
@@ -245,7 +313,40 @@ static DWORD WINAPI RcPrefetchThread( LPVOID )
 	RcPrefetchFile( "gfx\\vgui\\640_inventory_p.tga" );
 	RcPrefetchFolder( "txtfiles", false );	// hints and the other texts
 	RcPrefetchFile( "decals.wad" );
+
+	// B365: the models the client loads late
+	for ( int i = 0; i < ARRAYSIZE( s_szRcLateModels ); i++ )
+		RcPrefetchFile( s_szRcLateModels[i] );
+	RcPrefetchFolder( "models\\weapons", false );
+
+	// B365: then the music of each map that loads
+	while ( !s_lPrefetchStop )
+	{
+		WaitForSingleObject( s_hPrefetchWake, INFINITE );
+
+		char szMap[MAX_PATH];
+		EnterCriticalSection( &s_csPrefetchMap );
+		strcpy( szMap, s_szPrefetchMap );
+		s_szPrefetchMap[0] = 0;
+		LeaveCriticalSection( &s_csPrefetchMap );
+
+		if ( szMap[0] )
+			RcPrefetchMapMusic( szMap );
+	}
+
 	return 0;
+}
+
+// B365: from CHud::VidInit, a map is loading; its name is maps/<name>.bsp
+void RcPrefetch_Map( const char *pszLevel )
+{
+	if ( !s_hPrefetch || !s_hPrefetchWake || !pszLevel || !pszLevel[0] || strlen( pszLevel ) >= sizeof( s_szPrefetchMap ) )
+		return;
+
+	EnterCriticalSection( &s_csPrefetchMap );
+	strcpy( s_szPrefetchMap, pszLevel );
+	LeaveCriticalSection( &s_csPrefetchMap );
+	SetEvent( s_hPrefetchWake );
 }
 
 static void RcPrefetch_Start( void )
@@ -260,6 +361,8 @@ static void RcPrefetch_Start( void )
 	_snprintf( s_szPrefetchDir, sizeof( s_szPrefetchDir ) - 1, "%s%s\\", szExe, gEngfuncs.pfnGetGameDirectory() );
 	s_szPrefetchDir[sizeof( s_szPrefetchDir ) - 1] = 0;
 
+	InitializeCriticalSection( &s_csPrefetchMap );
+	s_hPrefetchWake = CreateEventA( NULL, FALSE, FALSE, NULL );
 	s_hPrefetch = CreateThread( NULL, 64 * 1024, RcPrefetchThread, NULL, 0, NULL );
 }
 
@@ -271,6 +374,8 @@ void RcPrefetch_Shutdown( void )
 		return;
 
 	InterlockedExchange( &s_lPrefetchStop, 1 );
+	if ( s_hPrefetchWake )
+		SetEvent( s_hPrefetchWake );
 	if ( WaitForSingleObject( s_hPrefetch, 2000 ) != WAIT_OBJECT_0 )
 	{
 		HMODULE hSelf;
