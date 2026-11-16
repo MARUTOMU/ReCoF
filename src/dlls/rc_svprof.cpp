@@ -7,6 +7,9 @@
 // the player's movement, sending entities to the client) is outside hl.dll and not timed here; rc_prof in
 // client.dll times the whole server frame from the client's side ("server").
 //
+// rc_svprof 2 (B367, set by client.dll's performance log while it is open) times the scopes of hl.dll only: no
+// engine function is wrapped and nothing is printed. RcSvProf_FrameText gives the log the server frame's scopes.
+//
 // It only observes: while it is on, the engine functions in hl.dll's copy of the engine's table
 // (g_engfuncs) are wrappers that time the call and pass it on unchanged, and they are put back when it is
 // turned off. Nothing it does changes what the game does.
@@ -52,6 +55,7 @@ static double	s_flWinStart;
 static int		s_iWinFrames;
 static double	s_flWinExcl[RCSV_COUNT], s_flWinIncl[RCSV_COUNT];
 static double	s_flFrameExcl[RCSV_COUNT];	// this frame's own times, added to the second at its end (B338)
+static int		s_iFrameCalls[RCSV_COUNT];	// this frame's calls (B367)
 static double	s_flWinWorst, s_flWinWorstExcl[RCSV_COUNT];	// the second's slowest frame
 static int		s_iWinCalls[RCSV_COUNT];
 
@@ -95,6 +99,7 @@ void RcSvProf_Push( int scope )
 	s_iDepth++;
 	s_iOpen[scope]++;
 	s_iWinCalls[scope]++;
+	s_iFrameCalls[scope]++;
 }
 
 void RcSvProf_Pop( void )
@@ -409,6 +414,7 @@ void RcSvProf_Frame( void )
 {
 	double now = RcSvNow();
 	int on = rc_svprof.value ? 1 : 0;
+	int hook = rc_svprof.value == 1;	// B367: 2 times hl.dll's scopes only, without a console line
 
 	s_iDepth = 0;
 	s_iOverflow = 0;
@@ -426,11 +432,12 @@ void RcSvProf_Frame( void )
 		memcpy( s_flWinWorstExcl, s_flFrameExcl, sizeof( s_flWinWorstExcl ) );
 	}
 	memset( s_flFrameExcl, 0, sizeof( s_flFrameExcl ) );
+	memset( s_iFrameCalls, 0, sizeof( s_iFrameCalls ) );
 
-	if ( on != g_iRcSvProf )
+	if ( on != g_iRcSvProf || hook != s_bRcSvHooked )
 	{
 		g_iRcSvProf = on;
-		RcSvHook( on );
+		RcSvHook( hook );
 		RcSvClearWindow( now );
 		return;
 	}
@@ -452,8 +459,44 @@ void RcSvProf_Frame( void )
 	memcpy( s_flShowWorstExcl, s_flWinWorstExcl, sizeof( s_flShowWorstExcl ) );
 	RcSvClearWindow( now );
 
+	if ( !hook )
+		return;
 	RcSvCensus();
 	RcSvPrintLine();
+}
+
+//-----------------------------------------------------------------------------
+// B367: the server frame since the last StartFrame, for client.dll's performance log (RcPerfFrame, in a STUTTER
+// whose server part was long): the scopes that took 0.5 ms or more on their own, with their calls, as
+// "route 6.20 ms 14 calls, localmove 4.10 ms 120 calls". Returns the frame's time in hl.dll's scopes (ms)
+//-----------------------------------------------------------------------------
+#ifdef _WIN32
+#define RC_SVPROF_EXPORT extern "C" __declspec( dllexport )
+#else
+#define RC_SVPROF_EXPORT extern "C" __attribute__( ( visibility( "default" ) ) )
+#endif
+
+RC_SVPROF_EXPORT double RcSvProf_FrameText( char *pszOut, int iSize )
+{
+	double total = 0;
+	int len = 0;
+
+	if ( !pszOut || iSize < 1 )
+		return 0;
+	pszOut[0] = 0;
+
+	for ( int i = 0; i < RCSV_COUNT; i++ )
+	{
+		total += s_flFrameExcl[i];
+		if ( s_flFrameExcl[i] < 0.5 || len > iSize - 64 )
+			continue;
+		int n = snprintf( pszOut + len, iSize - len, "%s%s %.2f ms %d calls", len ? ", " : "", s_szRcSvName[i],
+			s_flFrameExcl[i], s_iFrameCalls[i] );
+		if ( n > 0 )
+			len += n;
+	}
+
+	return total;
 }
 
 void RcSvProf_Init( void )

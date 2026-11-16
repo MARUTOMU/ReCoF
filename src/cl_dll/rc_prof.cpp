@@ -372,6 +372,24 @@ static double RcPerfTimerMs( void )
 	return lCur / 10000.0;
 }
 
+// B367: the server's own work in a stutter. While the log is open it sets rc_svprof 2, so hl.dll times its scopes
+// (rc_svprof.cpp: monster thinks, route building, local moves, ...) without wrapping the engine or printing, and a
+// STUTTER line whose server part took 4 ms or more adds what RcSvProf_FrameText gives for that server frame. A
+// player's beta.7 log had frames of 20 ms with the server taking 10 to 12 ms in monsters' walk moves (PF_walkmove,
+// SV_CheckBottom) on c_park3 and c_forest4, without saying which part of the AI asked for them
+typedef double ( *RcSvFrameText_t )( char *, int );
+
+static void RcPerfServerProfiler( bool bOn )
+{
+	cvar_t *pSv = gEngfuncs.pfnGetCvarPointer( "rc_svprof" );
+	if ( !pSv )
+		return;	// no game DLL loaded yet
+	if ( bOn && !pSv->value )
+		gEngfuncs.Cvar_SetValue( "rc_svprof", 2 );
+	else if ( !bOn && pSv->value == 2 )
+		gEngfuncs.Cvar_SetValue( "rc_svprof", 0 );
+}
+
 // rc_smooth.cpp RcSmooth_Frame, on each pass of the limiter
 void RcProf_LimiterPass( double *pHostFrameTime )
 {
@@ -870,7 +888,8 @@ static void RcPerfHeader( void )
 		"means it was inside Windows or a driver and could only be looked at once it came out. "
 		"\"frame limiter\": the times the engine looked whether the next frame was due and found it was not, the "
 		"longest time between two looks (a sleep of 1 to 2 ms when the Windows timer runs at 1 ms), the engine's own "
-		"time for the frame and the Windows timer's period. "
+		"time for the frame and the Windows timer's period. \"server game code\": in a frame whose server part was long, "
+		"the parts of hl.dll that took 0.5 ms or more and how often they ran (rc_svprof). "
 		"PAUSE lines: a time of pictures without HUD frames (a menu, the inventory, a note, a cutscene or a load), left out "
 		"of the numbers.\n\n" );
 	fflush( s_pPerf );
@@ -882,6 +901,7 @@ static void RcPerfClose( void )
 		return;
 
 	RcStallStop();	// B348
+	RcPerfServerProfiler( false );	// B367
 	fprintf( s_pPerf, "end of the log\n" );
 	fclose( s_pPerf );
 	s_pPerf = NULL;
@@ -1008,6 +1028,7 @@ static void RcPerfSecond( LONGLONG qpcNow )
 	s_flLateMax = 0;
 	if ( s_iPerfSecAway )
 		fprintf( s_pPerf, " | game window not in front %d%%", s_iPerfSecAway * 100 / s_iPerfFrames );
+	RcPerfServerProfiler( true );	// B367: again each second, as a map load can set it back
 	double timerMs = RcPerfTimerMs();	// B366: only when Sleep( 1 ) cannot wake within about 1 ms
 	if ( timerMs > 1.2 )
 		fprintf( s_pPerf, " | Windows timer %.1f ms", timerMs );
@@ -1139,6 +1160,16 @@ static void RcPerfFrame( double frame, LONGLONG qpcNow )
 				continue;
 			RcPerfName( name, s_szScopeName[i] );
 			fprintf( s_pPerf, " %s %.2f", name, ms );
+		}
+		// B367: the server game code's scopes in this frame, when the server part was long
+		if ( s_llCpu[RCP_SERVER] * s_flTickMs >= 4.0 )
+		{
+			HMODULE hGame = GetModuleHandleA( "hl.dll" );
+			RcSvFrameText_t pfnText = hGame ? (RcSvFrameText_t)GetProcAddress( hGame, "RcSvProf_FrameText" ) : NULL;
+			char text[512];
+			double ms = pfnText ? pfnText( text, sizeof( text ) ) : 0;
+			if ( pfnText && text[0] )
+				fprintf( s_pPerf, " | server game code %.2f ms: %s", ms, text );
 		}
 		// B366: the frame limiter's wait in this frame
 		if ( s_iLimitPasses )
