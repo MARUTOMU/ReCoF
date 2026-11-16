@@ -46,6 +46,7 @@
 #include "event_api.h"
 #include "demo_api.h"
 #include "rc_client.h"
+#include "rc_prof.h"
 
 #include <windows.h>
 #include <math.h>
@@ -356,6 +357,8 @@ void RcSmooth_GameFrame( void )
 // (client_state_t, engine_hw client.h); pHostFrameTime is &host_frametime
 extern "C" __declspec( dllexport ) void RcSmooth_Frame( void ( *pfnUpdateScreen )( void ), double *pClTime, double *pHostFrameTime )
 {
+	RcProf_LimiterPass( pHostFrameTime );	// B366: the perf log counts the limiter's passes
+
 	double now = RcSmoothNow();
 
 	// a game frame ran since the last call: it started after that call returned

@@ -58,6 +58,7 @@ void RcProf_Pop( void );
 void RcProf_PopIf( int scope );	// pops the innermost scope only if it is this one (B337)
 void RcProf_HookStudio( void );	// times the engine's studio lighting (HUD_GetStudioModelInterface, B337)
 void RcProf_Count( int counter );
+void RcProf_LimiterPass( double *pHostFrameTime );	// a pass of the engine's frame limiter (RcSmooth_Frame, B366)
 
 // opens a scope for the rest of the block
 struct RcProfScope

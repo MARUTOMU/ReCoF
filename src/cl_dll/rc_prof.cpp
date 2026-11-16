@@ -350,6 +350,46 @@ static LONGLONG					s_llPerfQpc0;
 static ULONGLONG				s_ullPerfReads, s_ullPerfReadBytes;
 static DWORD					s_dwPerfFaults;
 static RcSwapTimes_t			s_pfnPerfSwap;		// B347
+
+// B366: how the frame limiter waited. Between two frames, hw.dll's Host_FilterTime says the next one is not due
+// and _Host_Frame calls RcSmooth_Frame; each such pass is counted here, with the longest time between two passes
+// (normally a Sleep( 1 ) of 1 to 2 ms). A player's beta.7 log had eleven frames of exactly 50 ms with the main
+// thread asleep in the limiter most of each: long gaps mean the sleeps overslept (the Windows timer, see below),
+// short ones with the engine's own frame time (host_frametime) at 50 ms mean the limiter itself waited that long
+typedef LONG ( __stdcall *RcNtQueryTimerResolution_t )( ULONG *, ULONG *, ULONG * );
+static RcNtQueryTimerResolution_t	s_pfnPerfTimerRes;
+static int					s_iLimitPasses;
+static LONGLONG				s_llLimitLast;		// the last pass, 0 before the first of a frame
+static double				s_flLimitLongest;	// ms
+static double				*s_pflHostFrameTime;	// hw.dll's host_frametime
+
+// the Windows timer's period now (ms), which Sleep( 1 ) waits at least; 0 if unknown
+static double RcPerfTimerMs( void )
+{
+	ULONG lMin, lMax, lCur;
+	if ( !s_pfnPerfTimerRes || s_pfnPerfTimerRes( &lMin, &lMax, &lCur ) != 0 )
+		return 0;
+	return lCur / 10000.0;
+}
+
+// rc_smooth.cpp RcSmooth_Frame, on each pass of the limiter
+void RcProf_LimiterPass( double *pHostFrameTime )
+{
+	if ( !s_pPerf )
+		return;
+
+	LARGE_INTEGER now;
+	QueryPerformanceCounter( &now );
+	if ( s_llLimitLast )
+	{
+		double gap = ( now.QuadPart - s_llLimitLast ) * s_flTickMs;
+		if ( gap > s_flLimitLongest )
+			s_flLimitLongest = gap;
+	}
+	s_llLimitLast = now.QuadPart;
+	s_iLimitPasses++;
+	s_pflHostFrameTime = pHostFrameTime;
+}
 static double					s_flPerfSwapTotal;	// the wrapper's ms of all swaps at the last frame
 static double					s_flPerfAvg;		// the recent frame time, which stutters are measured against
 static int						s_iPerfSkip;		// frames not judged after the log starts or the map changes
@@ -828,6 +868,9 @@ static void RcPerfHeader( void )
 		"or more late, when drivers or the BIOS held the processors whatever the game did. Under a STUTTER line, each "
 		"\"at\" line is where the main thread was at that moment of the frame and the code under it; \"stopped after\" "
 		"means it was inside Windows or a driver and could only be looked at once it came out. "
+		"\"frame limiter\": the times the engine looked whether the next frame was due and found it was not, the "
+		"longest time between two looks (a sleep of 1 to 2 ms when the Windows timer runs at 1 ms), the engine's own "
+		"time for the frame and the Windows timer's period. "
 		"PAUSE lines: a time of pictures without HUD frames (a menu, the inventory, a note, a cutscene or a load), left out "
 		"of the numbers.\n\n" );
 	fflush( s_pPerf );
@@ -869,6 +912,8 @@ static void RcPerfOpen( LONGLONG qpcNow )
 		s_pfnPerfCycles = (RcQueryThreadCycleTime_t)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "QueryThreadCycleTime" );
 	if ( !s_pfnPerfSwap )
 		s_pfnPerfSwap = (RcSwapTimes_t)GetProcAddress( GetModuleHandleA( "opengl32.dll" ), "RcSwapTimes" );	// B347
+	if ( !s_pfnPerfTimerRes )
+		s_pfnPerfTimerRes = (RcNtQueryTimerResolution_t)GetProcAddress( GetModuleHandleA( "ntdll.dll" ), "NtQueryTimerResolution" );	// B366
 	s_flPerfSwapTotal = 0;
 	if ( s_pfnPerfSwap )
 	{
@@ -963,6 +1008,9 @@ static void RcPerfSecond( LONGLONG qpcNow )
 	s_flLateMax = 0;
 	if ( s_iPerfSecAway )
 		fprintf( s_pPerf, " | game window not in front %d%%", s_iPerfSecAway * 100 / s_iPerfFrames );
+	double timerMs = RcPerfTimerMs();	// B366: only when Sleep( 1 ) cannot wake within about 1 ms
+	if ( timerMs > 1.2 )
+		fprintf( s_pPerf, " | Windows timer %.1f ms", timerMs );
 	fprintf( s_pPerf, "\n" );
 	fflush( s_pPerf );
 
@@ -1092,6 +1140,10 @@ static void RcPerfFrame( double frame, LONGLONG qpcNow )
 			RcPerfName( name, s_szScopeName[i] );
 			fprintf( s_pPerf, " %s %.2f", name, ms );
 		}
+		// B366: the frame limiter's wait in this frame
+		if ( s_iLimitPasses )
+			fprintf( s_pPerf, " | frame limiter %d passes, the longest %.1f ms apart, engine frame %.1f ms, Windows timer %.1f ms",
+				s_iLimitPasses, s_flLimitLongest, s_pflHostFrameTime ? *s_pflHostFrameTime * 1000.0 : 0.0, RcPerfTimerMs() );
 		fprintf( s_pPerf, "\n" );
 		RcStallWrite( s_lPerfFrameGen / 2, true );	// B348
 		fflush( s_pPerf );
@@ -1138,6 +1190,9 @@ void RcProf_Frame( void )
 
 		if ( s_pPerf )
 			RcPerfFrame( frame, now.QuadPart );	// B340
+		s_iLimitPasses = 0;	// B366: the passes of the next frame
+		s_llLimitLast = 0;
+		s_flLimitLongest = 0;
 		if ( s_pPerf )
 		{
 			RcStallWrite( s_lPerfFrameGen / 2, false );	// B348: the next frame starts
