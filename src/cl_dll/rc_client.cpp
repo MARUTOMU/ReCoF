@@ -718,7 +718,12 @@ void RcClient_Init( void )
 	// story co-op on the next map with more than one slot (hl.dll reads it by name; registered here too so that
 	// +rc_coop 1 on the command line works before the first map loads hl.dll)
 	gEngfuncs.pfnRegisterVariable( "rc_coop", "0", 0 );
-	gEngfuncs.pfnRegisterVariable( "rc_coop_left", "0", 0 );	// hw.dll sets it when the user disconnects (RcCoopReconnect)
+	gEngfuncs.pfnRegisterVariable( "rc_coop_left", "0", 0 );
+	// B394: story co-op proximity voice (hw.dll rc_coop.c RcVoice_*): 1 a teammate's voice comes from where he stands;
+	// it falls silent at rc_voice_range units, and behind a wall it is muffled at rc_voice_wall percent of its volume
+	gEngfuncs.pfnRegisterVariable( "rc_voice_3d", "1", FCVAR_ARCHIVE );
+	gEngfuncs.pfnRegisterVariable( "rc_voice_range", "1400", FCVAR_ARCHIVE );
+	gEngfuncs.pfnRegisterVariable( "rc_voice_wall", "10", FCVAR_ARCHIVE );	// hw.dll sets it when the user disconnects (RcCoopReconnect)
 	gEngfuncs.pfnAddCommand( "rc_coop_host", RcCoopHost_f );	// co-op spike: Steam relay networking
 	gEngfuncs.pfnAddCommand( "rc_coop_join", RcCoopJoin_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );

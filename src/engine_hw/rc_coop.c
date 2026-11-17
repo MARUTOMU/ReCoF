@@ -36,6 +36,9 @@ are char arrays here instead.
 #include "eiface.h"
 #include "delta.h"
 #include "server.h"
+#include "client.h"
+#include "sound.h"
+#include "world.h"
 #include "rc_coop.h"
 
 #define RC_MAX_CLIENTS	32
@@ -271,6 +274,174 @@ void RcCoop_SkipPhysics( void )
 }
 
 void CL_Disconnect_f( void );
+
+/*
+B394: story co-op proximity voice. Retail plays every voice on the listener's own entity, so it is flat and the same
+from anywhere. In story co-op (the server's physinfo "rcc" 1) with client.dll's rc_voice_3d on, a teammate's voice
+plays on his entity, so the mixer places it where he stands and lowers it with distance (silent at rc_voice_range
+units, as the mixer's attenuation is its 1000-unit clip distance divided by the range); and when the world stands
+between the listener and the speaker's head, his samples go through a one-pole low pass (about 800 Hz at the
+mixer's 22050 Hz) at rc_voice_wall percent of the volume, eased in and out. Integer arithmetic and constants in this
+section only (no floating point literal in code).
+*/
+#define RC_VOICE_CHANNELS	5
+
+static char rc_szVoice3D[] = "rc_voice_3d";
+static char rc_szVoiceRange[] = "rc_voice_range";
+static char rc_szVoiceWall[] = "rc_voice_wall";
+static char rc_szRcc[] = "rcc";
+static double rc_flVoiceClip = 1000;	// the mixer's nominal clip distance (snd_dma.c sound_nominal_clip_dist)
+static float rc_flVoiceEye = 28;	// a player's eyes above his origin
+static float rc_flVoiceOne = 1;
+static int rc_iVoiceEnt[RC_VOICE_CHANNELS];	// the entity each voice channel plays on
+static int rc_iVoiceLp[RC_VOICE_CHANNELS];	// its low pass now, 256 for none
+static int rc_iVoiceGain[RC_VOICE_CHANNELS];	// its volume now, 256 for full
+static int rc_iVoiceY[RC_VOICE_CHANNELS];	// the low pass's last output
+static int rc_iVoiceWall[RC_VOICE_CHANNELS];	// the world was between the listener and the speaker at the last block
+static char rc_szVoiceShow[] = "voice_showchannels";
+static char rc_szVoiceStart[] = "ReCoF voice: channel %i plays on entity %i (%s)\n";
+static char rc_szVoiceFlat[] = "flat";
+static char rc_szVoice3DNote[] = "where he stands";
+static char rc_szVoiceWallOn[] = "ReCoF voice: channel %i behind a wall, %i%% volume\n";
+static char rc_szVoiceWallOff[] = "ReCoF voice: channel %i in sight\n";
+
+static int RcVoice_Show( void )
+{
+	cvar_t	*v;
+
+	v = Cvar_FindVar( rc_szVoiceShow );
+	return v && (int)v->value;
+}
+
+int RcVoice_ChannelEntity( int iChannel );	// voice.cpp
+
+// the proximity voice is on: a story co-op server and rc_voice_3d
+static int RcVoice_On( void )
+{
+	cvar_t	*v;
+	char	*rcc;
+
+	v = Cvar_FindVar( rc_szVoice3D );
+	if ( !v || !(int)v->value )
+		return 0;
+	rcc = Info_ValueForKey( cls.physinfo, rc_szRcc );
+	return rcc && rcc[0] == '1';
+}
+
+// VoiceSE_StartChannel: the entity a voice channel plays on, the speaker's in story co-op
+int RcVoice_Entity( int iChannel )
+{
+	int	ent, e;
+
+	ent = cl.viewentity;
+	if ( iChannel < 0 || iChannel >= RC_VOICE_CHANNELS )
+		return ent;
+	if ( RcVoice_On() )
+	{
+		e = RcVoice_ChannelEntity( iChannel );
+		if ( e > 0 && e < cl.num_entities )
+			ent = e;
+	}
+	rc_iVoiceEnt[iChannel] = ent;
+	rc_iVoiceLp[iChannel] = 256;
+	rc_iVoiceGain[iChannel] = 256;
+	rc_iVoiceY[iChannel] = 0;
+	rc_iVoiceWall[iChannel] = 0;
+	if ( RcVoice_Show() )
+		Con_Printf( rc_szVoiceStart, iChannel, ent, ent == cl.viewentity ? rc_szVoiceFlat : rc_szVoice3DNote );
+	return ent;
+}
+
+// VoiceSE_EndChannel: the entity it was started on
+int RcVoice_EndEntity( int iChannel )
+{
+	if ( iChannel < 0 || iChannel >= RC_VOICE_CHANNELS || !rc_iVoiceEnt[iChannel] )
+		return cl.viewentity;
+	return rc_iVoiceEnt[iChannel];
+}
+
+// VoiceSE_StartChannel: the attenuation, so a voice falls silent at rc_voice_range units (retail's 1 for the flat voice)
+float RcVoice_Attn( int iChannel )
+{
+	cvar_t	*r;
+
+	if ( iChannel < 0 || iChannel >= RC_VOICE_CHANNELS || rc_iVoiceEnt[iChannel] == cl.viewentity )
+		return rc_flVoiceOne;
+	r = Cvar_FindVar( rc_szVoiceRange );
+	if ( !r || (int)r->value < 100 )
+		return rc_flVoiceOne;
+	return (float)( rc_flVoiceClip / r->value );
+}
+
+// VoiceSE_GetSoundDataCallback: a speaker the world hides from the listener is muffled and quieter
+void RcVoice_Filter( int iChannel, short *pSamples, int nSamples )
+{
+	int		ent, i, lpT, gT, lp, g, y;
+	vec3_t	eye;
+	trace_t	trace;
+	cvar_t	*w;
+
+	if ( iChannel < 0 || iChannel >= RC_VOICE_CHANNELS || nSamples <= 0 )
+		return;
+	ent = rc_iVoiceEnt[iChannel];
+	if ( ent <= 0 || ent == cl.viewentity || ent >= cl.num_entities || !cl.worldmodel )
+		return;
+
+	VectorCopy( cl_entities[ent].origin, eye );
+	eye[2] += rc_flVoiceEye;
+	Q_memset( &trace, 0, sizeof( trace ) );
+	trace.fraction = rc_flVoiceOne;
+	SV_RecursiveHullCheck( cl.worldmodel->hulls, 0, 0, 1, listener_origin, eye, &trace );
+
+	lpT = 256;
+	gT = 256;
+	if ( trace.fraction < rc_flVoiceOne )
+	{
+		w = Cvar_FindVar( rc_szVoiceWall );
+		gT = w ? (int)w->value * 256 / 100 : 26;
+		if ( gT < 0 )
+			gT = 0;
+		if ( gT > 256 )
+			gT = 256;
+		lpT = 52;	// 1 - e^(-2 pi 800 / 22050), in 256ths
+	}
+	if ( ( lpT < 256 ) != rc_iVoiceWall[iChannel] )
+	{
+		rc_iVoiceWall[iChannel] = lpT < 256;
+		if ( RcVoice_Show() )
+		{
+			if ( lpT < 256 )
+				Con_Printf( rc_szVoiceWallOn, iChannel, gT * 100 / 256 );
+			else
+				Con_Printf( rc_szVoiceWallOff, iChannel );
+		}
+	}
+
+	// a quarter of the way to the targets each block, so stepping out from a wall does not click
+	lp = rc_iVoiceLp[iChannel];
+	g = rc_iVoiceGain[iChannel];
+	lp += ( lpT - lp ) / 4;
+	g += ( gT - g ) / 4;
+	if ( lp - lpT < 4 && lpT - lp < 4 )
+		lp = lpT;
+	if ( g - gT < 4 && gT - g < 4 )
+		g = gT;
+	rc_iVoiceLp[iChannel] = lp;
+	rc_iVoiceGain[iChannel] = g;
+
+	y = rc_iVoiceY[iChannel];
+	if ( lp >= 256 && g >= 256 )
+	{
+		rc_iVoiceY[iChannel] = pSamples[nSamples - 1];
+		return;
+	}
+	for ( i = 0; i < nSamples; i++ )
+	{
+		y += ( ( pSamples[i] - y ) * lp ) >> 8;
+		pSamples[i] = (short)( ( y * g ) >> 8 );
+	}
+	rc_iVoiceY[iChannel] = y;
+}
 
 // the console's and the menu's disconnect: the user leaves, so a story co-op guest's game does not connect again to the
 // host as it does when the host drops it (a load of a co-op save); the server's own drops call CL_Disconnect_f directly

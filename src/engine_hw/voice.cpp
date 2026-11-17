@@ -950,3 +950,14 @@ IVoiceTweak g_VoiceTweakAPI =
 	VoiceTweak_GetControlFloat,
 	VoiceTweak_GetSpeakingVolume
 };
+
+// ReCoF story co-op (B394): the entity speaking on a voice channel, for the proximity voice (rc_coop.c
+// RcVoice_Entity). In ReCoF's own section after .data, as rc_coop.c, so no address the speedrun tools read moves
+#pragma code_seg( ".rctext" )
+extern "C" int RcVoice_ChannelEntity( int iChannel )
+{
+	if ( iChannel < 0 || iChannel >= 5 )
+		return -1;
+	return g_VoiceChannels[iChannel].m_iEntity;
+}
+#pragma code_seg()
