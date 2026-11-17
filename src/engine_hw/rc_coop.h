@@ -12,5 +12,6 @@ int RcCoop_Enabled( void );	// Host_ValidSave: a story co-op game may be saved
 void RcCoop_Loaded( void );	// Host_Load: the saved players wait for their clients
 int RcCoop_GuestPause( void );	// the pause commands: a guest may not pause a story co-op game
 void RcCoop_SkipPhysics( void );	// SV_Frame: the host's scene skip runs the server fast
+void RcCoop_Disconnect_f( void );	// the disconnect command: CL_Disconnect_f, and a co-op guest does not connect again
 
 #endif

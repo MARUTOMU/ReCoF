@@ -43,6 +43,8 @@ are char arrays here instead.
 
 static char rc_szCoop[] = "rc_coop";
 static char rc_szSkip[] = "rc_coop_skip";	// hl.dll rc_coop.cpp, G6
+static char rc_szLeft[] = "rc_coop_left";	// client.dll rc_client.cpp, the guest's reconnect
+static char rc_szOne[] = "1";
 static char rc_szCarry[] = "ReCoF co-op: carrying %i players to %s\n";
 
 static int rc_iCarried[RC_MAX_CLIENTS];	// 1 while this slot's player waits to be restored on the new level
@@ -224,4 +226,15 @@ void RcCoop_SkipPhysics( void )
 	}
 	host_frametime = flSave;
 	gGlobalVariables.frametime = host_frametime;
+}
+
+void CL_Disconnect_f( void );
+
+// the console's and the menu's disconnect: the user leaves, so a story co-op guest's game does not connect again to the
+// host as it does when the host drops it (a load of a co-op save); the server's own drops call CL_Disconnect_f directly
+void RcCoop_Disconnect_f( void )
+{
+	if ( Cvar_FindVar( rc_szLeft ) )
+		Cvar_Set( rc_szLeft, rc_szOne );
+	CL_Disconnect_f();
 }

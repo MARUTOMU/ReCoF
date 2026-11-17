@@ -455,6 +455,7 @@ static void RcCoopJoin_f( void )
 		s_bCoopLeft = 0;
 		s_bCoopWasIn = 0;
 		s_iCoopRetries = 0;
+		gEngfuncs.Cvar_SetValue( "rc_coop_left", 0 );
 	}
 }
 
@@ -547,7 +548,8 @@ static void RcCoopCmdFile( void )
 }
 
 // a story co-op guest the host dropped (a load of a co-op save, a map restart) connects again: up to 10 tries, 12 s
-// apart, while this game is not connected to a 169.254 (Steam) address; rc_coop_leave stops it
+// apart, while this game is not connected to a 169.254 (Steam) address; rc_coop_leave, the disconnect command (the
+// menu's too: hw.dll sets rc_coop_left) and a game elsewhere (not the menu's background map) stop it
 static void RcCoopLeave_f( void )
 {
 	s_bCoopLeft = 1;
@@ -568,6 +570,20 @@ static void RcCoopReconnect( void )
 		s_bCoopWasIn = 1;
 		s_iCoopRetries = 0;
 		s_dwCoopRetryAt = 0;
+		return;
+	}
+	if ( gEngfuncs.pfnGetCvarFloat( "rc_coop_left" ) != 0 )
+	{
+		gEngfuncs.Cvar_SetValue( "rc_coop_left", 0 );
+		if ( s_bCoopWasIn )
+			RcCoopPrint( "ReCoF co-op: left the game; rc_coop_join to come back\n" );
+		s_bCoopWasIn = 0;
+		return;
+	}
+	const char *pszLevel = gEngfuncs.pfnGetLevelName();
+	if ( st.connected && pszLevel && pszLevel[0] && !strstr( pszLevel, "game_menu" ) )
+	{
+		s_bCoopWasIn = 0;	// the user plays another game
 		return;
 	}
 	if ( !s_bCoopWasIn || s_iCoopRetries >= 10 )
@@ -644,6 +660,7 @@ void RcClient_Init( void )
 	// story co-op on the next map with more than one slot (hl.dll reads it by name; registered here too so that
 	// +rc_coop 1 on the command line works before the first map loads hl.dll)
 	gEngfuncs.pfnRegisterVariable( "rc_coop", "0", 0 );
+	gEngfuncs.pfnRegisterVariable( "rc_coop_left", "0", 0 );	// hw.dll sets it when the user disconnects (RcCoopReconnect)
 	gEngfuncs.pfnAddCommand( "rc_coop_host", RcCoopHost_f );	// co-op spike: Steam relay networking
 	gEngfuncs.pfnAddCommand( "rc_coop_join", RcCoopJoin_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );

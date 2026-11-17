@@ -400,9 +400,16 @@ bool RcSteamNet_Join( const char *pszAddr, bool bRelayOnly, RcSteamPrint_t pfnPr
 		s_pfnPrint( "ReCoF co-op: rc_coop_join takes the host's Steam address, 169.254.x.x:port\n" );
 		return false;
 	}
+	// a guest who left joins again (the same host or another) through the port he has: the engine's packets to any
+	// 169.254 address go out through it
+	if ( s_iMode == RCSN_JOIN )
+	{
+		RcLog( "join again %s", pszAddr );
+		return true;
+	}
 	if ( s_iMode != RCSN_OFF )
 	{
-		s_pfnPrint( "ReCoF co-op: already started\n" );
+		s_pfnPrint( "ReCoF co-op: this game hosts; it cannot join another\n" );
 		return false;
 	}
 	if ( !RcStart( bRelayOnly ) )
