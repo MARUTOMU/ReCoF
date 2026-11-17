@@ -2,17 +2,17 @@
 
 Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
 
-The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B391 in [bugs.md](bugs.md).
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B394 in [bugs.md](bugs.md).
 
 ## Playing
 
 Every player needs the same ReCoF build and Steam running.
 
-- **Host:** open the console and type `rc_coop_start` (Simon's story from the start) or `rc_coop_start <map>` (for example `rc_coop_start c_apartment1`). It also works as a launch option, `+rc_coop_start c_apartment1`. When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
-- **Invite:** `rc_coop_invite` opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
+- **Host:** in the main menu choose Story Co-op, then New game (from the story's start) or Continue (the newest co-op save); the panel also sets the difficulty and the rules preset. From the console: `rc_coop_start` (Simon's story from the start), `rc_coop_start <map> [classic|casual|hardcore]` (for example `rc_coop_start c_apartment1`) or `rc_coop_continue coop_auto`; `rc_coop_menu` opens the panel. It also works as a launch option, `+rc_coop_start c_apartment1`. When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
+- **Invite:** in the game, Esc and Invite Steam friends to co-op (or `rc_coop_invite`) opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
 - **Join by hand:** `rc_coop_join 169.254.x.x:port` in the console.
 - **Status:** `rc_coop_status` shows the datagrams through Steam and the relay network's state.
-- **Leaving:** a guest whose host loads a save or restarts connects again by himself (up to 10 tries). A guest who leaves (the menu's Disconnect, `disconnect` or `rc_coop_leave`) stays out, and `rc_coop_join` brings him back.
+- **Leaving:** a guest whose host loads a save or restarts connects again by himself (up to 10 tries). A guest who leaves (the game menu's Leave the co-op game, Disconnect, `disconnect` or `rc_coop_leave`) stays out, and `rc_coop_join` brings him back.
 - **Saving:** the game saves itself as `coop_auto` once everyone is in on each new level, and as `coop_tape` when anyone uses a tape recorder (on the hardest difficulty it costs that player a tape); the host can also type `save <name>`. The host loads with `load coop_auto`, `load coop_tape` or `load <name>`; every saved player is kept for his player (matched by name, so 3 or 4 players may come back in any order), and the guests come back by themselves. A saved player whose player does not come back within 90 seconds is put away. Hosting or joining gives a player who kept the default name (Unknown) his Steam name, so the names tell the players apart.
 
 ## What the co-op does
@@ -34,6 +34,7 @@ Every player needs the same ReCoF build and Steam running.
 - **A team wipe** brings everyone back at the level's start with their things, without restarting the map.
 - **Story effects for everyone.** Objectives, on-screen texts, grey fades, rain changes and the phone going dead reach every player (the music already did), and so do the keypad code note, the boss bar and the end of the wheelchair ride.
 - **The one who set it off.** Story entities written for one player act on the player who set them off, not the host: a button unlocked with an item, the c_basement keypad, the strangle scene, the look-at scares, the doctor duel's and the sledgehammer Book Simon's triggers.
+- **Voices come from the teammate.** In story co-op a teammate's voice comes from where he stands, fades out with distance (silent at `rc_voice_range` units, 1400) and sounds muffled behind a wall (`rc_voice_wall` percent of its volume, 10). `rc_voice_3d 0` brings back the flat retail voice; `voice_showchannels 1` prints where each voice plays. The room's echo does not reach voices yet.
 - **Bosses take the nearest player.** The roof boss and Purnell fight the nearest player they can see, Book Simon shoots at the nearest player in a wheelchair, and heads turn to the nearest player. A player in a scene is unseen on his own, not because a teammate is in one.
 - **Late joiners** come in with the weapons of the teammate they appear next to; the group's keys follow by themselves.
 - **Harder with more players.** Monsters get 25% more health for each player beyond the first (at most double), the monsters the map places too; a player joining or leaving changes it, and a hurt monster stays as hurt. This takes the place of the police co-op's damage multiplier; the police co-op's hunting monster Simon never appears.
@@ -49,20 +50,23 @@ Every player needs the same ReCoF build and Steam running.
 | `rc_coop_monster_health` | 25 | percent more monster health for each player beyond the first, at most double; 0 for single player's |
 | `rc_coop_skip_vote` | 1 | 1 lets the guests skip a scene once every player watching it has pressed Enter; 0 only the host skips |
 
+`rc_coop_preset classic`, `casual` or `hardcore` sets them in one go, and `rc_coop_preset` alone shows them and which preset they are. Classic is the table above; casual respawns after 5 s and leaves the monsters as in single player; hardcore keeps Cry of Fear's own death rule, saves only at tape recorders and gives monsters 50% more health a player. Every co-op save keeps the settings it was played with, and loading it sets them again.
+
+The voice options (`rc_voice_3d`, `rc_voice_range`, `rc_voice_wall`) are each player's own.
+
 These are server settings: they live in the host's game, so the host's value applies to everyone and a guest cannot change it. The same holds for the movement settings (`rc_bhopcap`, `rc_hlmovement`, `rc_ducktap`), which already reach every player's prediction.
 
 ## Not done yet
 
 - A load menu for co-op saves, and loading the last save after a team wipe.
-- The menu: Cry of Fear's main menu is made of pictures, so Host and Invite buttons need their own; for now the console commands and the `+rc_coop_start` launch option.
 - Starting ReCoF instead of retail Cry of Fear when a friend accepts an invite with the game closed (Steam launch options, decision 11).
 - The 28 maps that need a rule of their own (bosses, vehicles, endings) and the rest of the places where the story only looks at the first player (G7): bosses, puzzles, sounds played "from the player", the look-at scenes.
-- The voice chat and the host's presets.
+- The voice's room echo, push to talk tuning, Simon's phone as a radio, and monsters that hear voices (decisions 13 to 18).
 - A death trigger (cof_killplayer) kills the whole group, which brings everyone back at the level's start (a team wipe); single player's death is the same restart for Simon.
 
 ## Tested
 
-On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, a team wipe, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, Simon's voice, saving and loading with both players (a guest coming back by himself), the autosave after a level change holding both players, host-only pause, the host skipping the intro for both (on to c_nightmare), monster health with one and two players and after a load, a guest leaving and joining again, the single-player level change and intro skip unchanged, and the speedrun address check. A tape recorder saved the group (the host using it; loading coop_tape gave back the saved health). Later the same day: a guest using a tape recorder (loading coop_tape gave him back his saved health), the keypad code a guest learned on c_sewer2 opening the keypad for the host and used up for both, c_basement's keypad code and picture reaching the guest, the padlock on c_start (a guest opening, cancelling and solving it, the host untouched), a guest's skip vote, and a guest coming back by name into his own slot after two loads. Not tested: the overlay invite and Join Game clicks, three or four players, two players on different internet connections, Proton, and the story entities of the later maps (bosses, puzzles, the endings), which were only built.
+On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, a team wipe, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, Simon's voice, saving and loading with both players (a guest coming back by himself), the autosave after a level change holding both players, host-only pause, the host skipping the intro for both (on to c_nightmare), monster health with one and two players and after a load, a guest leaving and joining again, the single-player level change and intro skip unchanged, and the speedrun address check. A tape recorder saved the group (the host using it; loading coop_tape gave back the saved health). Later the same day: a guest using a tape recorder (loading coop_tape gave him back his saved health), the keypad code a guest learned on c_sewer2 opening the keypad for the host and used up for both, c_basement's keypad code and picture reaching the guest, the padlock on c_start (a guest opening, cancelling and solving it, the host untouched), a guest's skip vote, a guest coming back by name into his own slot after two loads, the presets kept in a save, and continuing a co-op save from the main menu (the menu and its panel seen in screenshots). Not tested: the overlay invite and Join Game clicks, three or four players, two players on different internet connections, Proton, the story entities of the later maps (bosses, puzzles, the endings), which were only built, and the proximity voice, which was built and run but not heard (no microphone was recorded).
 
 ## For testers
 
