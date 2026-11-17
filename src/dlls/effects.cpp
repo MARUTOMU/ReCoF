@@ -335,6 +335,8 @@ extern int m_iMusicManagerLoops;
 extern float m_fMusicManagerFadeTime;
 extern const char *GetClassnameForId[];
 bool showobjective;
+
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 extern int g_iSurvivalMode;
 extern int m_iSimonMode;
 extern bool m_gbIsInCutscene;
@@ -5243,10 +5245,46 @@ void CRainModify::KeyValue( KeyValueData *pkvd )
 	}
 }
 
+// ReCoF story co-op: the same settings rain_modify gives the single player, for one player
+static void RcRainApply( CRainModify *pRain, CBasePlayer *pPlayer )
+{
+	if ( pRain->fadeTime )
+	{
+		pPlayer->Rain_ideal_dripsPerSecond = pRain->Rain_Drips;
+		pPlayer->Rain_ideal_randX = pRain->Rain_randX;
+		pPlayer->Rain_ideal_randY = pRain->Rain_randY;
+		pPlayer->Rain_ideal_windX = pRain->Rain_windX;
+		pPlayer->Rain_ideal_windY = pRain->Rain_windY;
+		pPlayer->Rain_endFade = gpGlobals->time + pRain->fadeTime;
+		pPlayer->Rain_nextFadeUpdate = gpGlobals->time + 1;
+	}
+	else
+	{
+		pPlayer->Rain_dripsPerSecond = pRain->Rain_Drips;
+		pPlayer->Rain_randX = pRain->Rain_randX;
+		pPlayer->Rain_randY = pRain->Rain_randY;
+		pPlayer->Rain_windX = pRain->Rain_windX;
+		pPlayer->Rain_windY = pRain->Rain_windY;
+		pPlayer->Rain_needsUpdate = 1;
+	}
+}
+
 void CRainModify::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if (pev->spawnflags & 1)
 		return; // constant
+
+	// ReCoF story co-op: the change reaches every player (multiplayer otherwise keeps only static rain)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				RcRainApply( this, (CBasePlayer *)pEnt );
+		}
+		return;
+	}
 
 	if (gpGlobals->deathmatch)
 	{
@@ -8600,9 +8638,9 @@ void CCofPhoneDisable::Spawn( void )
 	pev->movetype = MOVETYPE_NONE;
 }
 
-void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+// ReCoF story co-op: the phone disable for one player (the code that was Use)
+static void RcPhoneDisableFor( CBaseEntity *player )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )
 	{
@@ -8655,6 +8693,23 @@ void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_T
 			}
 		}
 	}
+}
+
+void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+{
+	// ReCoF story co-op: every player's phone
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				RcPhoneDisableFor( pEnt );
+		}
+		return;
+	}
+
+	RcPhoneDisableFor( UTIL_FirstPlayer_rc() );
 }
 
 //=========================================================
@@ -11724,6 +11779,16 @@ void CCoFGreyFade::Spawn( void )
 
 void CCoFGreyFade::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
+	// ReCoF story co-op: every player's screen
+	if ( RcCoop_Story() )
+	{
+		MESSAGE_BEGIN( MSG_ALL, gmsgGreyFade );
+			WRITE_BYTE( pev->iuser1 );
+			WRITE_BYTE( pev->iuser2 );
+		MESSAGE_END();
+		return;
+	}
+
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )
@@ -12336,6 +12401,21 @@ void CCoFObjective::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 
 			pPlayer->m_sObjectiveText = pev->message;
 			showobjective = true;
+		}
+	}
+
+	// ReCoF story co-op: every player gets the objective (the popup flag goes with the first who updates)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || !pEnt->IsPlayer() || pEnt == player )
+				continue;
+			CBasePlayer *pOther = (CBasePlayer *)pEnt;
+			if ( pev->target )
+				pOther->m_sCustomObjectives = pev->target;
+			pOther->m_sObjectiveText = pev->message;
 		}
 	}
 }
@@ -13026,6 +13106,10 @@ void CCoFSimpleText::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 
 
 	if ( pev->spawnflags & 1 )
+		all = true;
+
+	// ReCoF story co-op: every player reads it
+	if ( RcCoop_Story() )
 		all = true;
 
 	CBaseEntity *player = UTIL_FirstPlayer_rc();

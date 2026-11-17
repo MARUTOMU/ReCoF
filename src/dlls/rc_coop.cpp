@@ -591,6 +591,12 @@ static void RcCoopGo( void )
 	g_engfuncs.pfnServerPrint( "ReCoF co-op: the next exit touch goes now\n" );
 }
 
+// a story co-op game (the effects that reach only the first player in single player reach everyone)
+bool RcCoop_Story( void )
+{
+	return RcCoopRules() != NULL;
+}
+
 bool RcPoliceMP( void )
 {
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();
