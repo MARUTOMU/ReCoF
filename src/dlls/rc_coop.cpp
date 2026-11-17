@@ -13,11 +13,15 @@
 #include "gamerules.h"
 #include "game.h"
 
+extern void UTIL_ProMessage( CBaseEntity *pEntity, const char *pMessage, int colour, bool all );
+
 // G1: how long an exit a player walks into waits for the rest of the group before it brings them (0: at once)
 cvar_t	rc_coop_exit_wait = { "rc_coop_exit_wait", "60", FCVAR_SERVER };
 // G12: seconds before a dead player comes back next to the group, with his things (0: Cry of Fear's own rule, jump
 // after 60 s or wait sv_auto_respawn_time, without them)
 cvar_t	rc_coop_respawn_time = { "rc_coop_respawn_time", "10", FCVAR_SERVER };
+// G13: 1 saves the group's game as coop_auto once every player is in on a new level
+cvar_t	rc_coop_autosave = { "rc_coop_autosave", "1", FCVAR_SERVER };
 
 static CHalfLifeStoryCoop *RcCoopRules( void )
 {
@@ -107,6 +111,8 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 static void RcCoopSyncKeys( void );
 static void RcCoopSyncCodes( void );
 static float s_flRcNextKeySync;
+static string_t s_iszRcAutosaved;	// the level the last autosave was made on
+static float s_flRcLevelStart;
 
 void CHalfLifeStoryCoop::Think( void )
 {
@@ -117,6 +123,31 @@ void CHalfLifeStoryCoop::Think( void )
 		s_flRcNextKeySync = gpGlobals->time + 1;
 		RcCoopSyncKeys();
 		RcCoopSyncCodes();
+
+		// G13: an autosave once every player is in on a new level
+		if ( s_iszRcAutosaved != gpGlobals->mapname || s_flRcLevelStart > gpGlobals->time )
+		{
+			if ( s_flRcLevelStart == 0 || s_flRcLevelStart > gpGlobals->time )
+				s_flRcLevelStart = gpGlobals->time;
+			bool bAllIn = true;
+			int nIn = 0;
+			for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+			{
+				CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+				if ( !RcCoopPresent( pEnt ) )
+					continue;
+				if ( m_flSeen[i] == 0 || gpGlobals->time - m_flSeen[i] > 2.0 )
+					bAllIn = false;
+				nIn++;
+			}
+			if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - s_flRcLevelStart > 3 )
+			{
+				s_iszRcAutosaved = gpGlobals->mapname;
+				s_flRcLevelStart = 0;
+				SERVER_COMMAND( "save coop_auto\n" );
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: autosave on %s (load coop_auto)\n", STRING( gpGlobals->mapname ) ) );
+			}
+		}
 	}
 
 	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
@@ -458,6 +489,31 @@ void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
 			bTrigger ? "same trigger" : "scene" ) );
 }
 
+// G13: a tape recorder in story co-op: the host's game saves the group (coop_tape); a guest's own game cannot, and the
+// save screen would show only to the one who used it. On the hardest difficulty the user spends a tape as in single
+// player. False outside story co-op.
+bool RcCoop_TapeSave( CBasePlayer *pPlayer )
+{
+	if ( !RcCoopRules() )
+		return false;
+	if ( CVAR_GET_FLOAT( "difficulty" ) == 4 )
+	{
+		pPlayer->m_iTapes--;
+		if ( pPlayer->m_iTapes <= 0 )
+			pPlayer->HasItemInSlot( "inventoryitems/cassettetape.txt", true );
+	}
+	SERVER_COMMAND( "save coop_tape\n" );
+	EMIT_SOUND( ENT( pPlayer->pev ), CHAN_VOICE, "save/save_sequence.wav", 1, ATTN_NORM );
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+			UTIL_ProMessage( (CBasePlayer *)pEnt, "The group's progress was recorded.", 3, false );
+	}
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s saved the group's game at a tape recorder (load coop_tape)\n", STRING( pPlayer->pev->netname ) ) );
+	return true;
+}
+
 static EHANDLE s_hRcWaitExit;
 static float s_flRcWaitStart, s_flRcWaitTouch, s_flRcWaitMsg;
 static bool s_bRcGoNow;
@@ -674,4 +730,5 @@ void RcCoop_Init( void )
 	g_engfuncs.pfnAddServerCommand( "rc_coop_go", RcCoopGo );
 	CVAR_REGISTER( &rc_coop_exit_wait );
 	CVAR_REGISTER( &rc_coop_respawn_time );
+	CVAR_REGISTER( &rc_coop_autosave );
 }
