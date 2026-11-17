@@ -318,6 +318,7 @@ public:
 	bool m_bThreeSlots;
 	int m_iUsingComputerOrPhone;
 	bool b_GoingThroughADoor;
+	bool m_bRcDoorHid;	// ReCoF (B430): the door hid this player (EF_NODRAW), so its end shows him again
 	int m_iFlashlight;
 	int m_iClientFlashlight;
 	int m_ClientDrawBars;

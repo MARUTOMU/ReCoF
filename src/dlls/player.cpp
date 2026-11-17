@@ -723,6 +723,7 @@ TYPEDESCRIPTION	CBasePlayer::m_playerSaveData[] =
 	DEFINE_FIELD( CBasePlayer, m_fLightlevel, FIELD_FLOAT ),
 
 	DEFINE_FIELD( CBasePlayer, b_GoingThroughADoor, FIELD_BOOLEAN ),
+	DEFINE_FIELD( CBasePlayer, m_bRcDoorHid, FIELD_BOOLEAN ),	// ReCoF (B430)
 	DEFINE_ARRAY( CBasePlayer, inventorySlot, FIELD_STRING, 7 ),
 	DEFINE_ARRAY( CBasePlayer, inventorySlotModels, FIELD_STRING, 7 ),
 	DEFINE_ARRAY( CBasePlayer, inventorySlotClassname, FIELD_STRING, 7 ),
@@ -5734,7 +5735,18 @@ void CBasePlayer::PostThink()
 	if ( b_GoingThroughADoor && g_pGameRules && g_pGameRules->IsMultiplayer() && IsAlive() )
 	{
 		if ( !( pev->effects & EF_NODRAW ) )
+		{
 			pev->effects |= EF_NODRAW;
+			m_bRcDoorHid = true;	// ReCoF (B430)
+		}
+	}
+	else if ( m_bRcDoorHid && !b_GoingThroughADoor )
+	{
+		// ReCoF (B430): the door's end (CoF_InterDoor.cpp) clears b_GoingThroughADoor but never the hide, so after
+		// his first door the others never saw this player again, and AddToFullPack stopped sending him (his voice
+		// lost its place with him)
+		m_bRcDoorHid = false;
+		pev->effects &= ~EF_NODRAW;
 	}
 
 	if ( pev->vuser4.x != pev->fuser3 )

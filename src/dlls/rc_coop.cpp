@@ -12,6 +12,7 @@
 #include "weapons.h"
 #include "gamerules.h"
 #include "game.h"
+#include "shake.h"	// B430: FFADE_IN
 
 extern void UTIL_ProMessage( CBaseEntity *pEntity, const char *pMessage, int colour, bool all );
 
@@ -274,6 +275,15 @@ static void RcCoopResendState( CBasePlayer *pPlayer )
 	pPlayer->m_pClientActiveItem = NULL;
 	for ( int a = 0; a < MAX_AMMO_SLOTS; a++ )
 		pPlayer->m_rgAmmoLast[a] = -1;
+	// B430: a door cannot go on across a level change; a player carried mid-door arrived frozen, faded to black and
+	// hidden. The door's own end, here: control back, the fade lifted, shown again (PostThink)
+	if ( pPlayer->b_GoingThroughADoor )
+	{
+		pPlayer->b_GoingThroughADoor = false;
+		pPlayer->EnableControl( TRUE );
+		UTIL_ScreenFade( pPlayer, Vector( 0, 0, 0 ), 0.5, 0, 255, FFADE_IN );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s came in mid-door, the door is over\n", STRING( pPlayer->pev->netname ) ) );
+	}
 }
 
 // CmdStart: this player's client sends commands, so it has loaded the level (PreThink returns early in some scenes)
@@ -1157,9 +1167,10 @@ static void RcCoopDump( void )
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d move: fuser3 %g, iuser3 %d, maxspeed %.0f, ducking %d, in duck %d, "
-			"view %.0f, on ground %d, phone %d, fall freeze %d, physinfo %s\n", i, pPlayer->pev->fuser3, pPlayer->pev->iuser3, pPlayer->pev->maxspeed,
+			"view %.0f, on ground %d, phone %d, fall freeze %d, effects %x, door %d hid %d, physinfo %s\n", i, pPlayer->pev->fuser3, pPlayer->pev->iuser3, pPlayer->pev->maxspeed,
 			( pPlayer->pev->flags & FL_DUCKING ) != 0, pPlayer->pev->bInDuck, pPlayer->pev->view_ofs.z, ( pPlayer->pev->flags & FL_ONGROUND ) != 0,
-			pPlayer->m_bInPhoneCall, pPlayer->m_bShouldFallFreeze, g_engfuncs.pfnGetPhysicsInfoString( pPlayer->edict() ) ) );
+			pPlayer->m_bInPhoneCall, pPlayer->m_bShouldFallFreeze, pPlayer->pev->effects, pPlayer->b_GoingThroughADoor, pPlayer->m_bRcDoorHid,
+			g_engfuncs.pfnGetPhysicsInfoString( pPlayer->edict() ) ) );
 	}
 
 	// G16: the live monsters, their health and the scale they have
