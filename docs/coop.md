@@ -2,16 +2,18 @@
 
 Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
 
-The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B376 in [bugs.md](bugs.md).
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B380 in [bugs.md](bugs.md).
 
 ## Playing
 
 Every player needs the same ReCoF build and Steam running.
 
-- **Host:** open the console and type `rc_coop_start` (Simon's story from the start) or `rc_coop_start <map>` (for example `rc_coop_start c_apartment1`). When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
+- **Host:** open the console and type `rc_coop_start` (Simon's story from the start) or `rc_coop_start <map>` (for example `rc_coop_start c_apartment1`). It also works as a launch option, `+rc_coop_start c_apartment1`. When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
 - **Invite:** `rc_coop_invite` opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
 - **Join by hand:** `rc_coop_join 169.254.x.x:port` in the console.
 - **Status:** `rc_coop_status` shows the datagrams through Steam and the relay network's state.
+- **Leaving:** a guest whose host loads a save or restarts connects again by himself (up to 10 tries); `rc_coop_leave` leaves and stops that.
+- **Saving:** the game saves itself as `coop_auto` once everyone is in on each new level, and as `coop_tape` when anyone uses a tape recorder (on the hardest difficulty it costs that player a tape); the host can also type `save <name>`. The host loads with `load coop_auto`, `load coop_tape` or `load <name>`; every saved player is kept for his player, and the guests come back by themselves.
 
 ## What the co-op does
 
@@ -25,6 +27,9 @@ Every player needs the same ReCoF build and Steam running.
 - **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate.
 - **Cameras** already show every scene to every player (Cry of Fear's own code).
 - **Teammates.** No friendly fire; a player who joins comes in next to a teammate.
+- **Pause.** Only the host pauses (his menu pauses everyone); a guest's menu pauses nobody.
+- **Simon, not a police officer.** Simon's voice, hints, dual wield, the slow walk at low health and the map's own sky, as in single player.
+- **A team wipe** brings everyone back at the level's start with their things, without restarting the map.
 
 ## Settings (host)
 
@@ -33,20 +38,22 @@ Every player needs the same ReCoF build and Steam running.
 | `rc_coop` | 0 | 1 with more than one slot plays the story in co-op (set by `rc_coop_start`) |
 | `rc_coop_exit_wait` | 60 | seconds an exit waits for the group; 0 changes level at once |
 | `rc_coop_respawn_time` | 10 | seconds before a dead player comes back with his things; 0 keeps Cry of Fear's rule |
+| `rc_coop_autosave` | 1 | saves `coop_auto` once everyone is in on each new level |
 
 These are server settings: they live in the host's game, so the host's value applies to everyone and a guest cannot change it. The same holds for the movement settings (`rc_bhopcap`, `rc_hlmovement`, `rc_ducktap`), which already reach every player's prediction.
 
 ## Not done yet
 
-- Party saves (a co-op game cannot be saved and resumed yet); a team wipe restarts the map as in the police co-op.
-- The menu: Host, Invite and Join buttons; for now the console commands above.
+- Matching saved players by identity: with 3 or 4 players coming back in another order after a load, they get each other's saved player.
+- A load menu for co-op saves, and loading the last save after a team wipe.
+- The menu: Cry of Fear's main menu is made of pictures, so Host and Invite buttons need their own; for now the console commands and the `+rc_coop_start` launch option.
 - Starting ReCoF instead of retail Cry of Fear when a friend accepts an invite with the game closed (Steam launch options, decision 11).
 - The 28 maps that need a rule of their own (bosses, vehicles, endings) and the places where the story only looks at the first player (G7).
 - Simon's single-player behaviour in co-op (the police co-op branches), host-only pause, the voice chat, presets.
 
 ## Tested
 
-On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, the single-player level change unchanged, and the speedrun address check. Not tested: the overlay invite and Join Game clicks, four players, two players on different internet connections, Proton.
+On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, a team wipe, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, Simon's voice, saving and loading with both players (a guest coming back by himself), the autosave after a level change holding both players, host-only pause, the single-player level change unchanged, and the speedrun address check. Not tested: the overlay invite and Join Game clicks, a tape recorder in game, four players, two players on different internet connections, Proton.
 
 ## For testers
 
