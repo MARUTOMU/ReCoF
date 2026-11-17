@@ -99,6 +99,17 @@ public:
 		}
 	}
 
+	// ReCoF (B413): flat tabs as cof-enhanced's: the chosen one on a dark red, the one under the mouse a little
+	// lighter, the others on nothing (the red line under the chosen one is its border, RcTheme.cpp)
+	virtual Color GetButtonBgColor()
+	{
+		if (_active)
+			return Color(150, 24, 20, 70);
+		if (IsArmed())
+			return Color(255, 255, 255, 18);
+		return Color(0, 0, 0, 0);
+	}
+
 	virtual void SetActive(bool state)
 	{
 		_active = state;

@@ -18,6 +18,8 @@
 
 #include <vgui/IScheme.h>
 #include <vgui/ISurface.h>
+#include <vgui/IBorder.h>	// B413
+#include <vgui/IPanel.h>
 #include <vgui_controls/Controls.h>
 #include "Color.h"
 
@@ -297,6 +299,101 @@ static bool RcRegisterFont( int id )
 }
 
 //-----------------------------------------------------------------------------
+// B413: the borders, flat as cof-enhanced's windows: a hairline round buttons, boxes, lists and windows (lighter while
+// pressed, red with the keyboard's focus), nothing round a tab and a red line under the chosen one, nothing on the
+// title bar's and scroll bars' buttons; in place of trackerscheme.res's raised and sunken frames. A name not in the
+// list keeps the scheme's own border.
+//-----------------------------------------------------------------------------
+int RcUiScaled( int value );
+
+enum { RCB_NONE, RCB_LINE, RCB_UNDER };
+
+struct RcBorderDef_t
+{
+	const char	*name;
+	int			style;
+	int			r, g, b, a;
+	int			inset;
+};
+
+static const RcBorderDef_t s_RcBorderDefs[] =
+{
+	{ "BaseBorder", RCB_LINE, 62, 62, 62, 255, 1 },	// text boxes, lists
+	{ "InsetBorder", RCB_LINE, 62, 62, 62, 255, 1 },
+	{ "ComboBoxBorder", RCB_LINE, 80, 80, 80, 255, 1 },
+	{ "BrowserBorder", RCB_LINE, 62, 62, 62, 255, 1 },
+	{ "ButtonBorder", RCB_LINE, 90, 90, 90, 255, 1 },
+	{ "RaisedBorder", RCB_LINE, 90, 90, 90, 255, 1 },
+	{ "ButtonDepressedBorder", RCB_LINE, 160, 160, 160, 255, 1 },
+	{ "ButtonKeyFocusBorder", RCB_LINE, 235, 70, 60, 255, 1 },
+	{ "FrameBorder", RCB_LINE, 95, 95, 95, 255, 1 },
+	{ "MenuBorder", RCB_LINE, 80, 80, 80, 255, 1 },
+	{ "ToolTipBorder", RCB_LINE, 95, 95, 95, 255, 1 },
+	{ "TabBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+	{ "TabActiveBorder", RCB_UNDER, 235, 70, 60, 255, 0 },
+	{ "TitleButtonBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+	{ "TitleButtonDisabledBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+	{ "TitleButtonDepressedBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+	{ "ScrollBarButtonBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+	{ "ScrollBarButtonDepressedBorder", RCB_NONE, 0, 0, 0, 0, 0 },
+};
+
+#define RC_BORDERS	( sizeof( s_RcBorderDefs ) / sizeof( s_RcBorderDefs[0] ) )
+
+class CRcBorder : public IBorder
+{
+public:
+	const RcBorderDef_t	*m_pDef;
+
+	virtual void Paint( VPANEL panel )
+	{
+		int wide, tall;
+		ipanel()->GetSize( panel, wide, tall );
+		Paint( 0, 0, wide, tall );
+	}
+	virtual void Paint( int x0, int y0, int x1, int y1 )
+	{
+		if ( !m_pDef || m_pDef->style == RCB_NONE )
+			return;
+		surface()->DrawSetColor( m_pDef->r, m_pDef->g, m_pDef->b, m_pDef->a );
+		if ( m_pDef->style == RCB_UNDER )
+		{
+			int thick = RcUiScaled( 2 );
+			surface()->DrawFilledRect( x0, y1 - thick, x1, y1 );
+			return;
+		}
+		surface()->DrawOutlinedRect( x0, y0, x1, y1 );
+	}
+	virtual void Paint( int x0, int y0, int x1, int y1, int breakSide, int breakStart, int breakStop )
+	{
+		Paint( x0, y0, x1, y1 );
+	}
+	virtual void SetInset( int left, int top, int right, int bottom ) {}
+	virtual void GetInset( int &left, int &top, int &right, int &bottom )
+	{
+		left = top = right = bottom = m_pDef ? m_pDef->inset : 0;
+	}
+	virtual void ApplySchemeSettings( IScheme *pScheme, KeyValues *inResourceData ) {}
+	virtual const char *GetName() { return m_pDef ? m_pDef->name : ""; }
+	virtual void SetName( const char *name ) {}
+};
+
+static CRcBorder s_RcBorders[RC_BORDERS];
+
+static IBorder *RcThemeBorder( const char *name )
+{
+	for ( int i = 0; name && i < (int)RC_BORDERS; i++ )
+	{
+		if ( !stricmp( name, s_RcBorderDefs[i].name ) )
+		{
+			s_RcBorders[i].m_pDef = &s_RcBorderDefs[i];
+			return &s_RcBorders[i];
+		}
+	}
+	return NULL;
+}
+
+//-----------------------------------------------------------------------------
 // The wrappers
 //-----------------------------------------------------------------------------
 class CRcScheme : public IScheme
@@ -305,7 +402,11 @@ public:
 	IScheme *m_pReal;
 
 	virtual const char *GetResourceString( const char *stringName ) { return m_pReal->GetResourceString( stringName ); }
-	virtual IBorder *GetBorder( const char *borderName ) { return m_pReal->GetBorder( borderName ); }
+	virtual IBorder *GetBorder( const char *borderName )
+	{
+		IBorder *b = RcThemeBorder( borderName );	// B413
+		return b ? b : m_pReal->GetBorder( borderName );
+	}
 	virtual HFont GetFont( const char *fontName, bool proportional )
 	{
 		HFont f = RcThemeFont( fontName );

@@ -852,6 +852,7 @@ void Frame::PerformLayout()
 	_minimizeToSysTrayButton->MoveToFront();
 
 	_menuButton->SetBounds(5+2, 5+3, 18, 18);
+	_menuButton->SetVisible( false );	// ReCoF (B413): no icon in the title bar
 
 	float scale = 1;
 	if (IsProportional())
@@ -901,6 +902,20 @@ void Frame::PerformLayout()
 //-----------------------------------------------------------------------------
 // Purpose: Set the text in the title bar.
 //-----------------------------------------------------------------------------
+#include <wctype.h>	// ReCoF (B413): towupper
+
+// ReCoF (B413): window titles in capitals, as cof-enhanced's (the text after its localization)
+static void RcUpperTitle( TextImage *title )
+{
+	wchar_t text[256];
+	text[0] = 0;
+	title->GetText( text, sizeof( text ) / sizeof( text[0] ) - 1 );	// a count of characters, which wcsncpy pads to
+	text[255] = 0;
+	for ( wchar_t *p = text; *p; p++ )
+		*p = towupper( *p );
+	title->SetText( text );
+}
+
 void Frame::SetTitle(const char *title, bool surfaceTitle)
 {
 	if (!_title)
@@ -909,6 +924,7 @@ void Frame::SetTitle(const char *title, bool surfaceTitle)
 	}
 
 	_title->SetText(title);
+	RcUpperTitle( _title );	// ReCoF (B413)
 
 	// see if the combobox text has changed, and if so, post a message detailing the new text
 	const char *newTitle = title;
@@ -949,6 +965,7 @@ void Frame::SetTitle(const wchar_t *title, bool surfaceTitle)
 		_title = new TextImage( "" );
 	}
 	_title->SetText(title);
+	RcUpperTitle( _title );	// ReCoF (B413)
 	if (surfaceTitle)
 	{
 		surface()->SetTitle(GetVPanel(), title);
@@ -1189,8 +1206,13 @@ void Frame::PaintBackground()
 
 		float scale = ( (float)( screenH ) / (float)( proH ) );
 
+		// ReCoF (B413): the title band across the whole window, a hairline under it, the title in capitals where the
+		// icon was
+		int band = (int)(28 * scale);
 		surface()->DrawSetColor(titleColor);
-		surface()->DrawFilledRect(5, 5, wide - 5, (int)(28 * scale));
+		surface()->DrawFilledRect(1, 1, wide - 1, band);
+		surface()->DrawSetColor(255, 255, 255, 36);
+		surface()->DrawFilledRect(1, band, wide - 1, band + 1);
 
 		if (_title)
 		{
@@ -1202,7 +1224,7 @@ void Frame::PaintBackground()
 			{
 				_title->SetColor(_titleBarDisabledFgColor);
 			}
-			_title->SetPos(28, 9);
+			_title->SetPos((int)(12 * scale), ( band - tall ) / 2 + 1);
 			_title->SetSize(wide - 72, tall);
 			_title->Paint();
 		}
@@ -1222,7 +1244,7 @@ void Frame::ApplySchemeSettings(IScheme *pScheme)
 	_titleBarDisabledFgColor = GetSchemeColor("TitleBarDisabledFgColor", pScheme);
 	_titleBarDisabledBgColor = GetSchemeColor("TitleBarDisabledBgColor", pScheme);
 
-	_title->SetFont(pScheme->GetFont("Default", IsProportional()));
+	_title->SetFont(pScheme->GetFont("DefaultBold", IsProportional()));	// ReCoF (B413)
 	_title->ResizeImageToContent();
 
 	HFont marfont_guess = pScheme->GetFont("Marlett", IsProportional());
