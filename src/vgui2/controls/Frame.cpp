@@ -809,6 +809,16 @@ void Frame::LayoutProportional( FrameButton *bt )
 //-----------------------------------------------------------------------------
 // Purpose: Lays out the position of the grips and buttons
 //-----------------------------------------------------------------------------
+#ifndef GLQUAKE
+// ReCoF (B427): the title band's height, from the title font as the content's top is (GetClientArea: font + 13), so
+// the band and the content meet on every screen; it followed the screen height (28 lines at 480) while the font
+// follows the menu scale, and at 4:3 the content covered the title (GameUI.dll only, see B415)
+static int RcTitleBand( TextImage *title )
+{
+	return surface()->GetFontTall( title->GetFont() ) + 12;
+}
+#endif
+
 void Frame::PerformLayout()
 {
 	// chain back
@@ -880,6 +890,15 @@ void Frame::PerformLayout()
 		_closeButton->SetPos((wide-side_border_offset)-offset,top_border_offset);
 		offset += offset_start;
 		LayoutProportional( _closeButton );
+#ifndef GLQUAKE
+		// ReCoF (B427): inside the title band, centred in it
+		int band = RcTitleBand( _title ), bw, bt;
+		_closeButton->GetSize( bw, bt );
+		if ( bt > band - 6 )
+			bt = bw = band - 6;
+		_closeButton->SetSize( bw, bt );
+		_closeButton->SetPos( wide - side_border_offset - bw - 2, ( band - bt ) / 2 + 1 );
+#endif
 	}
 	if (_minimizeToSysTrayButton->IsVisible())
 	{
@@ -1217,7 +1236,7 @@ void Frame::PaintBackground()
 #ifndef GLQUAKE
 		// ReCoF (B413): the title band across the whole window, a hairline under it, the title in capitals where the
 		// icon was (B415: GameUI.dll's windows only)
-		int band = (int)(28 * scale);
+		int band = RcTitleBand( _title );	// B427
 		surface()->DrawSetColor(titleColor);
 		surface()->DrawFilledRect(1, 1, wide - 1, band);
 		surface()->DrawSetColor(255, 255, 255, 36);
