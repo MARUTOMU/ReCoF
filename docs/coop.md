@@ -1,0 +1,56 @@
+# Story co-op (work in progress)
+
+Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
+
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B376 in [bugs.md](bugs.md).
+
+## Playing
+
+Every player needs the same ReCoF build and Steam running.
+
+- **Host:** open the console and type `rc_coop_start` (Simon's story from the start) or `rc_coop_start <map>` (for example `rc_coop_start c_apartment1`). When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
+- **Invite:** `rc_coop_invite` opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
+- **Join by hand:** `rc_coop_join 169.254.x.x:port` in the console.
+- **Status:** `rc_coop_status` shows the datagrams through Steam and the relay network's state.
+
+## What the co-op does
+
+- **Level exits wait for the group.** A player who walks into an exit waits there with "Waiting at the exit: k of N players" on everyone's screen until the whole group is in it, or until `rc_coop_exit_wait` seconds pass (default 60), then the players who are not there are brought to the exit. The host can end the wait with `rc_coop_go`. Exits fired by a door or a script do not wait.
+- **Everyone keeps their things through a level change.** The engine carries every player through the single-player transition (health, weapons, inventory), as it does for Simon alone.
+- **No bouncing back.** A player who arrives inside the exit back counts for exits only after he has stepped out of every exit once.
+- **Players still loading cannot be hurt.**
+- **Respawn.** A player who dies comes back next to a living teammate after `rc_coop_respawn_time` seconds (default 10), with his weapons and ammo. Reviving by CPR works as in the police co-op.
+- **Keys belong to the group.** A key, fuse or other story item one player picks up is in everyone's inventory; when it is used on its door or lock it is gone for everyone.
+- **One code for the group.** The padlock combination and the keypad code are the same for every player.
+- **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate.
+- **Cameras** already show every scene to every player (Cry of Fear's own code).
+- **Teammates.** No friendly fire; a player who joins comes in next to a teammate.
+
+## Settings (host)
+
+| Setting | Default | What it does |
+|---|---|---|
+| `rc_coop` | 0 | 1 with more than one slot plays the story in co-op (set by `rc_coop_start`) |
+| `rc_coop_exit_wait` | 60 | seconds an exit waits for the group; 0 changes level at once |
+| `rc_coop_respawn_time` | 10 | seconds before a dead player comes back with his things; 0 keeps Cry of Fear's rule |
+
+These are server settings: they live in the host's game, so the host's value applies to everyone and a guest cannot change it. The same holds for the movement settings (`rc_bhopcap`, `rc_hlmovement`, `rc_ducktap`), which already reach every player's prediction.
+
+## Not done yet
+
+- Party saves (a co-op game cannot be saved and resumed yet); a team wipe restarts the map as in the police co-op.
+- The menu: Host, Invite and Join buttons; for now the console commands above.
+- Starting ReCoF instead of retail Cry of Fear when a friend accepts an invite with the game closed (Steam launch options, decision 11).
+- The 28 maps that need a rule of their own (bosses, vehicles, endings) and the places where the story only looks at the first player (G7).
+- Simon's single-player behaviour in co-op (the police co-op branches), host-only pause, the voice chat, presets.
+
+## Tested
+
+On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, the single-player level change unchanged, and the speedrun address check. Not tested: the overlay invite and Join Game clicks, four players, two players on different internet connections, Proton.
+
+## For testers
+
+- `rc_coop_dump` (host console) prints every player's health, place, weapons, inventory and codes.
+- `rc_coop_host [relay] [nomap]` and `rc_coop_join <ip:port> [relay]` are the pieces `rc_coop_start` uses; `relay` turns off direct connections, as between two homes.
+- Starting `cof.exe` with `-rccmdfile` runs the console commands written to `rc_cmd.txt` next to `cof.exe` once a second (test scripts only).
+- `rc_coop_steam.log` next to `cof.exe` logs the Steam side (no Steam IDs or addresses).
