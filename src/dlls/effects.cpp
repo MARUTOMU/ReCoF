@@ -7120,6 +7120,8 @@ public:
 
 LINK_ENTITY_TO_CLASS( cof_teleport, CCofTeleport );
 
+void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller );	// ReCoF story co-op (rc_coop.cpp)
+
 void CCofTeleport::Spawn( void )
 {
 	pev->solid = SOLID_NOT;
@@ -7186,6 +7188,9 @@ void CCofTeleport::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 			pPlayer->pev->fixangle = TRUE;
 
 			pPlayer->b_GoingThroughADoor = false;
+
+			// ReCoF story co-op: the group goes along (rc_coop.cpp)
+			RcCoop_TeleportFollow( pPlayer, pCaller );
 		}
 		else if ( pev->message )
 		{

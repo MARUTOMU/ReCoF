@@ -373,6 +373,87 @@ static void RcCoopSyncCodes( void )
 	}
 }
 
+// G5: cof_teleport moved pMoved. Fired by a trigger he walked into (an arrival room), the other players standing in
+// that trigger go with him (its wait would ignore their touch and leave them behind); fired by anything else (a scene's
+// relays and managers), the whole group goes. They land on free spots around him.
+void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
+{
+	if ( !RcCoopRules() || !pMoved )
+		return;
+	bool bTrigger = pCaller && pCaller->pev->solid == SOLID_TRIGGER && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 );
+	int nMoved = 0;
+
+	// the destination is taken by a teammate who came the same way before: step beside him
+	for ( int j = 1; j <= gpGlobals->maxClients; j++ )
+	{
+		CBaseEntity *pOther = UTIL_PlayerByIndex( j );
+		if ( !RcCoopPresent( pOther ) || pOther == pMoved )
+			continue;
+		Vector d = pOther->pev->origin - pMoved->pev->origin;
+		if ( fabs( d.x ) >= 32 || fabs( d.y ) >= 32 || fabs( d.z ) >= 72 )
+			continue;
+		Vector vecBase = pOther->pev->origin;
+		static const float s_flStep[3] = { 40, 72, 104 };
+		for ( int r = 0; r < 3; r++ )
+		{
+			bool bDone = false;
+			for ( int a = 0; a < 8 && !bDone; a++ )
+			{
+				float yaw = ( pMoved->pev->angles.y + 90 + a * 45 ) * ( M_PI / 180.0 );
+				Vector vecTry = vecBase + Vector( cos( yaw ) * s_flStep[r], sin( yaw ) * s_flStep[r], 0 );
+				if ( RcCoopSpotFree( vecBase, vecTry, pMoved->edict() ) )
+				{
+					UTIL_SetOrigin( pMoved, vecTry );
+					pMoved->m_vPreviousOrigin = vecTry;
+					bDone = true;
+				}
+			}
+			if ( bDone )
+				break;
+		}
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s stepped beside a teammate at the teleport's end\n", STRING( pMoved->pev->netname ) ) );
+		break;
+	}
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !RcCoopPresent( pEnt ) || pEnt == pMoved )
+			continue;
+		if ( bTrigger && !RcCoopInside( pCaller, pEnt ) )
+			continue;
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		Vector vecBase = pMoved->pev->origin;
+		Vector vecSpot = vecBase;
+		static const float s_flRing[3] = { 40, 72, 104 };
+		bool bFound = false;
+		for ( int r = 0; r < 3 && !bFound; r++ )
+		{
+			for ( int a = 0; a < 8 && !bFound; a++ )
+			{
+				float yaw = ( pMoved->pev->angles.y + 180 + a * 45 + i * 15 ) * ( M_PI / 180.0 );
+				Vector vecTry = vecBase + Vector( cos( yaw ) * s_flRing[r], sin( yaw ) * s_flRing[r], 0 );
+				if ( RcCoopSpotFree( vecBase, vecTry, pPlayer->edict() ) )
+				{
+					vecSpot = vecTry;
+					bFound = true;
+				}
+			}
+		}
+		UTIL_SetOrigin( pPlayer, vecSpot );
+		pPlayer->m_vPreviousOrigin = vecSpot;
+		pPlayer->pev->angles = pMoved->pev->angles;
+		pPlayer->pev->v_angle.y = pMoved->pev->angles.y;
+		pPlayer->pev->fixangle = TRUE;
+		pPlayer->pev->velocity = pPlayer->pev->basevelocity = g_vecZero;
+		pPlayer->pev->flags &= ~FL_ONGROUND;
+		pPlayer->b_GoingThroughADoor = false;
+		nMoved++;
+	}
+	if ( nMoved )
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %d teammates went along with %s (%s)\n", nMoved, STRING( pMoved->pev->netname ),
+			bTrigger ? "same trigger" : "scene" ) );
+}
+
 static EHANDLE s_hRcWaitExit;
 static float s_flRcWaitStart, s_flRcWaitTouch, s_flRcWaitMsg;
 static bool s_bRcGoNow;
