@@ -150,6 +150,40 @@ float RcCoop_MonsterHealthScale( void )
 	return flScale > 2 ? 2 : flScale;
 }
 
+// G16: brings a live monster's health to the group's scale; it keeps the scale it has (saved with it), so a level
+// change, a loaded game or a player joining or leaving changes its health once, in proportion (a hurt monster stays as
+// hurt). MonsterInit calls it for a new monster; the rules' Think, once a second, for all (a map's monsters spawn
+// before any player is in).
+void RcCoop_ScaleMonster( CBaseMonster *pMonster )
+{
+	if ( !RcCoopRules() || !pMonster || pMonster->IsPlayer() || pMonster->pev->deadflag != DEAD_NO || pMonster->pev->health <= 0 )
+		return;
+	float flOld = pMonster->m_flRcCoopScale > 0 ? pMonster->m_flRcCoopScale : 1;
+	float flNew = RcCoop_MonsterHealthScale();
+	if ( flNew == flOld )
+	{
+		pMonster->m_flRcCoopScale = flNew;
+		return;
+	}
+	pMonster->pev->health = pMonster->pev->health * flNew / flOld;
+	if ( pMonster->pev->max_health > 0 )
+		pMonster->pev->max_health = pMonster->pev->max_health * flNew / flOld;
+	pMonster->m_flRcCoopScale = flNew;
+}
+
+static void RcCoopScaleMonsters( void )
+{
+	for ( int i = gpGlobals->maxClients + 1; i < gpGlobals->maxEntities; i++ )
+	{
+		edict_t *pEdict = INDEXENT( i );
+		if ( !pEdict || pEdict->free || !( pEdict->v.flags & FL_MONSTER ) )
+			continue;
+		CBaseEntity *pEnt = CBaseEntity::Instance( pEdict );
+		if ( pEnt )
+			RcCoop_ScaleMonster( pEnt->MyMonsterPointer() );
+	}
+}
+
 void CHalfLifeStoryCoop::PlayerThink( CBasePlayer *pPlayer )
 {
 	CHalfLifeMultiplay::PlayerThink( pPlayer );
@@ -197,6 +231,7 @@ void CHalfLifeStoryCoop::Think( void )
 	if ( gpGlobals->time >= s_flRcNextKeySync || gpGlobals->time < s_flRcNextKeySync - 2 )
 	{
 		s_flRcNextKeySync = gpGlobals->time + 1;
+		RcCoopScaleMonsters();
 		RcCoopSyncKeys();
 		RcCoopSyncCodes();
 
@@ -853,6 +888,23 @@ static void RcCoopDump( void )
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
 	}
+
+	// G16: the live monsters, their health and the scale they have
+	int nMonsters = 0;
+	for ( int e = gpGlobals->maxClients + 1; e < gpGlobals->maxEntities; e++ )
+	{
+		edict_t *pEdict = INDEXENT( e );
+		if ( !pEdict || pEdict->free || !( pEdict->v.flags & FL_MONSTER ) || pEdict->v.deadflag != DEAD_NO )
+			continue;
+		CBaseEntity *pEnt = CBaseEntity::Instance( pEdict );
+		CBaseMonster *pMonster = pEnt ? pEnt->MyMonsterPointer() : NULL;
+		if ( !pMonster )
+			continue;
+		if ( nMonsters++ < 8 )
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: monster %d %s health %.0f of %.0f, scale %.2f\n", e, STRING( pEdict->v.classname ),
+				pEdict->v.health, pEdict->v.max_health, pMonster->m_flRcCoopScale ) );
+	}
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %d live monsters, group scale %.2f\n", nMonsters, RcCoop_MonsterHealthScale() ) );
 }
 
 static void RcCoopAutosaveState( void )

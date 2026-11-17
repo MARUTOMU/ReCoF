@@ -155,6 +155,7 @@ TYPEDESCRIPTION	CBaseMonster::m_SaveData[] =
 	DEFINE_FIELD( CBaseMonster, m_bIsFlickerAppearing, FIELD_BOOLEAN ),
 	DEFINE_FIELD( CBaseMonster, m_flFlickerAppearTime, FIELD_TIME ),
 	DEFINE_FIELD( CBaseMonster, m_flNextFlickerAppear, FIELD_TIME ),
+	DEFINE_FIELD( CBaseMonster, m_flRcCoopScale, FIELD_FLOAT ),	// ReCoF story co-op (G16); older saves read 0
 };
 
 //IMPLEMENT_SAVERESTORE( CBaseMonster, CBaseToggle );
@@ -2302,7 +2303,7 @@ void CBaseMonster::MoveExecute( CBaseEntity *pTargetEnt, const Vector &vecDir, f
 // initialization that should take place for all monsters
 // goes here.
 //=========================================================
-float RcCoop_MonsterHealthScale( void );	// ReCoF story co-op (rc_coop.cpp): 1 outside story co-op
+void RcCoop_ScaleMonster( CBaseMonster *pMonster );	// ReCoF story co-op (rc_coop.cpp): nothing outside story co-op
 
 void CBaseMonster :: MonsterInit ( void )
 {
@@ -2326,8 +2327,8 @@ void CBaseMonster :: MonsterInit ( void )
 		pev->takedamage		= DAMAGE_AIM;
 
 	// ReCoF story co-op (G16): more health with more players (rc_coop.cpp), in place of the police co-op's damage
-	// multiplier
-	pev->health *= RcCoop_MonsterHealthScale();
+	// multiplier; a monster the map places before the players are in gets it from the rules' Think
+	RcCoop_ScaleMonster( this );
 
 	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && false )
 	{
