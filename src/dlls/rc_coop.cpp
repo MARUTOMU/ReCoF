@@ -752,6 +752,36 @@ CBaseEntity *RcCoop_User( CBaseEntity *pActivator )
 	return UTIL_FirstPlayer_rc();
 }
 
+// G7 (B389): the living player in the game nearest to pFrom; with bVisible the nearest one pFrom can see, when it
+// sees any. Outside story co-op the first player as before
+CBaseEntity *RcCoop_NearestPlayer( CBaseEntity *pFrom, bool bVisible )
+{
+	if ( !RcCoopRules() || !pFrom )
+		return UTIL_FirstPlayer_rc();
+	CBaseEntity *pBest = NULL, *pBestSeen = NULL;
+	float flBest = 1e9, flBestSeen = 1e9;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !RcCoopPresent( pEnt ) )
+			continue;
+		float fl = ( pEnt->pev->origin - pFrom->pev->origin ).Length();
+		if ( fl < flBest )
+		{
+			flBest = fl;
+			pBest = pEnt;
+		}
+		if ( bVisible && fl < flBestSeen && pFrom->FVisible( pEnt ) )
+		{
+			flBestSeen = fl;
+			pBestSeen = pEnt;
+		}
+	}
+	if ( pBestSeen )
+		return pBestSeen;
+	return pBest ? pBest : UTIL_FirstPlayer_rc();
+}
+
 bool RcPoliceMP( void )
 {
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();

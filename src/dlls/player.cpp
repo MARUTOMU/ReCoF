@@ -6468,7 +6468,34 @@ void CBasePlayer::PostThink()
 	if ( pevGround && ( pevGround->flags & FL_MONSTER ) && ( pev->flags & FL_ONGROUND ) )
 		pev->velocity = pev->velocity - gpGlobals->v_forward * CVAR_GET_FLOAT( "cof_monsterpushstrength" );
 
-	if ( m_gbIsInCutscene )
+	// ReCoF story co-op (B389): each player's scene is his own: the one global flipped between players in different
+	// states (one at a keypad's camera, another walking), so the one in a scene was seen and the others unseen. A
+	// player in a scene is unseen and leaves his iron sights as he enters it, and the global says whether any player
+	// is in a scene, which its readers (sounds, flares, bosses, stats) take as "a scene runs"
+	if ( RcCoop_Story() )
+	{
+		if ( IsInCutscene() )
+		{
+			if ( pev->renderamt != 0 )
+			{
+				if ( m_pActiveItem && ((CBasePlayerWeapon *)m_pActiveItem)->m_bIronSights )
+					m_pActiveItem->IronsightsFrom();
+				pev->renderamt = 0;
+			}
+		}
+		else if ( pev->renderamt != 255 )
+			pev->renderamt = 255;
+
+		bool bAny = false;
+		for ( int iRc = 1; iRc <= gpGlobals->maxClients && !bAny; iRc++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( iRc );
+			if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && ( (CBasePlayer *)pEnt )->IsInCutscene() )
+				bAny = true;
+		}
+		m_gbIsInCutscene = bAny;
+	}
+	else if ( m_gbIsInCutscene )
 	{
 		if ( pev->renderamt != 0 )
 			pev->renderamt = 0;

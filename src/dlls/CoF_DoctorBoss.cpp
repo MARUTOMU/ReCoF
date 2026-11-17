@@ -591,6 +591,14 @@ void CDoctorBoss :: MonsterThink( void )
 		return;
 	}
 
+	// ReCoF story co-op (B389): Purnell duels the nearest player he can see; he keeps his target while he sees him
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pNear = RcCoop_NearestPlayer( this, true );
+		if ( pNear && pNear->IsPlayer() && ( !pPlayer || pPlayer->pev->fuser4 != 0 || !pPlayer->IsAlive() || !FVisible( pPlayer ) ) )
+			pPlayer = (CBasePlayer *)pNear;
+	}
+
 	StudioFrameAdvance( );
 	DecideWhatToDo();
 

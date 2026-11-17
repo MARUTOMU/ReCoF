@@ -2236,7 +2236,7 @@ void CEnvModel::Think( void )
 
 	if ( pev->spawnflags & 8 )
 	{
-		CBaseEntity *pent = UTIL_FirstPlayer_rc();
+		CBaseEntity *pent = RcCoop_NearestPlayer( this, false );	// ReCoF story co-op (B389): the nearest player
 
 		if ( pent && !m_gbIsInCutscene )
 		{

@@ -248,6 +248,9 @@ extern edict_t		*UTIL_FirstPlayerEdict_rc( void );
 extern CBaseEntity	*RcCoop_User( CBaseEntity *pActivator );
 // ReCoF: true in a story co-op game (rc_coop.cpp)
 extern bool		RcCoop_Story( void );
+// ReCoF story co-op (B389): the player in the game nearest to pFrom (bVisible: the nearest it sees, when it sees
+// any), else the first player as UTIL_FirstPlayer_rc; outside story co-op always the first player (rc_coop.cpp)
+extern CBaseEntity	*RcCoop_NearestPlayer( CBaseEntity *pFrom, bool bVisible );
 // ReCoF (B328): a player's own setting, from the private userinfo key ReCoF's client sends (util.cpp)
 extern float		UTIL_PlayerSetting_rc( CBaseEntity *pPlayer, const char *key, const char *cvar );
 
