@@ -276,6 +276,46 @@ static bool RcCoopLastSave( char *pszName, int len )
 	return bFound;
 }
 
+// B395: Steam's launch options for Cry of Fear that start ReCoF instead ("<this cof.exe>" %command%): with them a
+// friend's invite or Join Game starts ReCoF while the game is closed, as Steam then runs this cof.exe with its own
+// command and the host's connect value (+rc_coop_join) after it. Copied to the clipboard; false if it could not be
+static bool RcCoopLaunchOptions( char *text, int len )
+{
+	char exe[MAX_PATH];
+	if ( !GetModuleFileNameA( NULL, exe, sizeof( exe ) ) )
+		return false;
+	_snprintf( text, len - 1, "\"%s\" %%command%%", exe );
+	text[len - 1] = 0;
+	return true;
+}
+
+static bool RcCoopCopyLaunchOptions( void )
+{
+	char text[MAX_PATH + 32];
+	if ( !RcCoopLaunchOptions( text, sizeof( text ) ) )
+		return false;
+	if ( !OpenClipboard( NULL ) )
+		return false;
+	EmptyClipboard();
+	size_t n = strlen( text ) + 1;
+	HGLOBAL h = GlobalAlloc( GMEM_MOVEABLE, n );
+	bool bOk = false;
+	if ( h )
+	{
+		void *p = GlobalLock( h );
+		if ( p )
+		{
+			memcpy( p, text, n );
+			GlobalUnlock( h );
+			bOk = SetClipboardData( CF_TEXT, h ) != NULL;
+		}
+		if ( !bOk )
+			GlobalFree( h );
+	}
+	CloseClipboard();
+	return bOk;
+}
+
 class CRcCoopPanel : public Panel
 {
 public:
@@ -291,11 +331,11 @@ public:
 		AddLabel( "You host, and your Steam friends join you:", y + 110, 30, pText );
 		AddLabel( "in the game press Esc, then Invite Steam friends.", y + 140, 30, pText );
 
-		static const char *s_pszButtons[5] = { "New game", "Continue", "", "", "Cancel" };
-		for ( int i = 0; i < 5; i++ )
+		static const char *s_pszButtons[6] = { "New game", "Continue", "", "", "Copy Steam launch options", "Cancel" };
+		for ( int i = 0; i < 6; i++ )
 		{
 			// the font before the text: VGUI sizes a text when it is set
-			m_pButton[i] = new ColorButton( "", x + 50, y + 200 + i * 48, 600, 40, false, true );
+			m_pButton[i] = new ColorButton( "", ScreenWidth / 2 - 400, y + 200 + i * 48, 800, 40, false, true );
 			m_pButton[i]->setParent( this );
 			if ( pText )
 				m_pButton[i]->setFont( pText );
@@ -326,6 +366,7 @@ public:
 			m_pButton[1]->setText( "Continue (no co-op save yet)" );
 		m_pButton[2]->setText( s_pszRcSkill[RcSkill()] );
 		m_pButton[3]->setText( s_pszRcPresetLabel[s_iRcPreset] );
+		m_pButton[4]->setText( "Copy Steam launch options" );
 	}
 
 	int RcSkill( void )
@@ -376,7 +417,17 @@ public:
 			m_pButton[3]->setText( s_pszRcPresetLabel[s_iRcPreset] );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			break;
-		case 14:	// back to the menu (Panel::setVisible: CGameMenu's own would start its music again)
+		case 14:	// B395: the Steam launch options to the clipboard
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			if ( RcCoopCopyLaunchOptions() )
+			{
+				m_pButton[4]->setText( "Copied: Steam, Properties, Launch options" );
+				gEngfuncs.Con_Printf( "ReCoF co-op: Steam launch options copied; Steam's Play then starts ReCoF too (clear them to play retail from Steam)\n" );
+			}
+			else
+				m_pButton[4]->setText( "Could not copy the launch options" );
+			break;
+		case 15:	// back to the menu (Panel::setVisible: CGameMenu's own would start its music again)
 			setVisible( false );
 			if ( s_pRcMenu )
 				s_pRcMenu->Panel::setVisible( true );
@@ -411,7 +462,7 @@ private:
 	}
 
 	Label *m_pTitle;
-	ColorButton *m_pButton[5];
+	ColorButton *m_pButton[6];
 	bool m_bSave;
 	char m_szSave[32];
 };
@@ -443,6 +494,14 @@ void CRcCoopHandler::actionPerformed( Panel *panel )
 bool RcCoopMenu_Visible( void )
 {
 	return s_pRcPanel && s_pRcPanel->isVisible();
+}
+
+// rc_coop_launchoptions: prints the Steam launch options the panel copies (B395)
+void RcCoopMenu_LaunchOptions( void )
+{
+	char text[MAX_PATH + 32];
+	if ( RcCoopLaunchOptions( text, sizeof( text ) ) )
+		gEngfuncs.Con_Printf( "ReCoF co-op: Steam, Cry of Fear, Properties, Launch options: %s\n", text );
 }
 
 // rc_coop_menu: the Story Co-op panel, as the menu's entry opens it
