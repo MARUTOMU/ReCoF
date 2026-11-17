@@ -11,6 +11,8 @@
 #include "player.h"
 #include "animation.h"
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
 extern int gmsgCameraZoom;
 
 
@@ -82,7 +84,10 @@ void CThirdPersonInteraction::Spawn( void )
 			m_pPlayer->pev->flags |= FL_NOTARGET;
 
 			m_pPlayer->pev->flags |= FL_FROZEN;
-			GetClassPtr( (CBasePlayer *)m_pPlayer->pev )->RemoveAllItems( FALSE );
+			// ReCoF (B435): in story co-op the victim comes back with what he had when he died (rc_coop.cpp G12), and
+			// this took it all first: he came back with nothing. Single player ends here and keeps retail's
+			if ( !RcCoop_Story() )
+				GetClassPtr( (CBasePlayer *)m_pPlayer->pev )->RemoveAllItems( FALSE );
 		}
 	}
 
