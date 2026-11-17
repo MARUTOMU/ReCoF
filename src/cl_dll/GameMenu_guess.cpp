@@ -21,7 +21,7 @@
 
 // ReCoF story co-op (B393): the Story Co-op entry, in the row between Host Server and Language (rc_coopmenu.cpp)
 void RcCoopMenu_Create( CGameMenu *pMenu, int x, int y, int wide, int tall );
-void RcCoopMenu_SetPos( int x, int y );
+void RcCoopMenu_SetPos( int x, int y, int wide, int tall );	// B429: and its click area
 void RcCoopMenu_Show( bool bShow );
 void RcCoopMenu_Solve( void );
 void RcCoopMenu_Reset( void );
@@ -637,7 +637,26 @@ void CGameMenu::ResetButtonPositions_guess()
 	m_pExtras_guess->setPos( x, y - tall * 3 );
 	m_pHostServer_guess->setPos( x, y - tall * 7 );
 	m_pQuit_guess->setPos( x, y - tall );
-	RcCoopMenu_SetPos( x, y - tall * 6 );	// ReCoF (B393)
+	RcCoopMenu_SetPos( x, y - tall * 6, wide, tall );	// ReCoF (B393)
+
+	// ReCoF (B429): the click areas and the logos were placed once, when the menu was made: after a resolution
+	// change (or a new rc_menu_scale) the pictures moved and a click on one of them hit nothing
+	m_pNewGameButton_guess->setBounds( x, y - tall * 11, wide, tall );
+	m_pLoadGameButton_guess->setBounds( x, y - tall * 10, wide, tall );
+	m_pCustomButton_guess->setBounds( x, y - tall * 9, wide, tall );
+	m_pJoinServerButton_guess->setBounds( x, y - tall * 8, wide, tall );
+	m_pOptionsButton_guess->setBounds( x, y - tall * 2, wide, tall );
+	m_pLanguageButton_guess->setBounds( x, y - tall * 5, wide, tall );
+	m_pUnlockablesButton_guess->setBounds( x, y - tall * 4, wide, tall );
+	m_pExtrasButton_guess->setBounds( x, y - tall * 3, wide, tall );
+	m_pHostServerButton_guess->setBounds( x, y - tall * 7, wide, tall );
+	m_pQuitButton_guess->setBounds( x, y - tall, wide, tall );
+	logoWide = RcMenuScaled( logoWide );
+	logoTall = RcMenuScaled( logoTall );
+	m_pLogo_guess->setPos( ScreenWidth / 2 - logoWide / 2, ScreenHeight / 2 - logoTall * 3 );
+	tsWide = RcMenuScaled( tsWide );
+	tsTall = RcMenuScaled( tsTall );
+	m_pLogoTS_guess->setPos( ScreenWidth - tsWide - 15, ScreenHeight - tsTall - 15 );
 }
 
 void VGUI_GameMenuInit_guess()

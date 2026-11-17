@@ -990,10 +990,12 @@ void RcCoopMenu_Create( CGameMenu *pMenu, int x, int y, int wide, int tall )
 }
 
 // CGameMenu::ResetButtonPositions_guess
-void RcCoopMenu_SetPos( int x, int y )
+void RcCoopMenu_SetPos( int x, int y, int wide, int tall )
 {
 	if ( s_pRcItem )
 		s_pRcItem->setPos( x, y );
+	if ( s_pRcItemButton )
+		s_pRcItemButton->setBounds( x, y, wide, tall );	// B429: the click area follows the picture
 }
 
 // the menu shows or hides its entries (the custom campaign list hides them)
