@@ -213,6 +213,7 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 
 static void RcCoopSyncKeys( void );
 static void RcCoopSyncCodes( void );
+static void RcCoopSyncNightmare( void );	// B396
 static float s_flRcNextKeySync;
 
 void CHalfLifeStoryCoop::Think( void )
@@ -253,6 +254,7 @@ void CHalfLifeStoryCoop::Think( void )
 		RcCoopScaleMonsters();
 		RcCoopSyncKeys();
 		RcCoopSyncCodes();
+		RcCoopSyncNightmare();	// B396
 
 		// B391: a saved player whose player has not come back once the load's 90 s are over (hw.dll rc_coop.c
 		// RC_CARRY_SECONDS) is put away as one who left (client.cpp ClientDisconnect's marks): unseen, not solid
@@ -1073,51 +1075,79 @@ void RcCoop_SkipVote( CBasePlayer *pPlayer, bool bSkippable )
 	}
 }
 
-// B392: the host's co-op settings: presets, and the settings each co-op save keeps. The order of the values in a
-// save: exit wait, respawn time, autosave, monster health, skip vote
+// B392, B396: the host's co-op settings. The presets are the game's own difficulties: each sets the difficulty cvar
+// (1 to 4) and the co-op rules that go with it. The order of the values in a save: exit wait, respawn time,
+// autosave, monster health, skip vote, then the difficulty
 static cvar_t *s_pRcSet[] = { &rc_coop_exit_wait, &rc_coop_respawn_time, &rc_coop_autosave, &rc_coop_monster_health, &rc_coop_skip_vote };
-static const char *s_pszRcPreset[3] = { "classic", "casual", "hardcore" };
-static const float s_flRcPreset[3][5] = {
-	{ 60, 10, 1, 25, 1 },	// classic: the defaults
-	{ 60, 5, 1, 0, 1 },	// casual: quick respawn, monsters as in single player
-	{ 60, 0, 0, 50, 1 },	// hardcore: Cry of Fear's own death rule, tape recorders only, monsters +50% a player
+static const char *s_pszRcPreset[4] = { "easy", "normal", "hard", "nightmare" };
+static const char *s_pszRcPresetName[4] = { "Easy", "Normal", "Hard", "Nightmare" };
+static const float s_flRcPreset[4][5] = {
+	{ 60, 5, 1, 0, 1 },	// easy: quick respawn, monsters as for one player
+	{ 60, 10, 1, 25, 1 },	// normal: the defaults
+	{ 60, 20, 1, 40, 1 },	// hard: a longer wait to come back, monsters +40% a player
+	{ 60, 0, 0, 50, 1 },	// nightmare: Cry of Fear's own death rule, tape recorders only (a tape each), monsters +50% a player
 };
+
+static int RcCoopDifficulty( void )
+{
+	int iSkill = (int)CVAR_GET_FLOAT( "difficulty" );
+	return iSkill < 1 ? 1 : ( iSkill > 4 ? 4 : iSkill );
+}
 
 static void RcCoopShowSettings( const char *pszWhy )
 {
-	int iMatch = -1;
-	for ( int p = 0; p < 3 && iMatch < 0; p++ )
-	{
-		bool bSame = true;
-		for ( int k = 0; k < 5; k++ )
-			bSame = bSame && s_pRcSet[k]->value == s_flRcPreset[p][k];
-		if ( bSame )
-			iMatch = p;
-	}
-	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op %s: %s; exit wait %g s, respawn %g s%s, autosave %g, monster health +%g%% a player, guests' skip vote %g\n",
-		pszWhy, iMatch >= 0 ? s_pszRcPreset[iMatch] : "custom", rc_coop_exit_wait.value, rc_coop_respawn_time.value,
+	int iSkill = RcCoopDifficulty();
+	bool bRules = true;
+	for ( int k = 0; k < 5; k++ )
+		bRules = bRules && s_pRcSet[k]->value == s_flRcPreset[iSkill - 1][k];
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op %s: %s%s; exit wait %g s, respawn %g s%s, autosave %g, monster health +%g%% a player, guests' skip vote %g\n",
+		pszWhy, s_pszRcPresetName[iSkill - 1], bRules ? "" : " (rules changed)", rc_coop_exit_wait.value, rc_coop_respawn_time.value,
 		rc_coop_respawn_time.value == 0 ? " (Cry of Fear's own rule)" : "", rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value ) );
 }
 
-// rc_coop_preset [classic | casual | hardcore]: sets the co-op settings, or shows them
+// sets the difficulty; the game's skill data follows at once, as a new game's would
+static void RcCoopSetDifficulty( int iSkill )
+{
+	if ( (int)CVAR_GET_FLOAT( "difficulty" ) == iSkill )
+		return;
+	CVAR_SET_FLOAT( "difficulty", iSkill );
+	if ( g_pGameRules )
+		g_pGameRules->RefreshSkillData();
+}
+
+// rc_coop_preset [easy | normal | hard | nightmare]: sets the difficulty and its co-op rules, or shows them
 static void RcCoopPreset( void )
 {
 	if ( CMD_ARGC() < 2 )
 	{
 		RcCoopShowSettings( "settings" );
-		g_engfuncs.pfnServerPrint( "usage: rc_coop_preset classic | casual | hardcore\n" );
+		g_engfuncs.pfnServerPrint( "usage: rc_coop_preset easy | normal | hard | nightmare\n" );
 		return;
 	}
-	for ( int p = 0; p < 3; p++ )
+	for ( int p = 0; p < 4; p++ )
 	{
 		if ( stricmp( CMD_ARGV( 1 ), s_pszRcPreset[p] ) )
 			continue;
+		RcCoopSetDifficulty( p + 1 );
 		for ( int k = 0; k < 5; k++ )
 			CVAR_SET_FLOAT( s_pRcSet[k]->name, s_flRcPreset[p][k] );
-		RcCoopShowSettings( "preset" );
+		RcCoopShowSettings( "difficulty" );
 		return;
 	}
-	g_engfuncs.pfnServerPrint( "usage: rc_coop_preset classic | casual | hardcore\n" );
+	g_engfuncs.pfnServerPrint( "usage: rc_coop_preset easy | normal | hard | nightmare\n" );
+}
+
+// B396: nightmare's stamina (a quicker drain, a slower refill: CBasePlayer m_bNightmare, which single player's
+// difficulty choice sets) follows the difficulty for every player in story co-op, players who join included
+static void RcCoopSyncNightmare( void )
+{
+	bool bNightmare = RcCoopDifficulty() == 4;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && ( (CBasePlayer *)pEnt )->m_bNightmare != bNightmare )
+			( (CBasePlayer *)pEnt )->m_bNightmare = bNightmare;
+	}
 }
 
 // CBasePlayer::Save: in story co-op every saved player keeps the host's co-op settings
@@ -1125,8 +1155,8 @@ void RcCoop_SettingsSave( CBasePlayer *pPlayer )
 {
 	if ( !RcCoopRules() )
 		return;
-	_snprintf( pPlayer->m_szRcCoopSet, sizeof( pPlayer->m_szRcCoopSet ) - 1, "%g %g %g %g %g", rc_coop_exit_wait.value,
-		rc_coop_respawn_time.value, rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value );
+	_snprintf( pPlayer->m_szRcCoopSet, sizeof( pPlayer->m_szRcCoopSet ) - 1, "%g %g %g %g %g %d", rc_coop_exit_wait.value,
+		rc_coop_respawn_time.value, rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value, RcCoopDifficulty() );
 	pPlayer->m_szRcCoopSet[sizeof( pPlayer->m_szRcCoopSet ) - 1] = 0;
 }
 
@@ -1137,9 +1167,15 @@ void RcCoop_SettingsLoad( CBasePlayer *pPlayer )
 	if ( !RcCoopRules() || !pPlayer->m_szRcCoopSet[0] )
 		return;
 	float v[5];
-	if ( sscanf( pPlayer->m_szRcCoopSet, "%f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4] ) != 5 )
+	int iSkill = 0;
+	if ( sscanf( pPlayer->m_szRcCoopSet, "%f %f %f %f %f %d", &v[0], &v[1], &v[2], &v[3], &v[4], &iSkill ) < 5 )
 		return;
 	bool bChanged = false;
+	if ( iSkill >= 1 && iSkill <= 4 && iSkill != RcCoopDifficulty() )
+	{
+		RcCoopSetDifficulty( iSkill );
+		bChanged = true;
+	}
 	for ( int k = 0; k < 5; k++ )
 	{
 		if ( s_pRcSet[k]->value != v[k] )

@@ -503,9 +503,10 @@ static DWORD s_dwCoopStartAt;
 static void RcCoopStart_f( void )
 {
 	const char *pszMap = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "c_intro";
-	// B392: rc_coop_start <map> <classic | casual | hardcore> sets the host's preset first (hl.dll rc_coop_preset)
+	// B392, B396: rc_coop_start <map> <easy | normal | hard | nightmare> sets the difficulty and its co-op rules first
+	// (hl.dll rc_coop_preset)
 	const char *pszPreset = gEngfuncs.Cmd_Argc() > 2 ? gEngfuncs.Cmd_Argv( 2 ) : "";
-	if ( stricmp( pszPreset, "classic" ) && stricmp( pszPreset, "casual" ) && stricmp( pszPreset, "hardcore" ) )
+	if ( stricmp( pszPreset, "easy" ) && stricmp( pszPreset, "normal" ) && stricmp( pszPreset, "hard" ) && stricmp( pszPreset, "nightmare" ) )
 		pszPreset = "";
 	char szPreset[48];
 	szPreset[0] = 0;

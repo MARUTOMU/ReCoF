@@ -236,10 +236,14 @@ static BitmapTGA *s_pRcLabel, *s_pRcLabelArmed;
 static bool s_bRcArmed;
 static int s_iRcArmedX, s_iRcArmedY;
 static CRcCoopPanel *s_pRcPanel;
-static int s_iRcPreset;	// 0 classic, 1 casual, 2 hardcore
-static const char *s_pszRcPreset[3] = { "classic", "casual", "hardcore" };
-static const char *s_pszRcPresetLabel[3] = { "Rules: Classic", "Rules: Casual (quick respawn, monsters as alone)", "Rules: Hardcore (no respawn, tape recorders only)" };
+// B396: the game's own difficulties are the co-op presets (hl.dll rc_coop_preset): each brings its co-op rules
+static const char *s_pszRcPreset[5] = { "", "easy", "normal", "hard", "nightmare" };
+// the buttons hold 32 characters (CommandButton, MAX_BUTTON_SIZE): the line under them says what a difficulty means
 static const char *s_pszRcSkill[5] = { "", "Difficulty: Easy", "Difficulty: Normal", "Difficulty: Hard", "Difficulty: Nightmare" };
+static const char *s_pszRcSkillInfo[5] = { "", "Easy: back in 5 s after dying, monsters as for one player.",
+	"Normal: back in 10 s after dying, monsters a quarter tougher for each friend.",
+	"Hard: back in 20 s after dying, monsters 40% tougher for each friend.",
+	"Nightmare: no coming back, tape recorders only (a tape each), less stamina." };
 
 // the newest co-op save (coop_auto, coop_tape) in either save folder next to cof.exe, its name in pszName; false for none
 static bool RcCoopLastSave( char *pszName, int len )
@@ -331,8 +335,8 @@ public:
 		AddLabel( "You host, and your Steam friends join you:", y + 110, 30, pText );
 		AddLabel( "in the game press Esc, then Invite Steam friends.", y + 140, 30, pText );
 
-		static const char *s_pszButtons[6] = { "New game", "Continue", "", "", "Copy Steam launch options", "Cancel" };
-		for ( int i = 0; i < 6; i++ )
+		static const char *s_pszButtons[5] = { "New game", "Continue", "", "Copy Steam launch options", "Cancel" };
+		for ( int i = 0; i < 5; i++ )
 		{
 			// the font before the text: VGUI sizes a text when it is set
 			m_pButton[i] = new ColorButton( "", ScreenWidth / 2 - 400, y + 200 + i * 48, 800, 40, false, true );
@@ -346,6 +350,7 @@ public:
 			m_pButton[i]->setArmedColor( 255, 0, 0, 0 );
 			m_pButton[i]->setVisible( true );
 		}
+		m_pInfo = AddLabel( "", y + 200 + 5 * 48 + 10, 30, pText );
 		setBgColor( 0, 0, 0, 40 );
 		setVisible( false );
 	}
@@ -365,8 +370,8 @@ public:
 		else
 			m_pButton[1]->setText( "Continue (no co-op save yet)" );
 		m_pButton[2]->setText( s_pszRcSkill[RcSkill()] );
-		m_pButton[3]->setText( s_pszRcPresetLabel[s_iRcPreset] );
-		m_pButton[4]->setText( "Copy Steam launch options" );
+		m_pButton[3]->setText( "Copy Steam launch options" );
+		m_pInfo->setText( s_pszRcSkillInfo[RcSkill()] );
 	}
 
 	int RcSkill( void )
@@ -394,7 +399,7 @@ public:
 			if ( strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
 				IrrKlangStop_guess( 1 );
 			if ( cmd == 10 )
-				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start c_intro %s\n", s_pszRcPreset[s_iRcPreset] );
+				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start c_intro %s\n", s_pszRcPreset[RcSkill()] );
 			else
 				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_continue %s\n", m_szSave );
 			szCmd[sizeof( szCmd ) - 1] = 0;
@@ -409,25 +414,22 @@ public:
 			szCmd[sizeof( szCmd ) - 1] = 0;
 			gEngfuncs.pfnClientCmd( szCmd );
 			m_pButton[2]->setText( s_pszRcSkill[iSkill] );
+			m_pInfo->setText( s_pszRcSkillInfo[iSkill] );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			break;
 		}
-		case 13:	// the next rules preset
-			s_iRcPreset = ( s_iRcPreset + 1 ) % 3;
-			m_pButton[3]->setText( s_pszRcPresetLabel[s_iRcPreset] );
-			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-			break;
-		case 14:	// B395: the Steam launch options to the clipboard
+		case 13:	// B395: the Steam launch options to the clipboard
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			if ( RcCoopCopyLaunchOptions() )
 			{
-				m_pButton[4]->setText( "Copied: Steam, Properties, Launch options" );
+				m_pButton[3]->setText( "Copied to the clipboard" );
+				m_pInfo->setText( "Paste it in Steam: Cry of Fear, Properties, Launch options." );
 				gEngfuncs.Con_Printf( "ReCoF co-op: Steam launch options copied; Steam's Play then starts ReCoF too (clear them to play retail from Steam)\n" );
 			}
 			else
-				m_pButton[4]->setText( "Could not copy the launch options" );
+				m_pButton[3]->setText( "Could not copy them" );
 			break;
-		case 15:	// back to the menu (Panel::setVisible: CGameMenu's own would start its music again)
+		case 14:	// back to the menu (Panel::setVisible: CGameMenu's own would start its music again)
 			setVisible( false );
 			if ( s_pRcMenu )
 				s_pRcMenu->Panel::setVisible( true );
@@ -462,7 +464,8 @@ private:
 	}
 
 	Label *m_pTitle;
-	ColorButton *m_pButton[6];
+	ColorButton *m_pButton[5];
+	Label *m_pInfo;	// what the difficulty means, or where the launch options go
 	bool m_bSave;
 	char m_szSave[32];
 };
