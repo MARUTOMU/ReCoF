@@ -5993,6 +5993,23 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 	if ( !pActivator->IsPlayer() )
 		return;
 
+	// ReCoF story co-op (B420): a weapon the map takes from "the player" (c_start's opening scene takes c_nightmare's
+	// camera) goes from every player, as B404 gives such weapons to every player (cof_giveitems below); clearing the
+	// whole inventory (flag 1) and inventory items stay with the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll && !( pev->spawnflags & 1 ) && pev->message && strstr( STRING( pev->message ), "weapon_" ) )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() &&
+				( (CBasePlayer *)pEnt )->HasNamedPlayerItem( STRING( pev->message ) ) )
+				Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( !pPlayer )
