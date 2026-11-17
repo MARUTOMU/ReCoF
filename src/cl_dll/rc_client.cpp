@@ -552,6 +552,12 @@ static void RcCoopInvite_f( void )
 static void RcCoopSteamJoin( const char *pszConnect )
 {
 	unsigned a, b, c, d, port;
+	// B406: a friend in a story co-op lobby: into the lobby, which joins the host's game when it is up
+	if ( !strncmp( pszConnect, "+connect_lobby ", 15 ) )
+	{
+		RcLobby_Join( _strtoui64( pszConnect + 15, NULL, 10 ) );
+		return;
+	}
 	if ( sscanf( pszConnect, "+rc_coop_join %u.%u.%u.%u:%u", &a, &b, &c, &d, &port ) != 5 || a != 169 || b != 254 )
 	{
 		RcCoopPrint( "ReCoF co-op: Steam asked to join a game this version does not know how to reach\n" );
@@ -561,6 +567,35 @@ static void RcCoopSteamJoin( const char *pszConnect )
 	_snprintf( cmd, sizeof( cmd ) - 1, "rc_coop_join %u.%u.%u.%u:%u\n", a, b, c, d, port );
 	cmd[sizeof( cmd ) - 1] = 0;
 	gEngfuncs.pfnClientCmd( cmd );
+}
+
+// B406: Steam starts the game with +connect_lobby <id> when a friend accepts an invite to a lobby while it is closed
+static void RcConnectLobby_f( void )
+{
+	if ( gEngfuncs.Cmd_Argc() > 1 )
+		RcLobby_Join( _strtoui64( gEngfuncs.Cmd_Argv( 1 ), NULL, 10 ) );
+}
+
+// rc_lobby: the lobby's state, players and data (rc_lobby create | leave | invite as the panel's buttons)
+static void RcLobby_f( void )
+{
+	const char *pszArg = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "";
+	if ( !strcmp( pszArg, "create" ) )
+		RcLobby_Create();
+	else if ( !strcmp( pszArg, "leave" ) )
+		RcLobby_Leave();
+	else if ( !strcmp( pszArg, "invite" ) )
+		RcLobby_Invite();
+	static const char *s_pszState[3] = { "none", "asked", "in" };
+	int iState = RcLobby_State();
+	char szNames[4][48];
+	bool bHost[4], bSelf[4];
+	int n = RcLobby_Members( szNames, bHost, bSelf, 4 );
+	RcCoopPrint( "ReCoF lobby: %s%s, id %I64u, %d players, difficulty %s, game %s, connect %s%s%s\n", s_pszState[iState >= 0 && iState <= 2 ? iState : 0],
+		RcLobby_Owner() ? " (host)" : "", RcLobby_Id(), n, RcLobby_Data( "difficulty" ), RcLobby_Data( "game" ), RcLobby_Data( "connect" ),
+		RcLobby_Note()[0] ? ", note: " : "", RcLobby_Note() );
+	for ( int i = 0; i < n; i++ )
+		RcCoopPrint( "ReCoF lobby: player %d%s%s\n", i + 1, bHost[i] ? " host" : "", bSelf[i] ? " (this game)" : "" );
 }
 
 // test runs: rc_coop_autotest <seconds> prints the counters and takes a screenshot halfway, then quits
@@ -616,6 +651,7 @@ static void RcCoopCmdFile( void )
 // menu's too: hw.dll sets rc_coop_left) and a game elsewhere (not the menu's background map) stop it
 static void RcCoopLeave_f( void )
 {
+	RcLobby_Leave();	// B406: out of the group's lobby too
 	s_bCoopLeft = 1;
 	gEngfuncs.pfnClientCmd( "disconnect\n" );
 	RcCoopPrint( "ReCoF co-op: left the game; rc_coop_join to come back\n" );
@@ -746,6 +782,8 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_launchoptions", RcCoopMenu_LaunchOptions );	// B395
 	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_leave", RcCoopLeave_f );
+	gEngfuncs.pfnAddCommand( "connect_lobby", RcConnectLobby_f );	// B406
+	gEngfuncs.pfnAddCommand( "rc_lobby", RcLobby_f );
 	RcSteamNet_InitCallbacks( RcCoopSteamJoin );	// Join Game and invites from Steam
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect

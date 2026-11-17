@@ -19,6 +19,8 @@
 #include "steamworks_sdk/steam/isteamnetworkingutils.h"
 #include "steamworks_sdk/steam/steamnetworkingfakeip.h"
 #include "steamworks_sdk/steam/isteamfriends.h"
+#include "steamworks_sdk/steam/isteammatchmaking.h"	// B406
+#include "steamworks_sdk/steam/isteamuser.h"
 #include "rc_steamnet.h"
 
 typedef void *( __cdecl *RcSteamClient_t )( void );
@@ -318,6 +320,294 @@ static ISteamFriends *RcFriends( void )
 	return s_pFriends;
 }
 
+//-----------------------------------------------------------------------------
+// B406: the story co-op lobby. The host makes a friends-only Steam lobby for 4 from the main menu; friends come in
+// through Steam's invite (the overlay, or Join Game, which starts the game with +connect_lobby <id> when it is not
+// running). The lobby's data carries the host's choices ("difficulty", "game") and, once the host's game has its
+// Steam address, "connect" ("+rc_coop_join <FakeIP:port>"): the guests' games join it by themselves. The lobby stays
+// for the whole game, so a friend invited later joins the running game the same way.
+//-----------------------------------------------------------------------------
+static ISteamMatchmaking *s_pMM;
+static ISteamUser *s_pUser;
+static uint64 s_ulLobby;			// the lobby this player is in, 0 for none
+static int s_iLobbyState;			// RCLOBBY_*
+static DWORD s_dwLobbyAsked;		// when the lobby was asked for (Steam answers in a second or two)
+static char s_szLobbyJoined[64];	// the connect value this guest has followed
+static char s_szLobbyNote[96];		// the last thing that went wrong, for the panel
+static bool s_bLobbyWantPanel;		// Steam brought this player into a lobby: the menu shows it
+static RcSteamJoin_t s_pfnLobbyJoin;
+
+static ISteamMatchmaking *RcMM( void )
+{
+	if ( !s_pMM )
+		s_pMM = (ISteamMatchmaking *)RcGetInterface( STEAMMATCHMAKING_INTERFACE_VERSION );
+	return s_pMM;
+}
+
+static uint64 RcSelf( void )
+{
+	if ( !s_pUser )
+		s_pUser = (ISteamUser *)RcGetInterface( STEAMUSER_INTERFACE_VERSION );
+	return s_pUser ? s_pUser->GetSteamID().ConvertToUint64() : 0;
+}
+
+static void RcLobbyNote( const char *pszNote )
+{
+	strncpy( s_szLobbyNote, pszNote, sizeof( s_szLobbyNote ) - 1 );
+	s_szLobbyNote[sizeof( s_szLobbyNote ) - 1] = 0;
+	RcLog( "lobby: %s", pszNote );
+}
+
+// Steam's Join Game for this player's friends: into the lobby
+static void RcLobbyPresence( bool bIn )
+{
+	if ( !RcFriends() )
+		return;
+	char sz[64];
+	sz[0] = 0;
+	if ( bIn )
+		_snprintf( sz, sizeof( sz ) - 1, "+connect_lobby %I64u", s_ulLobby );
+	sz[sizeof( sz ) - 1] = 0;
+	s_pFriends->SetRichPresence( "connect", sz );
+	s_pFriends->SetRichPresence( "status", bIn ? "In a Cry of Fear story co-op lobby (ReCoF)" : "" );
+}
+
+bool RcLobby_Create( void )
+{
+	if ( !RcMM() )
+	{
+		RcLobbyNote( "Steam is not available" );
+		return false;
+	}
+	if ( s_ulLobby )
+		RcLobby_Leave();
+	s_pMM->CreateLobby( k_ELobbyTypeFriendsOnly, 4 );
+	s_iLobbyState = RCLOBBY_ASKED;
+	s_dwLobbyAsked = GetTickCount();
+	s_szLobbyNote[0] = 0;
+	RcLog( "lobby: asked for one" );
+	return true;
+}
+
+void RcLobby_Join( unsigned long long ulLobby )
+{
+	if ( !ulLobby || !RcMM() )
+		return;
+	if ( s_ulLobby == ulLobby )
+	{
+		s_bLobbyWantPanel = true;
+		return;
+	}
+	if ( s_ulLobby )
+		RcLobby_Leave();
+	s_pMM->JoinLobby( CSteamID( (uint64)ulLobby ) );
+	s_iLobbyState = RCLOBBY_ASKED;
+	s_dwLobbyAsked = GetTickCount();
+	s_szLobbyNote[0] = 0;
+	s_bLobbyWantPanel = true;
+	RcLog( "lobby: joining %I64u", (uint64)ulLobby );
+}
+
+void RcLobby_Leave( void )
+{
+	if ( s_ulLobby && RcMM() )
+		s_pMM->LeaveLobby( CSteamID( s_ulLobby ) );
+	if ( s_ulLobby )
+		RcLog( "lobby: left %I64u", s_ulLobby );
+	s_ulLobby = 0;
+	s_iLobbyState = RCLOBBY_NONE;
+	s_szLobbyJoined[0] = 0;
+	RcLobbyPresence( false );
+}
+
+int RcLobby_State( void )
+{
+	if ( s_iLobbyState == RCLOBBY_ASKED && GetTickCount() - s_dwLobbyAsked > 15000 )
+	{
+		s_iLobbyState = RCLOBBY_NONE;
+		RcLobbyNote( "Steam did not answer" );
+	}
+	return s_iLobbyState;
+}
+
+unsigned long long RcLobby_Id( void )
+{
+	return s_ulLobby;
+}
+
+const char *RcLobby_Note( void )
+{
+	return s_szLobbyNote;
+}
+
+bool RcLobby_WantPanel( void )
+{
+	bool b = s_bLobbyWantPanel;
+	s_bLobbyWantPanel = false;
+	return b;
+}
+
+static uint64 RcLobbyOwner( void )
+{
+	return s_ulLobby && RcMM() ? s_pMM->GetLobbyOwner( CSteamID( s_ulLobby ) ).ConvertToUint64() : 0;
+}
+
+bool RcLobby_Owner( void )
+{
+	return s_ulLobby && RcLobbyOwner() == RcSelf();
+}
+
+int RcLobby_Members( char ( *pszNames )[48], bool *pbHost, bool *pbSelf, int max )
+{
+	if ( !s_ulLobby || !RcMM() )
+		return 0;
+	CSteamID lobby( s_ulLobby );
+	uint64 owner = RcLobbyOwner(), self = RcSelf();
+	int n = s_pMM->GetNumLobbyMembers( lobby );
+	if ( n > max )
+		n = max;
+	for ( int i = 0; i < n; i++ )
+	{
+		CSteamID member = s_pMM->GetLobbyMemberByIndex( lobby, i );
+		const char *pszName = RcFriends() ? s_pFriends->GetFriendPersonaName( member ) : NULL;
+		strncpy( pszNames[i], pszName && pszName[0] ? pszName : "Player", 47 );
+		pszNames[i][47] = 0;
+		pbHost[i] = member.ConvertToUint64() == owner;
+		pbSelf[i] = member.ConvertToUint64() == self;
+	}
+	return n;
+}
+
+void RcLobby_SetData( const char *pszKey, const char *pszValue )
+{
+	if ( RcLobby_Owner() )
+		s_pMM->SetLobbyData( CSteamID( s_ulLobby ), pszKey, pszValue );
+}
+
+const char *RcLobby_Data( const char *pszKey )
+{
+	const char *psz = s_ulLobby && RcMM() ? s_pMM->GetLobbyData( CSteamID( s_ulLobby ), pszKey ) : NULL;
+	return psz ? psz : "";
+}
+
+bool RcLobby_Invite( void )
+{
+	if ( !s_ulLobby || !RcFriends() )
+		return false;
+	s_pFriends->ActivateGameOverlayInviteDialog( CSteamID( s_ulLobby ) );
+	RcLog( "lobby: invite dialog opened" );
+	return true;
+}
+
+// the host's game is up: the guests follow its connect value (once each; again after the guest's own game was left
+// only through the panel's Join game)
+static void RcLobbyFollow( void )
+{
+	if ( !s_ulLobby || RcLobby_Owner() )
+		return;
+	// the host who made the lobby has left it: Steam gave it to a guest, who has no game to join
+	const char *pszHost = RcLobby_Data( "host" );
+	if ( pszHost[0] && _strtoui64( pszHost, NULL, 10 ) != RcLobbyOwner() )
+	{
+		RcLobby_Leave();
+		RcLobbyNote( "The host left the lobby" );
+		s_bLobbyWantPanel = true;
+		return;
+	}
+	const char *pszConnect = RcLobby_Data( "connect" );
+	if ( pszConnect[0] && strcmp( pszConnect, s_szLobbyJoined ) )
+	{
+		strncpy( s_szLobbyJoined, pszConnect, sizeof( s_szLobbyJoined ) - 1 );
+		s_szLobbyJoined[sizeof( s_szLobbyJoined ) - 1] = 0;
+		RcLog( "lobby: the host's game is up, joining (%s)", pszConnect );
+		if ( s_pfnLobbyJoin )
+			s_pfnLobbyJoin( pszConnect );
+	}
+}
+
+void RcLobby_JoinGame( void )
+{
+	s_szLobbyJoined[0] = 0;
+	RcLobbyFollow();
+}
+
+class RcLobbyEnterCallback : public CCallbackBase
+{
+public:
+	virtual void Run( void *pvParam )
+	{
+		LobbyEnter_t *p = (LobbyEnter_t *)pvParam;
+		if ( p->m_EChatRoomEnterResponse != k_EChatRoomEnterResponseSuccess )
+		{
+			s_iLobbyState = RCLOBBY_NONE;
+			RcLobbyNote( p->m_EChatRoomEnterResponse == k_EChatRoomEnterResponseFull ? "The lobby is full" : "Could not enter the lobby" );
+			return;
+		}
+		s_ulLobby = p->m_ulSteamIDLobby;
+		s_iLobbyState = RCLOBBY_IN;
+		s_szLobbyJoined[0] = 0;
+		RcLog( "lobby: in %I64u, %s", s_ulLobby, RcLobby_Owner() ? "host" : "guest" );
+		if ( RcLobby_Owner() )
+		{
+			char sz[32];
+			_snprintf( sz, sizeof( sz ) - 1, "%I64u", RcSelf() );
+			sz[sizeof( sz ) - 1] = 0;
+			RcLobby_SetData( "host", sz );
+			RcLobby_SetData( "rc", "1" );
+		}
+		RcLobbyPresence( true );
+		RcLobbyFollow();
+	}
+	virtual void Run( void *pvParam, bool bIOFailure, SteamAPICall_t hSteamAPICall ) { Run( pvParam ); }
+	virtual int GetCallbackSizeBytes() { return sizeof( LobbyEnter_t ); }
+};
+
+class RcLobbyDataCallback : public CCallbackBase
+{
+public:
+	virtual void Run( void *pvParam )
+	{
+		LobbyDataUpdate_t *p = (LobbyDataUpdate_t *)pvParam;
+		if ( p->m_ulSteamIDLobby == s_ulLobby && p->m_ulSteamIDMember == s_ulLobby )
+			RcLobbyFollow();
+	}
+	virtual void Run( void *pvParam, bool bIOFailure, SteamAPICall_t hSteamAPICall ) { Run( pvParam ); }
+	virtual int GetCallbackSizeBytes() { return sizeof( LobbyDataUpdate_t ); }
+};
+
+// a member came or went: a lobby whose host has gone is left (RcLobbyFollow)
+class RcLobbyChatCallback : public CCallbackBase
+{
+public:
+	virtual void Run( void *pvParam )
+	{
+		LobbyChatUpdate_t *p = (LobbyChatUpdate_t *)pvParam;
+		if ( p->m_ulSteamIDLobby == s_ulLobby )
+			RcLobbyFollow();
+	}
+	virtual void Run( void *pvParam, bool bIOFailure, SteamAPICall_t hSteamAPICall ) { Run( pvParam ); }
+	virtual int GetCallbackSizeBytes() { return sizeof( LobbyChatUpdate_t ); }
+};
+
+// an invite accepted, or Join Game on a friend in a lobby, while this game runs
+class RcLobbyJoinRequestCallback : public CCallbackBase
+{
+public:
+	virtual void Run( void *pvParam )
+	{
+		GameLobbyJoinRequested_t *p = (GameLobbyJoinRequested_t *)pvParam;
+		RcLog( "lobby: Steam asks to join %I64u", p->m_steamIDLobby.ConvertToUint64() );
+		RcLobby_Join( p->m_steamIDLobby.ConvertToUint64() );
+	}
+	virtual void Run( void *pvParam, bool bIOFailure, SteamAPICall_t hSteamAPICall ) { Run( pvParam ); }
+	virtual int GetCallbackSizeBytes() { return sizeof( GameLobbyJoinRequested_t ); }
+};
+
+static RcLobbyEnterCallback s_LobbyEnter;
+static RcLobbyDataCallback s_LobbyData;
+static RcLobbyChatCallback s_LobbyChat;
+static RcLobbyJoinRequestCallback s_LobbyJoinRequest;
+
 static bool RcStart( bool bRelayOnly )
 {
 	static bool s_bInit;
@@ -472,7 +762,12 @@ void RcSteamNet_Frame( void )
 				// Steam's Join Game and the overlay's Invite to Game hand this to the friend's game
 				_snprintf( s_szConnect, sizeof( s_szConnect ) - 1, "+rc_coop_join %s", sz );
 				s_szConnect[sizeof( s_szConnect ) - 1] = 0;
-				if ( RcFriends() )
+				if ( RcLobby_Owner() )
+				{
+					RcLobby_SetData( "connect", s_szConnect );	// B406: the lobby's guests join by themselves
+					s_pfnPrint( "ReCoF co-op: the lobby's friends are joining\n" );
+				}
+				else if ( RcFriends() )
 				{
 					bool bOk = s_pFriends->SetRichPresence( "connect", s_szConnect );
 					s_pFriends->SetRichPresence( "status", "Playing Cry of Fear co-op (ReCoF)" );
@@ -541,6 +836,11 @@ const char *RcSteamNet_PersonaName( void )
 
 void RcSteamNet_Invite( RcSteamPrint_t pfnPrint )
 {
+	if ( RcLobby_Invite() )
+	{
+		pfnPrint( "ReCoF co-op: Steam's invite list is open (Shift+Tab if the overlay does not show)\n" );
+		return;
+	}
 	if ( !s_szConnect[0] )
 	{
 		pfnPrint( "ReCoF co-op: host a co-op game first (rc_coop_start); invites are possible once Steam gave it an address\n" );
@@ -600,6 +900,12 @@ void RcSteamNet_InitCallbacks( RcSteamJoin_t pfnJoin )
 		return;
 	s_JoinCallback.m_pfnJoin = pfnJoin;
 	pfnRegister( &s_JoinCallback, GameRichPresenceJoinRequested_t::k_iCallback );
+	// B406: the lobby's
+	s_pfnLobbyJoin = pfnJoin;
+	pfnRegister( &s_LobbyEnter, LobbyEnter_t::k_iCallback );
+	pfnRegister( &s_LobbyData, LobbyDataUpdate_t::k_iCallback );
+	pfnRegister( &s_LobbyChat, LobbyChatUpdate_t::k_iCallback );
+	pfnRegister( &s_LobbyJoinRequest, GameLobbyJoinRequested_t::k_iCallback );
 	s_bJoinRegistered = true;
 }
 

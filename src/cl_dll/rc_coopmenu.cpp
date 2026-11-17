@@ -1,8 +1,9 @@
-// ReCoF story co-op (B393): the main menu's "Story Co-op" entry and its panel. The entry's picture is ReCoF's own,
-// made in the look of the menu's other labels (280 x 38, white text on a faint streak, red under the cursor) and
-// kept here as an alpha mask, so no file is added to the game. The panel starts a story co-op game for Steam
-// friends (rc_coop_start), continues the last co-op save (rc_coop_continue), and sets the difficulty and the host's
-// rules preset; friends join through Steam (the game menu's Invite Steam friends, or Join Game).
+// ReCoF story co-op (B393): the main menu's "Story Co-op" entry and its panel. The entry's picture (Cry of Fear's
+// picture menu, rc_menu_classic 1) is ReCoF's own, made in the look of the menu's other labels (280 x 38, white
+// text on a faint streak, red under the cursor) and kept here as an alpha mask, so no file is added to the game.
+// B406: the panel is the group's lobby (a Steam lobby, rc_steamnet.cpp RcLobby_*), shown before anyone enters the
+// game: the players in it, the difficulty and the game the host picks (a new game or the last co-op save), Invite
+// friends, Leave and Start. When the host starts, the guests' games join by themselves.
 
 #include "hud.h"
 #include "cl_util.h"
@@ -10,6 +11,8 @@
 #include "GameMenu_guess.h"
 #include "..\game_shared\vgui_loadtga.h"
 #include "rc_vgui1.h"
+#include "rc_ui.h"	// B406
+#include "rc_steamnet.h"
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
@@ -239,12 +242,7 @@ static int s_iRcArmedX, s_iRcArmedY;
 static CRcCoopPanel *s_pRcPanel;
 // B396: the game's own difficulties are the co-op presets (hl.dll rc_coop_preset): each brings its co-op rules
 static const char *s_pszRcPreset[5] = { "", "easy", "normal", "hard", "nightmare" };
-// the buttons hold 32 characters (CommandButton, MAX_BUTTON_SIZE): the line under them says what a difficulty means
-static const char *s_pszRcSkill[5] = { "", "Difficulty: Easy", "Difficulty: Normal", "Difficulty: Hard", "Difficulty: Nightmare" };
-static const char *s_pszRcSkillInfo[5] = { "", "Easy: back in 5 s after dying, monsters as for one player.",
-	"Normal: back in 10 s after dying, monsters a quarter tougher for each friend.",
-	"Hard: back in 20 s after dying, monsters 40% tougher for each friend.",
-	"Nightmare: no coming back, tape recorders only (a tape each), less stamina." };
+static const char *s_pszRcSkillName[5] = { "", "Easy", "Normal", "Hard", "Nightmare" };
 
 // the newest co-op save (coop_auto, coop_tape) in either save folder next to cof.exe, its name in pszName; false for none
 static bool RcCoopLastSave( char *pszName, int len )
@@ -321,58 +319,88 @@ static bool RcCoopCopyLaunchOptions( void )
 	return bOk;
 }
 
+// the panel's commands
+enum
+{
+	RC_LOBBY_OPEN = 1,	// the menu's entry
+	RC_LOBBY_CLOSE = 10,
+	RC_LOBBY_LEAVE,
+	RC_LOBBY_INVITE,
+	RC_LOBBY_START,
+	RC_LOBBY_NEW,
+	RC_LOBBY_CONTINUE,
+	RC_LOBBY_LAUNCH,
+	RC_LOBBY_SKILL,		// + 0 to 3
+};
+
+// B406: the lobby, a frame in the middle of the screen over a dark veil
 class CRcCoopPanel : public Panel
 {
 public:
 	CRcCoopPanel() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	{
-		CSchemeManager *pSchemes = gViewPort->GetSchemeManager();
-		Font *pTitle = pSchemes->getFont( pSchemes->getSchemeHandle( "Title Font" ) );
-		Font *pText = pSchemes->getFont( pSchemes->getSchemeHandle( "credits" ) );
-		int x = ScreenWidth / 2 - 350, y = ScreenHeight / 2 - 230;
-
-		m_pTitle = AddLabel( "STORY CO-OP", y + 20, 50, pText );
-		AddLabel( "Simon's story for up to 4 players.", y + 80, 30, pText );
-		AddLabel( "You host, and your Steam friends join you:", y + 110, 30, pText );
-		AddLabel( "in the game press Esc, then Invite Steam friends.", y + 140, 30, pText );
-
-		static const char *s_pszButtons[5] = { "New game", "Continue", "", "Copy Steam launch options", "Cancel" };
-		for ( int i = 0; i < 5; i++ )
+		setBgColor( 0, 0, 0, 255 );
+		m_pFrame = new CRcUiFrame( "Story Co-op", 0, 0, 10, 10 );
+		m_pFrame->setParent( this );
+		m_pClose = AddButton( "X", CRcUiButton::STYLE_ROW, RCF_TITLE, RC_LOBBY_CLOSE );
+		m_pClose->setRcCentred( true );
+		m_pPlayersCap = AddText( "PLAYERS", RCF_LABEL, RCC_DIM );
+		for ( int i = 0; i < 4; i++ )
 		{
-			// the font before the text: VGUI sizes a text when it is set
-			m_pButton[i] = new ColorButton( "", ScreenWidth / 2 - 400, y + 200 + i * 48, 800, 40, false, true );
-			m_pButton[i]->setParent( this );
-			if ( pText )
-				m_pButton[i]->setFont( pText );
-			m_pButton[i]->setText( s_pszButtons[i] );
-			m_pButton[i]->addActionSignal( new CRcCoopHandler( 10 + i ) );
-			m_pButton[i]->setContentAlignment( Label::a_center );
-			m_pButton[i]->setUnArmedColor( 255, 255, 255, 0 );
-			m_pButton[i]->setArmedColor( 255, 0, 0, 0 );
-			m_pButton[i]->setVisible( true );
+			m_pName[i] = AddText( "", RCF_BODY, RCC_TEXT );
+			m_pTag[i] = AddText( "", RCF_LABEL, RCC_DIM );
+			m_pTag[i]->setRcAlign( 2 );
 		}
-		m_pInfo = AddLabel( "", y + 200 + 5 * 48 + 10, 30, pText );
-		setBgColor( 0, 0, 0, 40 );
+		m_pSkillCap = AddText( "DIFFICULTY", RCF_LABEL, RCC_DIM );
+		for ( int i = 0; i < 4; i++ )
+		{
+			m_pSkill[i] = AddButton( s_pszRcSkillName[i + 1], CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_SKILL + i );
+			m_pSkill[i]->setRcCentred( true );
+		}
+		m_pGameCap = AddText( "GAME", RCF_LABEL, RCC_DIM );
+		m_pNew = AddButton( "New game", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_NEW );
+		m_pNew->setRcCentred( true );
+		m_pContinue = AddButton( "Continue", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_CONTINUE );
+		m_pContinue->setRcCentred( true );
+		m_pStatus = AddText( "", RCF_LABEL, RCC_DIM );
+		m_pStatus->setRcAlign( 1 );
+		m_pInvite = AddButton( "Invite friends", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_INVITE );
+		m_pLeave = AddButton( "Leave", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_LEAVE );
+		m_pStart = AddButton( "Start", CRcUiButton::STYLE_PRIMARY, RCF_BUTTON, RC_LOBBY_START );
+		// under the frame: the launch options a friend's Steam needs to start ReCoF from an invite (B395)
+		m_pLaunch = new CRcUiButton( "Copy Steam launch options", 0, 0, 10, 10, CRcUiButton::STYLE_ITEM, RCF_LABEL );
+		m_pLaunch->setRcCentred( true );
+		m_pLaunch->setParent( this );
+		m_pLaunch->addActionSignal( new CRcCoopHandler( RC_LOBBY_LAUNCH ) );
+		m_iGame = 0;
+		m_bSave = false;
+		m_flScale = 0;
 		setVisible( false );
 	}
 
-	// shown from the menu: the continue line names the save, the setting lines what they are now
-	void Refresh( void )
+	// from the menu (bHost: a lobby of this player's own when there is none), or Steam brought the player into one
+	void Open( bool bHost )
 	{
-		char szSave[32], szText[96];
-		m_bSave = RcCoopLastSave( szSave, sizeof( szSave ) );
-		if ( m_bSave )
-		{
-			strcpy( m_szSave, szSave );
-			_snprintf( szText, sizeof( szText ) - 1, "Continue (%s)", szSave );
-			szText[sizeof( szText ) - 1] = 0;
-			m_pButton[1]->setText( szText );
-		}
-		else
-			m_pButton[1]->setText( "Continue (no co-op save yet)" );
-		m_pButton[2]->setText( s_pszRcSkill[RcSkill()] );
-		m_pButton[3]->setText( "Copy Steam launch options" );
-		m_pInfo->setText( s_pszRcSkillInfo[RcSkill()] );
+		m_bSave = RcCoopLastSave( m_szSave, sizeof( m_szSave ) );
+		if ( !m_bSave )
+			m_iGame = 0;
+		if ( bHost && RcLobby_State() == RCLOBBY_NONE )
+			RcLobby_Create();
+		m_pLaunch->setRcText( "Copy Steam launch options" );
+		Layout();
+		Refresh();
+		setVisible( true );
+		if ( s_pRcMenu )
+			s_pRcMenu->Panel::setVisible( false );	// Panel's: CGameMenu's own would start its music again
+		gViewPort->UpdateCursorState();
+	}
+
+	void Close( void )
+	{
+		setVisible( false );
+		if ( s_pRcMenu && strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
+			s_pRcMenu->Panel::setVisible( true );
+		gViewPort->UpdateCursorState();
 	}
 
 	int RcSkill( void )
@@ -383,115 +411,273 @@ public:
 		return iSkill;
 	}
 
+	// this player decides: the lobby's owner, or a player alone (no lobby: Steam is not there)
+	bool Hosting( void )
+	{
+		return RcLobby_State() != RCLOBBY_IN || RcLobby_Owner();
+	}
+
 	void Command( int cmd )
 	{
 		char szCmd[128];
+		bool bHost = Hosting();
+		if ( cmd >= RC_LOBBY_SKILL && cmd < RC_LOBBY_SKILL + 4 )
+		{
+			int iSkill = cmd - RC_LOBBY_SKILL + 1;
+			if ( !bHost || ( iSkill == 4 && !( gHUD.m_iUnlocks_guess & 32 ) ) )
+				return;
+			_snprintf( szCmd, sizeof( szCmd ) - 1, "difficulty %d\n", iSkill );
+			szCmd[sizeof( szCmd ) - 1] = 0;
+			gEngfuncs.pfnClientCmd( szCmd );
+			gEngfuncs.Cvar_SetValue( "difficulty", iSkill );	// shown at once, before the command runs
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			return;
+		}
 		switch ( cmd )
 		{
-		case 10:	// a new game from the story's start
-		case 11:	// the last co-op save
-			if ( cmd == 11 && !m_bSave )
-				return;
+		case RC_LOBBY_CLOSE:
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-			setVisible( false );
+			Close();
+			break;
+		case RC_LOBBY_LEAVE:
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			RcLobby_Leave();
+			Close();
+			break;
+		case RC_LOBBY_INVITE:
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			if ( !RcLobby_Invite() )
+				m_pStatus->setRcText( "Steam's overlay is not available" );
+			break;
+		case RC_LOBBY_NEW:
+		case RC_LOBBY_CONTINUE:
+			if ( !bHost || ( cmd == RC_LOBBY_CONTINUE && !m_bSave ) )
+				return;
+			m_iGame = cmd == RC_LOBBY_CONTINUE ? 1 : 0;
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			break;
+		case RC_LOBBY_LAUNCH:
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			m_pLaunch->setRcText( RcCoopCopyLaunchOptions() ? "Copied: paste it in Cry of Fear's launch options on Steam" : "Could not copy them" );
+			break;
+		case RC_LOBBY_START:
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			if ( !bHost )
+			{
+				RcLobby_JoinGame();	// the host's game is up: join it
+				return;
+			}
+			if ( m_iGame == 1 && !m_bSave )
+				return;
+			Close();
 			if ( s_pRcMenu )
 				s_pRcMenu->setVisible( false );
 			gViewPort->UpdateCursorState();
 			if ( strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
 				IrrKlangStop_guess( 1 );
-			if ( cmd == 10 )
+			if ( m_iGame == 0 )
 				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start c_intro %s\n", s_pszRcPreset[RcSkill()] );
 			else
 				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_continue %s\n", m_szSave );
 			szCmd[sizeof( szCmd ) - 1] = 0;
 			gEngfuncs.pfnClientCmd( szCmd );
 			break;
-		case 12:	// the next difficulty (Nightmare once unlocked)
-		{
-			int iSkill = RcSkill() + 1;
-			if ( iSkill > 4 || ( iSkill == 4 && !( gHUD.m_iUnlocks_guess & 32 ) ) )
-				iSkill = 1;
-			_snprintf( szCmd, sizeof( szCmd ) - 1, "difficulty %d\n", iSkill );
-			szCmd[sizeof( szCmd ) - 1] = 0;
-			gEngfuncs.pfnClientCmd( szCmd );
-			m_pButton[2]->setText( s_pszRcSkill[iSkill] );
-			m_pInfo->setText( s_pszRcSkillInfo[iSkill] );
-			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-			break;
-		}
-		case 13:	// B395: the Steam launch options to the clipboard
-			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-			if ( RcCoopCopyLaunchOptions() )
-			{
-				m_pButton[3]->setText( "Copied to the clipboard" );
-				m_pInfo->setText( "Paste it in Steam: Cry of Fear, Properties, Launch options." );
-				gEngfuncs.Con_Printf( "ReCoF co-op: Steam launch options copied; Steam's Play then starts ReCoF too (clear them to play retail from Steam)\n" );
-			}
-			else
-				m_pButton[3]->setText( "Could not copy them" );
-			break;
-		case 14:	// back to the menu (Panel::setVisible: CGameMenu's own would start its music again)
-			setVisible( false );
-			if ( s_pRcMenu )
-				s_pRcMenu->Panel::setVisible( true );
-			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-			gViewPort->UpdateCursorState();
-			break;
 		}
 	}
 
-	// a dark veil over the menu's background map (the menu's entries are hidden while the panel is up)
+	// every frame while shown: the lobby's players, the host's choices, what happens next
+	void Refresh( void )
+	{
+		int iState = RcLobby_State();
+		bool bHost = Hosting();
+		char szNames[4][48];
+		bool bIsHost[4], bIsSelf[4];
+		int n = iState == RCLOBBY_IN ? RcLobby_Members( szNames, bIsHost, bIsSelf, 4 ) : 0;
+		if ( n == 0 )
+		{
+			const char *pszMe = RcSteamNet_PersonaName();
+			strncpy( szNames[0], pszMe && pszMe[0] ? pszMe : "You", 47 );
+			szNames[0][47] = 0;
+			bIsHost[0] = bIsSelf[0] = true;
+			n = 1;
+		}
+		for ( int i = 0; i < 4; i++ )
+		{
+			if ( i < n )
+			{
+				m_pName[i]->setRcText( szNames[i] );
+				m_pName[i]->setRcColor( RCC_TEXT );
+				m_pTag[i]->setRcText( bIsHost[i] && bIsSelf[i] ? "Host, you" : bIsHost[i] ? "Host" : bIsSelf[i] ? "You" : "" );
+			}
+			else
+			{
+				m_pName[i]->setRcText( "Open" );
+				m_pName[i]->setRcColor( RCC_DISABLED );
+				m_pTag[i]->setRcText( "" );
+			}
+		}
+
+		// the host's choices: his own, or the lobby's for a guest
+		if ( bHost )
+		{
+			char sz[8];
+			_snprintf( sz, sizeof( sz ) - 1, "%d", RcSkill() );
+			sz[sizeof( sz ) - 1] = 0;
+			if ( strcmp( RcLobby_Data( "difficulty" ), sz ) )
+				RcLobby_SetData( "difficulty", sz );
+			if ( strcmp( RcLobby_Data( "game" ), m_iGame ? "continue" : "new" ) )
+				RcLobby_SetData( "game", m_iGame ? "continue" : "new" );
+		}
+		int iSkill = bHost ? RcSkill() : atoi( RcLobby_Data( "difficulty" ) );
+		bool bContinue = bHost ? m_iGame == 1 : !strcmp( RcLobby_Data( "game" ), "continue" );
+		for ( int i = 0; i < 4; i++ )
+		{
+			m_pSkill[i]->setRcSelected( i + 1 == iSkill );
+			m_pSkill[i]->setRcDisabled( !bHost || ( i == 3 && !( gHUD.m_iUnlocks_guess & 32 ) ) );
+		}
+		m_pNew->setRcSelected( !bContinue );
+		m_pNew->setRcDisabled( !bHost );
+		m_pContinue->setRcSelected( bContinue );
+		m_pContinue->setRcDisabled( !bHost || !m_bSave );
+		char szCont[48];
+		if ( bHost && m_bSave )
+			_snprintf( szCont, sizeof( szCont ) - 1, "Continue (%s)", m_szSave );
+		else
+			strcpy( szCont, "Continue" );
+		szCont[sizeof( szCont ) - 1] = 0;
+		m_pContinue->setRcText( szCont );
+
+		// a host back on the menu after a game: the lobby's guests no longer have a game to join
+		const char *pszConnect = RcLobby_Data( "connect" );
+		if ( iState == RCLOBBY_IN && RcLobby_Owner() && pszConnect[0] && strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
+		{
+			RcLobby_SetData( "connect", "" );
+			pszConnect = "";
+		}
+
+		const char *pszStatus = "";
+		if ( iState == RCLOBBY_ASKED )
+			pszStatus = "Opening the lobby...";
+		else if ( iState == RCLOBBY_NONE )
+			pszStatus = RcLobby_Note()[0] ? RcLobby_Note() : "";
+		else if ( bHost )
+			pszStatus = n < 2 ? "Invite your friends, then start" : "";
+		else
+			pszStatus = pszConnect[0] ? "The host's game is on" : "Waiting for the host to start";
+		m_pStatus->setRcText( pszStatus );
+		m_pInvite->setVisible( iState == RCLOBBY_IN );
+		m_pStart->setRcText( bHost ? "Start" : "Join game" );
+		m_pStart->setVisible( bHost || pszConnect[0] );
+	}
+
+	void Layout( void )
+	{
+		m_flScale = RcUiScale();
+		int W = RcUiS( 620 ), H = RcUiS( 470 );
+		if ( W > ScreenWidth - 32 )
+			W = ScreenWidth - 32;
+		int x0 = ( ScreenWidth - W ) / 2, y0 = ( ScreenHeight - H ) / 2 - RcUiS( 16 );
+		if ( y0 < 0 )
+			y0 = 0;
+		m_pFrame->setBounds( x0, y0, W, H );
+		int band = m_pFrame->bandTall(), pad = RcUiS( 24 ), gap = RcUiS( 8 );
+		m_pClose->setBounds( W - band, 0, band, band );
+		int y = band + RcUiS( 18 );
+		m_pPlayersCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
+		y += RcUiS( 24 );
+		for ( int i = 0; i < 4; i++ )
+		{
+			m_pName[i]->setBounds( pad, y + i * RcUiS( 30 ), W - 2 * pad, RcUiS( 28 ) );
+			m_pTag[i]->setBounds( pad, y + i * RcUiS( 30 ), W - 2 * pad, RcUiS( 28 ) );
+		}
+		y += 4 * RcUiS( 30 ) + RcUiS( 14 );
+		m_pSkillCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
+		y += RcUiS( 24 );
+		int bw = ( W - 2 * pad - 3 * gap ) / 4;
+		for ( int i = 0; i < 4; i++ )
+			m_pSkill[i]->setBounds( pad + i * ( bw + gap ), y, bw, RcUiS( 32 ) );
+		y += RcUiS( 32 ) + RcUiS( 16 );
+		m_pGameCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
+		y += RcUiS( 24 );
+		int gw = ( W - 2 * pad - gap ) / 2;
+		m_pNew->setBounds( pad, y, gw, RcUiS( 32 ) );
+		m_pContinue->setBounds( pad + gw + gap, y, gw, RcUiS( 32 ) );
+		int by = H - RcUiS( 20 ) - RcUiS( 34 );
+		m_pStatus->setBounds( pad, by - RcUiS( 32 ), W - 2 * pad, RcUiS( 22 ) );
+		m_pInvite->setBounds( pad, by, RcUiS( 170 ), RcUiS( 34 ) );
+		m_pStart->setBounds( W - pad - RcUiS( 150 ), by, RcUiS( 150 ), RcUiS( 34 ) );
+		m_pLeave->setBounds( W - pad - RcUiS( 150 ) - RcUiS( 12 ) - RcUiS( 120 ), by, RcUiS( 120 ), RcUiS( 34 ) );
+		m_pLaunch->setBounds( x0, y0 + H + RcUiS( 10 ), W, RcUiS( 28 ) );
+	}
+
+	virtual void solve()
+	{
+		Panel::solve();
+		// the guest's game joined the host's: the lobby goes with the menu
+		const char *pszLevel = gEngfuncs.pfnGetLevelName();
+		if ( pszLevel && pszLevel[0] && !strstr( pszLevel, "game_menu" ) )
+		{
+			setVisible( false );
+			gViewPort->UpdateCursorState();
+			return;
+		}
+		if ( RcUiScale() != m_flScale )
+			Layout();
+		Refresh();
+	}
+
+	// a dark veil over the menu's scene
 	virtual void paintBackground()
 	{
 		int wide, tall;
 		getPaintSize( wide, tall );
-		drawSetColor( 0, 0, 0, 90 );
+		drawSetColor( RCC_SCRIM.r, RCC_SCRIM.g, RCC_SCRIM.b, 255 - RCC_SCRIM.a );
 		drawFilledRect( 0, 0, wide, tall );
 	}
 
 private:
-	Label *AddLabel( const char *pszText, int y, int tall, Font *pFont )
+	CRcUiText *AddText( const char *pszText, int font, const RcUiColor &color )
 	{
-		Label *pLabel = new Label( "", 0, y, ScreenWidth, tall );
-		pLabel->setParent( this );
-		if ( pFont )
-			pLabel->setFont( pFont );
-		pLabel->setText( pszText );	// after the font: VGUI sizes a text when it is set
-		pLabel->setFgColor( 255, 255, 255, 0 );
-		pLabel->setBgColor( 0, 0, 0, 255 );
-		pLabel->setContentAlignment( Label::a_center );
-		pLabel->setVisible( true );
-		return pLabel;
+		CRcUiText *p = new CRcUiText( pszText, 0, 0, 10, 10, font, color );
+		p->setParent( m_pFrame );
+		return p;
 	}
 
-	Label *m_pTitle;
-	ColorButton *m_pButton[5];
-	Label *m_pInfo;	// what the difficulty means, or where the launch options go
+	CRcUiButton *AddButton( const char *pszText, int style, int font, int cmd )
+	{
+		CRcUiButton *p = new CRcUiButton( pszText, 0, 0, 10, 10, style, font );
+		p->setParent( m_pFrame );
+		p->addActionSignal( new CRcCoopHandler( cmd ) );
+		return p;
+	}
+
+	CRcUiFrame *m_pFrame;
+	CRcUiButton *m_pClose, *m_pSkill[4], *m_pNew, *m_pContinue, *m_pInvite, *m_pLeave, *m_pStart, *m_pLaunch;
+	CRcUiText *m_pPlayersCap, *m_pName[4], *m_pTag[4], *m_pSkillCap, *m_pGameCap, *m_pStatus;
+	int m_iGame;	// 0 a new game, 1 the last co-op save
 	bool m_bSave;
 	char m_szSave[32];
+	float m_flScale;
 };
 
 void CRcCoopHandler::actionPerformed( Panel *panel )
 {
-	if ( m_cmd == 1 )
+	if ( !s_pRcPanel )
 	{
-		// the menu's entry: its panel in place of the menu's entries (the viewport keeps the cursor for it,
-		// RcCoopMenu_Visible); the menu is hidden with Panel::setVisible, which leaves its music playing
-		if ( !s_pRcPanel )
-		{
-			s_pRcPanel = new CRcCoopPanel();
-			s_pRcPanel->setParent( gViewPort );
-		}
+		s_pRcPanel = new CRcCoopPanel();
+		s_pRcPanel->setParent( gViewPort );
+	}
+	if ( m_cmd == RC_LOBBY_OPEN )
+	{
+		// the menu's entry: the lobby in place of the menu's entries (the viewport keeps the cursor for it,
+		// RcCoopMenu_Visible)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-		s_pRcPanel->Refresh();
-		s_pRcPanel->setVisible( true );
-		if ( s_pRcMenu )
-			s_pRcMenu->Panel::setVisible( false );
-		gViewPort->UpdateCursorState();
+		s_pRcPanel->Open( true );
 		return;
 	}
-	if ( s_pRcPanel )
-		s_pRcPanel->Command( m_cmd );
+	s_pRcPanel->Command( m_cmd );
 }
 
 // TeamFortressViewport::UpdateCursorState: the panel needs the mouse cursor
@@ -551,6 +737,16 @@ void RcCoopMenu_Show( bool bShow )
 // CGameMenu::solve, each frame: the red picture and the shake under the cursor, as the menu's other entries
 void RcCoopMenu_Solve( void )
 {
+	// B406: Steam brought this player into a lobby (an invite, Join Game, +connect_lobby): the menu shows it
+	if ( RcLobby_WantPanel() )
+	{
+		if ( !s_pRcPanel )
+		{
+			s_pRcPanel = new CRcCoopPanel();
+			s_pRcPanel->setParent( gViewPort );
+		}
+		s_pRcPanel->Open( false );
+	}
 	if ( !s_pRcItemButton || !s_pRcItem )
 		return;
 	if ( s_pRcItemButton->isArmed() )

@@ -219,10 +219,10 @@ void CRcUiButton::paint()
 	getSize( wide, tall );
 	bool bArmed = isArmed() && !m_bRcDisabled;
 	const RcUiColor *pColor;
-	if ( m_bRcDisabled )
+	if ( m_iRcStyle == STYLE_ROW && m_bRcSelected )
+		pColor = &RCC_ACCENT;	// shown as chosen even where this player cannot change it (B406, a lobby's guest)
+	else if ( m_bRcDisabled )
 		pColor = &RCC_DISABLED;
-	else if ( m_iRcStyle == STYLE_ROW && m_bRcSelected )
-		pColor = &RCC_ACCENT;
 	else if ( m_iRcStyle == STYLE_PRIMARY || bArmed )
 		pColor = &RCC_HI;
 	else
