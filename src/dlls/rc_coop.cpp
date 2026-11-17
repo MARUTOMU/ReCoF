@@ -250,6 +250,7 @@ void CHalfLifeStoryCoop::PlayerThink( CBasePlayer *pPlayer )
 // view entity, FOV, flashlight, blur, objective and ammo it leaves out)
 static void RcCoopResendState( CBasePlayer *pPlayer )
 {
+	pPlayer->RcRestorePhysinfo();	// B424: the engine emptied the guest's physinfo when his game signed on
 	pPlayer->m_fInitHUD = TRUE;
 	pPlayer->m_iClientHideHUD = -1;
 	pPlayer->m_ClientDrawBars = -1;
@@ -1155,6 +1156,10 @@ static void RcCoopDump( void )
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d move: fuser3 %g, iuser3 %d, maxspeed %.0f, ducking %d, in duck %d, "
+			"view %.0f, on ground %d, phone %d, fall freeze %d, physinfo %s\n", i, pPlayer->pev->fuser3, pPlayer->pev->iuser3, pPlayer->pev->maxspeed,
+			( pPlayer->pev->flags & FL_DUCKING ) != 0, pPlayer->pev->bInDuck, pPlayer->pev->view_ofs.z, ( pPlayer->pev->flags & FL_ONGROUND ) != 0,
+			pPlayer->m_bInPhoneCall, pPlayer->m_bShouldFallFreeze, g_engfuncs.pfnGetPhysicsInfoString( pPlayer->edict() ) ) );
 	}
 
 	// G16: the live monsters, their health and the scale they have

@@ -544,6 +544,7 @@ public:
 	// buz: jumping height
 	int		m_iJumpHeight; // in percents, 0 - 100
 	void	SetJumpHeight( int value );
+	void	RcRestorePhysinfo( void );	// ReCoF (B424): the movement keys Spawn and Restore set, again
 
 	// buz: real lightlevel (from 0 to 1)
 	float	m_fLightlevel;

@@ -11289,6 +11289,25 @@ void CInfoIntermission::Think ( void )
 LINK_ENTITY_TO_CLASS( info_intermission, CInfoIntermission );
 
 
+// ReCoF (B424): the physinfo keys pm_shared reads that Spawn and Restore set (Restore's own lines below are kept as
+// retail had them). The engine empties a client's physinfo when it signs on to a new level (sv_main.c
+// SV_InactivateClients, host.c at connect); the host's game is in the server and never signs on again, but a story
+// co-op guest's does, after his player was restored, so he came into each new level without them: jump height 0 (no
+// jump at all), no step times, no materials. rc_coop.cpp sets them again on the guest's first command there
+void CBasePlayer::RcRestorePhysinfo( void )
+{
+	char *pszMaterials = (char *)CVAR_GET_STRING( "sv_custommaterials" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "mtl", strlen( pszMaterials ) > 2 ? pszMaterials : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "hl", "1" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "slj", m_fLongJump ? "1" : "0" );
+	if ( g_pGameRules && !RcPoliceMP() )
+		g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", m_bLowHealth ? "1" : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "asd", CVAR_GET_STRING( "cof_walksteptime" ) );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "bsd", CVAR_GET_STRING( "cof_runsteptime" ) );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "csd", CVAR_GET_STRING( "cof_sprintsteptime" ) );
+	SetJumpHeight( m_iJumpHeight );
+}
+
 // buz: set jump height function
 void CBasePlayer::SetJumpHeight(int value)
 {
