@@ -2568,6 +2568,7 @@ void SV_ConnectClient( void )
 	{
 		if ( !SV_FindEmptySlot( &adr, &nClientSlot, &client ) )
 			return;
+		RcCoop_PickSlot( name, &nClientSlot, &client );	// ReCoF: a story co-op player's own slot after a load
 	}
 	else
 	{

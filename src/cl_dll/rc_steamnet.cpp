@@ -534,6 +534,11 @@ void RcSteamNet_Status( RcSteamPrint_t pfnPrint )
 }
 
 // rc_coop_invite: Steam's overlay picker that sends the connect value to the friends chosen (no lobby needed)
+const char *RcSteamNet_PersonaName( void )
+{
+	return RcFriends() ? s_pFriends->GetPersonaName() : NULL;
+}
+
 void RcSteamNet_Invite( RcSteamPrint_t pfnPrint )
 {
 	if ( !s_szConnect[0] )

@@ -192,6 +192,46 @@ void RcCoop_Loaded( void )
 	Con_Printf( rc_szLoaded, n );
 }
 
+// SV_ConnectClient, after SV_FindEmptySlot (the first free slot): once a story co-op save is loaded, a client that
+// comes back takes the free slot whose saved player has his name (the save keeps each player's netname), and a
+// client the save has no player for takes a free slot without a saved player while there is one, so 3 or 4 players
+// coming back in another order each get their own saved player. A name the server made unique ("(1)...") matches
+// the one saved only if the players come back in the same order; the co-op commands give a player who kept the
+// default name his Steam name (client.dll rc_client.cpp RcCoopDefaultName)
+void RcCoop_PickSlot( char *name, int *pslot, client_t **ppClient )
+{
+	int			i, iFree;
+	client_t	*cl;
+	edict_t		*ent;
+
+	if ( !rc_bTransition || !RcCoop_On() || !name || !name[0] )
+		return;
+	iFree = -1;
+	for ( i = 0, cl = svs.clients; i < svs.maxclients && i < RC_MAX_CLIENTS; i++, cl++ )
+	{
+		if ( cl->active || cl->spawned || cl->connected )
+			continue;
+		if ( !RcCoop_Carried( cl ) )
+		{
+			if ( iFree < 0 )
+				iFree = i;
+			continue;
+		}
+		ent = EDICT_NUM( i + 1 );
+		if ( ent && !ent->free && ent->v.netname && !Q_strcmp( pr_strings + ent->v.netname, name ) )
+		{
+			*pslot = i;
+			*ppClient = cl;
+			return;
+		}
+	}
+	if ( iFree >= 0 && RcCoop_Carried( *ppClient ) )
+	{
+		*pslot = iFree;
+		*ppClient = &svs.clients[iFree];
+	}
+}
+
 // Host_TogglePause_f, Host_Pause_f and Host_Unpause_f: in story co-op only the host's own client (the loopback one)
 // pauses; a guest's pause, and the pause GameUI asks for when a guest opens his menu, are refused
 int RcCoop_GuestPause( void )

@@ -413,8 +413,38 @@ static int RcCoopHasArg( const char *pszArg )
 	return 0;
 }
 
+// B391: a player who kept the default name gets his Steam name for co-op, so the players have names apart (the host
+// gives each saved player back to the one with his name after a load, hw.dll RcCoop_PickSlot). Quotes, semicolons
+// and control characters are left out; a name the player chose himself stays
+static void RcCoopDefaultName( void )
+{
+	const char *pszName = gEngfuncs.pfnGetCvarString( "name" );
+	if ( pszName && pszName[0] && stricmp( pszName, "Unknown" ) && stricmp( pszName, "Player" ) && stricmp( pszName, "unnamed" ) )
+		return;
+	const char *pszSteam = RcSteamNet_PersonaName();
+	if ( !pszSteam )
+		return;
+	char szName[32];
+	int n = 0;
+	for ( const char *p = pszSteam; *p && n < (int)sizeof( szName ) - 1; p++ )
+	{
+		if ( (unsigned char)*p < 32 || *p == '"' || *p == ';' || *p == '\\' || *p == '%' )
+			continue;
+		szName[n++] = *p;
+	}
+	szName[n] = 0;
+	if ( n > 0 )
+	{
+		char szCmd[64];
+		_snprintf( szCmd, sizeof( szCmd ) - 1, "name \"%s\"\n", szName );
+		szCmd[sizeof( szCmd ) - 1] = 0;
+		gEngfuncs.pfnClientCmd( szCmd );
+	}
+}
+
 static void RcCoopHost_f( void )
 {
+	RcCoopDefaultName();
 	int port = (int)gEngfuncs.pfnGetCvarFloat( "hostport" );
 	if ( port <= 0 )
 		port = (int)gEngfuncs.pfnGetCvarFloat( "port" );
@@ -447,6 +477,7 @@ static void RcCoopJoin_f( void )
 	}
 	if ( RcSteamNet_Join( addr, RcCoopHasArg( "relay" ) != 0, RcCoopPrint ) )
 	{
+		RcCoopDefaultName();
 		// connect from HUD_Frame in 3 s: on the command line this runs before the menu map that InitInput queues,
 		// which would cancel the connect
 		_snprintf( s_szCoopConnect, sizeof( s_szCoopConnect ) - 1, "connect %s\n", addr );

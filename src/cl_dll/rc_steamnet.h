@@ -23,6 +23,9 @@ int RcSteamNet_Joined( void );
 // Steam's invite list for the host's game (rc_coop_invite)
 void RcSteamNet_Invite( RcSteamPrint_t pfnPrint );
 
+// the Steam name of the account playing (NULL without Steam)
+const char *RcSteamNet_PersonaName( void );
+
 // a friend's Join Game or accepted invite reaches pfnJoin with the host's connect value; Pump runs Steam's
 // callbacks of client.dll's connection every frame
 typedef void ( *RcSteamJoin_t )( const char *pszConnect );

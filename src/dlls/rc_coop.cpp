@@ -100,10 +100,18 @@ static bool RcCoopInside( CBaseEntity *pBox, CBaseEntity *pPlayer )
 		pPlayer->pev->absmin.z <= pBox->pev->absmax.z && pPlayer->pev->absmax.z >= pBox->pev->absmin.z;
 }
 
-// a player in the game: alive, not one who left (B320 fuser4)
+// B391: a player slot with no client behind it: a saved player whose player has not come back after a load (the
+// engine's userinfo of the slot is empty until a client connects to it)
+static bool RcCoopNoClient( CBaseEntity *pEnt )
+{
+	char *pszInfo = g_engfuncs.pfnGetInfoKeyBuffer( pEnt->edict() );
+	return !pszInfo || !pszInfo[0];
+}
+
+// a player in the game: alive, not one who left (B320 fuser4), with a client (B391)
 static bool RcCoopPresent( CBaseEntity *pEnt )
 {
-	return pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() && pEnt->pev->deadflag == DEAD_NO;
+	return pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() && pEnt->pev->deadflag == DEAD_NO && !RcCoopNoClient( pEnt );
 }
 
 // G18: a player who joins the game (not a respawn, which gets his own things back) gets the weapons of the teammate
@@ -245,6 +253,25 @@ void CHalfLifeStoryCoop::Think( void )
 		RcCoopScaleMonsters();
 		RcCoopSyncKeys();
 		RcCoopSyncCodes();
+
+		// B391: a saved player whose player has not come back once the load's 90 s are over (hw.dll rc_coop.c
+		// RC_CARRY_SECONDS) is put away as one who left (client.cpp ClientDisconnect's marks): unseen, not solid
+		if ( m_flLevelStart >= 0 && gpGlobals->time - m_flLevelStart > 95 )
+		{
+			for ( int g = 1; g <= gpGlobals->maxClients; g++ )
+			{
+				CBaseEntity *pEnt = UTIL_PlayerByIndex( g );
+				if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !RcCoopNoClient( pEnt ) )
+					continue;
+				pEnt->pev->fuser4 = 1;
+				pEnt->pev->takedamage = DAMAGE_NO;
+				pEnt->pev->solid = SOLID_NOT;
+				pEnt->pev->flags |= FL_NOTARGET;
+				pEnt->pev->effects |= EF_NODRAW;
+				UTIL_SetOrigin( pEnt, pEnt->pev->origin );
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: saved player %d had nobody come back for him; put away\n", g ) );
+			}
+		}
 
 		// G13: an autosave once every player is in on a new level
 		if ( !m_bAutosaved )
