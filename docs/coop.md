@@ -2,13 +2,13 @@
 
 Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
 
-The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B395 in [bugs.md](bugs.md).
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B396 in [bugs.md](bugs.md).
 
 ## Playing
 
 Every player needs the same ReCoF build and Steam running.
 
-- **Host:** in the main menu choose Story Co-op, then New game (from the story's start) or Continue (the newest co-op save); the panel also sets the difficulty and the rules preset. From the console: `rc_coop_start` (Simon's story from the start), `rc_coop_start <map> [classic|casual|hardcore]` (for example `rc_coop_start c_apartment1`) or `rc_coop_continue coop_auto`; `rc_coop_menu` opens the panel. It also works as a launch option, `+rc_coop_start c_apartment1`. When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
+- **Host:** in the main menu choose Story Co-op, then New game (from the story's start) or Continue (the newest co-op save); the panel also sets the difficulty, which brings its co-op rules. From the console: `rc_coop_start` (Simon's story from the start), `rc_coop_start <map> [easy|normal|hard|nightmare]` (for example `rc_coop_start c_apartment1`) or `rc_coop_continue coop_auto`; `rc_coop_menu` opens the panel. It also works as a launch option, `+rc_coop_start c_apartment1`. When Steam has given the game an address (a few seconds), the console shows `your friends join with: rc_coop_join 169.254.x.x:port`.
 - **Invite:** in the game, Esc and Invite Steam friends to co-op (or `rc_coop_invite`) opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
 - **Join by hand:** `rc_coop_join 169.254.x.x:port` in the console.
 - **Invites while the game is closed:** Steam starts the game it knows, retail Cry of Fear. The Story Co-op panel's Copy Steam launch options (or `rc_coop_launchoptions`, which prints it) gives `"<ReCoF folder>\cof.exe" %command%` to paste in Steam, Cry of Fear, Properties, Launch options; Steam then starts ReCoF and it joins the host. While the option is set, Steam's Play starts ReCoF too; clear it to play retail from Steam.
@@ -51,7 +51,7 @@ Every player needs the same ReCoF build and Steam running.
 | `rc_coop_monster_health` | 25 | percent more monster health for each player beyond the first, at most double; 0 for single player's |
 | `rc_coop_skip_vote` | 1 | 1 lets the guests skip a scene once every player watching it has pressed Enter; 0 only the host skips |
 
-`rc_coop_preset classic`, `casual` or `hardcore` sets them in one go, and `rc_coop_preset` alone shows them and which preset they are. Classic is the table above; casual respawns after 5 s and leaves the monsters as in single player; hardcore keeps Cry of Fear's own death rule, saves only at tape recorders and gives monsters 50% more health a player. Every co-op save keeps the settings it was played with, and loading it sets them again.
+The game's four difficulties are the presets: `rc_coop_preset easy`, `normal`, `hard` or `nightmare` sets the difficulty and its co-op rules, and `rc_coop_preset` alone shows them. Easy: back 5 s after dying, monsters as for one player. Normal: the table above. Hard: back after 20 s, monsters 40% tougher for each friend. Nightmare: Cry of Fear's own death rule, tape recorders only (a tape each), monsters 50% tougher for each friend, and nightmare's lower stamina for everyone. Every co-op save keeps the difficulty and the rules it was played with, and loading it sets them again.
 
 The voice options (`rc_voice_3d`, `rc_voice_range`, `rc_voice_wall`) are each player's own.
 
