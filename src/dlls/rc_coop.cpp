@@ -26,6 +26,9 @@ cvar_t	rc_coop_autosave = { "rc_coop_autosave", "1", FCVAR_SERVER };
 cvar_t	rc_coop_monster_health = { "rc_coop_monster_health", "25", FCVAR_SERVER };
 // G6: 1 while the host's scene skip runs: hw.dll then runs the server fast (rc_coop.c RcCoop_SkipPhysics)
 cvar_t	rc_coop_skip = { "rc_coop_skip", "0" };
+// G6 (B390): 1 lets the guests skip a scene too: once every player watching it has pressed Enter; 0 only the host
+cvar_t	rc_coop_skip_vote = { "rc_coop_skip_vote", "1", FCVAR_SERVER };
+static bool s_bRcSkipVote[33];	// this player asked to skip the scene he is in
 
 extern bool m_bSpawningSimon;	// multiplay_gamerules.cpp: the police co-op's hunting Simon
 
@@ -210,6 +213,14 @@ void CHalfLifeStoryCoop::Think( void )
 	m_bSpawningSimon = false;
 
 	CHalfLifeMultiplay::Think();
+
+	// G6 (B390): a vote lasts while its player is in a scene (the cameras of one scene follow each other)
+	for ( int v = 1; v <= gpGlobals->maxClients && v <= 32; v++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( v );
+		if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !( (CBasePlayer *)pEnt )->IsInCutscene() || CVAR_GET_FLOAT( "rc_coop_skip" ) != 0 )
+			s_bRcSkipVote[v] = false;
+	}
 
 	// G6: the skip ends once no player is in a scene any more
 	if ( CVAR_GET_FLOAT( "rc_coop_skip" ) != 0 )
@@ -998,7 +1009,41 @@ void RcCoop_SkipScene( bool bSkippable )
 		MESSAGE_BEGIN( MSG_ALL, gmsgSkipScene );
 		MESSAGE_END();
 	}
-	g_engfuncs.pfnServerPrint( "ReCoF co-op: the host skips the scene\n" );
+	g_engfuncs.pfnServerPrint( "ReCoF co-op: the group skips the scene\n" );
+}
+
+// G6 (B390): a guest pressed Enter in a scene (rc_cheats.cpp RcCutsceneSkip): his vote; once every player in a scene
+// has voted, the group skips it, and until then the others see who asked
+void RcCoop_SkipVote( CBasePlayer *pPlayer, bool bSkippable )
+{
+	if ( !RcCoopRules() || CVAR_GET_FLOAT( "rc_coop_skip" ) != 0 )
+		return;
+	int me = ENTINDEX( pPlayer->edict() );
+	if ( me < 1 || me > 32 )
+		return;
+	bool bNew = !s_bRcSkipVote[me];
+	s_bRcSkipVote[me] = true;
+
+	int nWatch = 0, nVotes = 0;
+	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !( (CBasePlayer *)pEnt )->IsInCutscene() )
+			continue;
+		nWatch++;
+		if ( s_bRcSkipVote[i] )
+			nVotes++;
+	}
+	if ( nVotes >= nWatch )
+	{
+		RcCoop_SkipScene( bSkippable );
+		return;
+	}
+	if ( bNew )
+	{
+		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, UTIL_VarArgs( "%s wants to skip the scene (%d of %d): Enter to agree\n", STRING( pPlayer->pev->netname ), nVotes, nWatch ) );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s votes to skip the scene, %d of %d\n", STRING( pPlayer->pev->netname ), nVotes, nWatch ) );
+	}
 }
 
 void RcCoop_Init( void )
@@ -1010,4 +1055,5 @@ void RcCoop_Init( void )
 	CVAR_REGISTER( &rc_coop_autosave );
 	CVAR_REGISTER( &rc_coop_monster_health );
 	CVAR_REGISTER( &rc_coop_skip );
+	CVAR_REGISTER( &rc_coop_skip_vote );
 }
