@@ -336,8 +336,10 @@ void CHalfLifeStoryCoop::Think( void )
 		}
 
 		// Cry of Fear makes players who overlap SOLID_NOT until they part (CBasePlayer::PreThink), and triggers do not
-		// touch a non-solid player: one standing in a level exit touches it here instead (the exit's own rules apply)
-		if ( m_bArmed[i] && !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype != MOVETYPE_NOCLIP )
+		// touch a non-solid player: one standing in a level exit touches it here instead (the exit's own rules apply;
+		// an exit fired by the map has no touch), once out of any scene, as a scene may carry a player through an exit
+		if ( m_bArmed[i] && !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype != MOVETYPE_NOCLIP &&
+			!( (CBasePlayer *)pEnt )->IsInCutscene() )
 		{
 			CBaseEntity *pExit = NULL;
 			while ( ( pExit = UTIL_FindEntityByClassname( pExit, "trigger_changelevel" ) ) != NULL )

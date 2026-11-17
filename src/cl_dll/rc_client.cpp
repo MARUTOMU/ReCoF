@@ -570,6 +570,8 @@ static void RcCoopReconnect( void )
 		s_bCoopWasIn = 1;
 		s_iCoopRetries = 0;
 		s_dwCoopRetryAt = 0;
+		if ( gEngfuncs.pfnGetCvarFloat( "rc_coop_left" ) != 0 )
+			gEngfuncs.Cvar_SetValue( "rc_coop_left", 0 );	// a disconnect from before this game (a Steam invite join)
 		return;
 	}
 	if ( gEngfuncs.pfnGetCvarFloat( "rc_coop_left" ) != 0 )
