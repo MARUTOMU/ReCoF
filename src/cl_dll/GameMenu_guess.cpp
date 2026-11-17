@@ -25,6 +25,9 @@ void RcCoopMenu_SetPos( int x, int y );
 void RcCoopMenu_Show( bool bShow );
 void RcCoopMenu_Solve( void );
 void RcCoopMenu_Reset( void );
+void RcMainMenu_Create( CGameMenu *pMenu );	// ReCoF (B405), rc_mainmenu.cpp
+void RcMainMenu_Apply( bool bItems );
+void RcMainMenu_Solve( void );
 #include <windows.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -265,6 +268,8 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pCampaignList_guess->setScrollValue( 0, 0 );
 	m_pCampaignList_guess->validate();
 
+	RcMainMenu_Create( this );	// ReCoF (B405): the modern main menu
+
 	Initialize();
 }
 
@@ -357,6 +362,7 @@ void CGameMenu::ActionSignal( int cmd )
 		m_pCancelButton_guess->setVisible( true );
 		m_pCampaignList_guess->setVisible( true );
 		RcCoopMenu_Show( false );	// ReCoF (B393)
+		RcMainMenu_Apply( false );	// ReCoF (B405)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -434,6 +440,7 @@ void CGameMenu::ActionSignal( int cmd )
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );
 		RcCoopMenu_Show( true );	// ReCoF (B393)
+		RcMainMenu_Apply( true );	// ReCoF (B405)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -696,6 +703,7 @@ void CGameMenu::setVisible( bool state )
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );
 		RcCoopMenu_Show( true );	// ReCoF (B393)
+		RcMainMenu_Apply( true );	// ReCoF (B405)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( int i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -715,6 +723,7 @@ void CGameMenu::solve()
 	m_pLogoImage_guess->setColor( Color( 255, 255, 255, gEngfuncs.pfnRandomLong( 0, 50 ) ) );
 
 	RcCoopMenu_Solve();	// ReCoF (B393)
+	RcMainMenu_Solve();	// ReCoF (B405)
 
 	if ( m_pNewGameButton_guess->isArmed() )
 	{

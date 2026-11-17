@@ -1578,6 +1578,14 @@
           "source": "src/cl_dll/rc_vgui1.cpp"
         },
         {
+          "name": "cl_dll/rc_ui",
+          "source": "src/cl_dll/rc_ui.cpp"
+        },
+        {
+          "name": "cl_dll/rc_mainmenu",
+          "source": "src/cl_dll/rc_mainmenu.cpp"
+        },
+        {
           "name": "external/discord-rpc/src/discord_rpc",
           "source": "src/external/discord-rpc/src/discord_rpc.cpp",
           "includes": [
@@ -1825,6 +1833,8 @@
           "cl_dll/rc_steamnet",
           "cl_dll/rc_coopmenu",
           "cl_dll/rc_vgui1",
+          "cl_dll/rc_ui",
+          "cl_dll/rc_mainmenu",
           "external/discord-rpc/src/discord_rpc",
           "external/discord-rpc/src/rpc_connection",
           "external/discord-rpc/src/serialization",

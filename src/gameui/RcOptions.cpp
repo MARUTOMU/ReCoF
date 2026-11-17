@@ -130,6 +130,9 @@ static const RcOption s_RcOptions[] =
 	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
 		"How large the menus and this window are, in percent of their size for your screen (they grow with its "
 		"height already). Takes effect when a window opens again." },
+	// B405: the main menu's look (client.dll rc_mainmenu.cpp)
+	{ "game_general", "rc_menu_classic", RC_BOOL, "Classic main menu", "0", 0, 0, NULL,
+		"Cry of Fear's picture menu instead of the text list." },
 
 	// Graphics, Quality
 	{ "gfx_quality", "gl_contrast", RC_FLOAT, "Contrast", "1", 0, 20, NULL,
