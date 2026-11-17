@@ -200,6 +200,36 @@ void CHalfLifeStoryCoop::PlayerThink( CBasePlayer *pPlayer )
 	CHalfLifeMultiplay::PlayerThink( pPlayer );
 }
 
+// B402: what the client knows of its player, as CBasePlayer::UpdateClientData and PostThink keep it, marked unknown so
+// the next UpdateClientData sends all of it (CBasePlayer::ForceClientDllUpdate's list and the HUD flags, black bars,
+// view entity, FOV, flashlight, blur, objective and ammo it leaves out)
+static void RcCoopResendState( CBasePlayer *pPlayer )
+{
+	pPlayer->m_fInitHUD = TRUE;
+	pPlayer->m_iClientHideHUD = -1;
+	pPlayer->m_ClientDrawBars = -1;
+	pPlayer->m_iClientViewEntIndex = -1;
+	pPlayer->m_iClientFOV = -1;
+	pPlayer->m_iClientHealth = -1;
+	pPlayer->m_iClientBattery = -1;
+	pPlayer->m_iClientUnlockedClothes = -1;
+	pPlayer->m_iClientDualWeaponLeftAmmo = -2;
+	pPlayer->m_iClientDualWeaponRightAmmo = -2;
+	pPlayer->m_sClientDualWieldViewModel = MAKE_STRING( "update" );
+	pPlayer->m_iClientPhoneDisabled = -1;
+	pPlayer->m_iClientFlashlightFlags = -1;
+	pPlayer->m_iClientFlashlight = -1;
+	pPlayer->m_iClientBlurActive = -1;
+	pPlayer->m_sClientObjectiveText = 0;
+	pPlayer->m_bitsHUDDamage = -1;
+	pPlayer->m_iTrain |= 0xc0;	// TRAIN_NEW (player.cpp)
+	pPlayer->m_fWeapon = FALSE;
+	pPlayer->m_fKnownItem = FALSE;
+	pPlayer->m_pClientActiveItem = NULL;
+	for ( int a = 0; a < MAX_AMMO_SLOTS; a++ )
+		pPlayer->m_rgAmmoLast[a] = -1;
+}
+
 // CmdStart: this player's client sends commands, so it has loaded the level (PreThink returns early in some scenes)
 void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 {
@@ -208,7 +238,15 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 		return;
 	int i = ENTINDEX( pPlayer->edict() );
 	if ( i >= 1 && i <= 32 )
+	{
+		// B402: the engine sends a carried player's client nothing while it loads the new level (hw.dll rc_coop.c
+		// RcCoop_Inactivate), but the level runs as soon as the host is in, and what the game sent this player then
+		// (the reset of the HUD, the end of a scene's hidden HUD and black bars, the weapons) is lost, though the
+		// game counts it as sent: the first command on the level gets the client all of it again
+		if ( pRules->m_flSeen[i] == 0 )
+			RcCoopResendState( pPlayer );
 		pRules->m_flSeen[i] = gpGlobals->time > 0 ? gpGlobals->time : 0.001;
+	}
 }
 
 static void RcCoopSyncKeys( void );
@@ -980,9 +1018,10 @@ static void RcCoopDump( void )
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d use: phone or computer %d, call %d, ladder %d, reviving %d, padlock open %d, next use in %.1f\n", i,
 			pPlayer->m_iUsingComputerOrPhone, pPlayer->m_bInPhoneCall ? 1 : 0, pPlayer->IsOnLadder() ? 1 : 0, pPlayer->pPlayerToRevive ? 1 : 0,
 			pPlayer->m_pPadlock != NULL ? 1 : 0, pPlayer->m_fUseTime - gpGlobals->time ) );
-		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d type %d, render %.0f\n", i, szSlots,
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d type %d, render %.0f, hidden hud %x, bars %d, view %d, camera %d\n", i, szSlots,
 			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber,
-			pPlayer->m_iKeypadType, pPlayer->pev->renderamt ) );
+			pPlayer->m_iKeypadType, pPlayer->pev->renderamt, pPlayer->m_iHideHUD, pPlayer->m_DrawBars, pPlayer->m_iViewEntIndex,
+			pPlayer->m_hCurrentCamera != NULL ? 1 : 0 ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));

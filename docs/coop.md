@@ -19,7 +19,7 @@ Every player needs the same ReCoF build and Steam running.
 ## What the co-op does
 
 - **Level exits wait for the group.** A player who walks into an exit waits there with "Waiting at the exit: k of N players" on everyone's screen until the whole group is in it, or until `rc_coop_exit_wait` seconds pass (default 60), then the players who are not there are brought to the exit. The host can end the wait with `rc_coop_go`. Exits fired by a door or a script do not wait.
-- **Everyone keeps their things through a level change.** The engine carries every player through the single-player transition (health, weapons, inventory), as it does for Simon alone.
+- **Everyone keeps their things through a level change.** The engine carries every player through the single-player transition (health, weapons, inventory), as it does for Simon alone; once a player's game has loaded the new level the server sends it his HUD, weapons and screen state again, so nothing a scene hid stays hidden.
 - **No bouncing back.** A player who arrives inside the exit back counts for exits only after he has stepped out of every exit once.
 - **Players still loading cannot be hurt.**
 - **Respawn.** A player who dies comes back next to a living teammate after `rc_coop_respawn_time` seconds (default 10), with his weapons and ammo. Reviving by CPR works as in the police co-op.
