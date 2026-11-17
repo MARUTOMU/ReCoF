@@ -408,6 +408,8 @@ void CHalfLifeStoryCoop::Think( void )
 		// client.dll shows the map's sky to story co-op players (gl_sky.cpp)
 		if ( strcmp( g_engfuncs.pfnGetPhysicsKeyValue( pEnt->edict(), "rcc" ), "1" ) )
 			g_engfuncs.pfnSetPhysicsKeyValue( pEnt->edict(), "rcc", "1" );
+		// B414: the model follows rc_coop_simon (the lobby's campaign, a co-op save's setting)
+		ClientUserInfoChanged( (CBasePlayer *)pEnt, g_engfuncs.pfnGetInfoKeyBuffer( pEnt->edict() ) );
 		// B411: client.dll draws Simon's sleeves and hands on the weapons (gl_studiomodel.cpp)
 		const char *pszSimon = rc_coop_simon.value ? "1" : "0";
 		if ( strcmp( g_engfuncs.pfnGetPhysicsKeyValue( pEnt->edict(), "rcs" ), pszSimon ) )
@@ -940,6 +942,25 @@ CBaseEntity *RcCoop_NearestPlayer( CBaseEntity *pFrom, bool bVisible )
 bool RcPoliceMP( void )
 {
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();
+}
+
+// B414: the players' model: "simon" (client.dll rc_simonmodel.cpp makes models/player/simon/simon.mdl from the game's
+// own files) in the main campaign, the map's or Cry of Fear's police officers (police1 to police4) in the others
+extern int gmsgMPModel;
+
+void CHalfLifeStoryCoop::ClientUserInfoChanged( CBasePlayer *pPlayer, char *infobuffer )
+{
+	if ( !rc_coop_simon.value )
+	{
+		CHalfLifeMultiplay::ClientUserInfoChanged( pPlayer, infobuffer );
+		return;
+	}
+	if ( !FStrEq( g_engfuncs.pfnInfoKeyValue( infobuffer, "model" ), "simon" ) )
+	{
+		g_engfuncs.pfnSetClientKeyValue( pPlayer->entindex(), g_engfuncs.pfnGetInfoKeyBuffer( pPlayer->edict() ), "model", "simon" );
+		MESSAGE_BEGIN( MSG_ONE, gmsgMPModel, NULL, pPlayer->pev );
+		MESSAGE_END();
+	}
 }
 
 // B411: a police officer's voice and arms: Cry of Fear's own multiplayer, and story co-op outside the main campaign

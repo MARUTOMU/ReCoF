@@ -175,8 +175,11 @@ so the HUD can reinitialize itself.
 ==========================
 */
 
+void RcSimonModel_Ensure( void );	// ReCoF (B414), rc_simonmodel.cpp
+
 int DLLEXPORT HUD_VidInit( void )
 {
+	RcSimonModel_Ensure();	// ReCoF (B414): Simon's player model, made once from the game's own files
 	gHUD.VidInit();
 
 	VGui_Startup();

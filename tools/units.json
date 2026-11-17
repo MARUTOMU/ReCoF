@@ -1586,6 +1586,10 @@
           "source": "src/cl_dll/rc_mainmenu.cpp"
         },
         {
+          "name": "cl_dll/rc_simonmodel",
+          "source": "src/cl_dll/rc_simonmodel.cpp"
+        },
+        {
           "name": "external/discord-rpc/src/discord_rpc",
           "source": "src/external/discord-rpc/src/discord_rpc.cpp",
           "includes": [
@@ -1835,6 +1839,7 @@
           "cl_dll/rc_vgui1",
           "cl_dll/rc_ui",
           "cl_dll/rc_mainmenu",
+          "cl_dll/rc_simonmodel",
           "external/discord-rpc/src/discord_rpc",
           "external/discord-rpc/src/rpc_connection",
           "external/discord-rpc/src/serialization",
