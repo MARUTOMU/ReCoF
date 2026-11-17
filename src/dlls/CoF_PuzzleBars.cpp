@@ -22,6 +22,24 @@
 #include "monsters.h"
 #include "player.h"
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
+// ReCoF story co-op (B388): the player who looks at the bar puzzle (cof_puzzlebarbutton gave him m_pPuzzleBar), as
+// single player's first player; when nobody does, the first player as before
+static CBaseEntity *RcPuzzleBarUser( void )
+{
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && ( (CBasePlayer *)pEnt )->m_pPuzzleBar != NULL )
+				return pEnt;
+		}
+	}
+	return UTIL_FirstPlayer_rc();
+}
+
 extern int gmsgPuzzlebar;
 
 #undef SET_VIEW
@@ -195,7 +213,7 @@ void CPuzzleBar::BarCheck( void )
 	else
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPuzzleBarUser();	// ReCoF story co-op (B388)
 
 	if ( !pPlayer )
 		return;
@@ -388,7 +406,7 @@ void CPuzzleBar2::BarCheck( void )
 	else
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPuzzleBarUser();	// ReCoF story co-op (B388)
 
 	if ( !pPlayer )
 		return;
@@ -581,7 +599,7 @@ void CPuzzleBar3::BarCheck( void )
 	else
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPuzzleBarUser();	// ReCoF story co-op (B388)
 
 	if ( !pPlayer )
 		return;
@@ -774,7 +792,7 @@ void CPuzzleBar4::BarCheck( void )
 	else
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPuzzleBarUser();	// ReCoF story co-op (B388)
 
 	if ( !pPlayer )
 		return;
@@ -967,7 +985,7 @@ void CPuzzleBar5::BarCheck( void )
 	else
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPuzzleBarUser();	// ReCoF story co-op (B388)
 
 	if ( !pPlayer )
 		return;

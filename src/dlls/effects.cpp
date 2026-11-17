@@ -10367,6 +10367,31 @@ void CCofCodeNote::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
+	// ReCoF story co-op (B388): every player gets the note, with the code of the one who set it off (the group's code
+	// reaches the others only once a second, G10)
+	int iRcLast = 1;
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pUser = RcCoop_User( pActivator );
+		int iCode = pUser ? ( (CBasePlayer *)pUser )->m_iKeypadNumber : 0;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				( (CBasePlayer *)pEnt )->m_iKeypadNumber = iCode;
+		}
+		iRcLast = gpGlobals->maxClients;
+	}
+
+	for ( int iRc = 1; iRc <= iRcLast; iRc++ )
+	{
+	if ( RcCoop_Story() )
+	{
+		player = UTIL_PlayerByIndex( iRc );
+		if ( player && ( !player->IsPlayer() || player->pev->fuser4 != 0 ) )
+			player = NULL;
+	}
+
 	if ( player )
 	{
 		CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)player->pev );
@@ -10411,6 +10436,7 @@ void CCofCodeNote::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 			}
 		}
 	}
+	}	// ReCoF (B388): each player in story co-op
 }
 
 //=========================================================
@@ -11831,6 +11857,19 @@ void CCoFStopWheelchair::Spawn( void )
 
 void CCoFStopWheelchair::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
+	// ReCoF story co-op (B388): every player leaves his chair (cof_wheelchairmode seats the one who set it off;
+	// StopWheelchairMode does nothing without a chair)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				( (CBasePlayer *)pEnt )->StopWheelchairMode();
+		}
+		return;
+	}
+
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )

@@ -41,6 +41,7 @@ extern float m_fMusicManagerFadeTime;
 extern int gmsgSimonMode;
 extern int gmsgGreyFade;
 extern int gmsgBossBar;
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 extern int gmsgTimerPlus;
 extern int gmsgCustomDLight;
 extern int gmsgMuzzleflash;
@@ -586,6 +587,18 @@ void CBookSimon :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 			CBaseEntity *player = UTIL_FirstPlayer_rc();
 
+			// ReCoF story co-op (B388): every player gets the boss bar (its health updates already reach everyone
+			// who has it)
+			int iRcLast = RcCoop_Story() ? gpGlobals->maxClients : 1;
+			for ( int iRc = 1; iRc <= iRcLast; iRc++ )
+			{
+			if ( RcCoop_Story() )
+			{
+				player = UTIL_PlayerByIndex( iRc );
+				if ( player && player->pev->fuser4 != 0 )
+					player = NULL;
+			}
+
 			if ( player && player->IsPlayer() )
 			{
 				CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)player->pev );
@@ -608,6 +621,7 @@ void CBookSimon :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 					MESSAGE_END();
 				}
 			}
+			}	// ReCoF (B388): each player in story co-op
 		}
 
 		switch ( m_iWeapon )
