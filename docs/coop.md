@@ -12,7 +12,7 @@ Every player needs the same ReCoF build and Steam running.
 - **Invite:** `rc_coop_invite` opens Steam's own invite list in the overlay; a friend who accepts joins. Friends can also use Join Game on the host in their Steam friends list, or type the `rc_coop_join` line the host's console shows.
 - **Join by hand:** `rc_coop_join 169.254.x.x:port` in the console.
 - **Status:** `rc_coop_status` shows the datagrams through Steam and the relay network's state.
-- **Leaving:** a guest whose host loads a save or restarts connects again by himself (up to 10 tries); `rc_coop_leave` leaves and stops that.
+- **Leaving:** a guest whose host loads a save or restarts connects again by himself (up to 10 tries). A guest who leaves (the menu's Disconnect, `disconnect` or `rc_coop_leave`) stays out, and `rc_coop_join` brings him back.
 - **Saving:** the game saves itself as `coop_auto` once everyone is in on each new level, and as `coop_tape` when anyone uses a tape recorder (on the hardest difficulty it costs that player a tape); the host can also type `save <name>`. The host loads with `load coop_auto`, `load coop_tape` or `load <name>`; every saved player is kept for his player, and the guests come back by themselves.
 
 ## What the co-op does
@@ -26,13 +26,14 @@ Every player needs the same ReCoF build and Steam running.
 - **One code for the group.** The padlock combination and the keypad code are the same for every player.
 - **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate.
 - **Cameras** already show every scene to every player (Cry of Fear's own code).
+- **Skipping scenes.** The host's Enter (or `rc_cutscene_skip`) skips a scene he is watching for everyone: the game hurries through it, and the players watching it see the skip screen. A guest's Enter does not skip, as it would hurry the host's world too.
 - **Teammates.** No friendly fire; a player who joins comes in next to a teammate.
 - **Pause.** Only the host pauses (his menu pauses everyone); a guest's menu pauses nobody.
 - **Simon, not a police officer.** Simon's voice, hints, dual wield, the slow walk at low health and the map's own sky, as in single player.
 - **A team wipe** brings everyone back at the level's start with their things, without restarting the map.
 - **Story effects for everyone.** Objectives, on-screen texts, grey fades, rain changes and the phone going dead reach every player (the music already did).
 - **Late joiners** come in with the weapons of the teammate they appear next to; the group's keys follow by themselves.
-- **Harder with more players.** Monsters get 25% more health for each player beyond the first (at most double), in place of the police co-op's damage multiplier; the police co-op's hunting monster Simon never appears.
+- **Harder with more players.** Monsters get 25% more health for each player beyond the first (at most double), the monsters the map places too; a player joining or leaving changes it, and a hurt monster stays as hurt. This takes the place of the police co-op's damage multiplier; the police co-op's hunting monster Simon never appears.
 
 ## Settings (host)
 
@@ -53,11 +54,11 @@ These are server settings: they live in the host's game, so the host's value app
 - The menu: Cry of Fear's main menu is made of pictures, so Host and Invite buttons need their own; for now the console commands and the `+rc_coop_start` launch option.
 - Starting ReCoF instead of retail Cry of Fear when a friend accepts an invite with the game closed (Steam launch options, decision 11).
 - The 28 maps that need a rule of their own (bosses, vehicles, endings) and the rest of the places where the story only looks at the first player (G7): bosses, puzzles, sounds played "from the player", the look-at scenes.
-- Simon's single-player behaviour in co-op (the police co-op branches), host-only pause, the voice chat, presets.
+- A vote for guests to skip a scene, the voice chat, presets.
 
 ## Tested
 
-On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, a team wipe, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, Simon's voice, saving and loading with both players (a guest coming back by himself), the autosave after a level change holding both players, host-only pause, the single-player level change unchanged, and the speedrun address check. Not tested: the overlay invite and Join Game clicks, a tape recorder in game, four players, two players on different internet connections, Proton.
+On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's relays: joining, the level change c_start to c_start2 with both players' health and weapons, the exit wait and gathering, the arrival guard, respawn with weapons, a team wipe, the apartment key in c_apartment1 shared and used up for both, the shared padlock code, the teleport step-aside, Simon's voice, saving and loading with both players (a guest coming back by himself), the autosave after a level change holding both players, host-only pause, the host skipping the intro for both (on to c_nightmare), monster health with one and two players and after a load, a guest leaving and joining again, the single-player level change and intro skip unchanged, and the speedrun address check. Not tested: the overlay invite and Join Game clicks, a tape recorder in game, four players, two players on different internet connections, Proton.
 
 ## For testers
 
