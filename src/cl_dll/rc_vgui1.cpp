@@ -20,9 +20,10 @@ float RcMenuScale( void )
 	if ( user > 2.0f )
 		user = 2.0f;
 	scale *= user;
-	// the main menu's column (twelve rows of 38) stays clear of the logo above the screen's middle
-	float fit = ScreenHeight / 660.0f;
-	if ( fit >= 1.0f && scale > fit )
+	// the main menu's column (twelve rows of 38) stays clear of the logo above the screen's middle; B423: below 664
+	// lines too (800 x 600 put New Game on the logo), where the pictures are drawn smaller than their pixels
+	float fit = ScreenHeight / 664.0f;
+	if ( scale > fit )
 		scale = fit;
 	if ( scale > 4.0f )
 		scale = 4.0f;

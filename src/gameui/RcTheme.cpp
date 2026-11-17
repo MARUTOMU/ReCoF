@@ -196,9 +196,13 @@ float RcUiScale( void )
 	int wide = 0, tall = 0;
 	if ( surface() )
 		surface()->GetScreenSize( wide, tall );
+	// B423: the width limits it too, and below 720p it shrinks to 75 %: at 4:3 the Options window (660 x 500 at 720p)
+	// took 82 % of an 800 x 600 screen and covered the game menu's list
 	float scale = tall / 720.0f;
-	if ( scale < 1.0f )
-		scale = 1.0f;
+	if ( wide > 0 && wide / 1080.0f < scale )
+		scale = wide / 1080.0f;
+	if ( scale < 0.75f )
+		scale = 0.75f;
 
 	// the player's menu size (rc_menu_scale, 100 to 200 percent) on top, as far as the Options window (500 lines at
 	// 720p) still fits on the screen

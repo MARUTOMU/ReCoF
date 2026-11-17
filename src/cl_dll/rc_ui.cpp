@@ -26,7 +26,9 @@ const RcUiColor RCC_SCRIM		= { 0, 0, 0, 150 };
 
 float RcUiScale( void )
 {
-	float s = ScreenHeight / 768.0f * 0.88f;
+	// B423: a narrow screen (4:3, 5:4) limits it too: 1092 x 768 is the 16:9-like width its panels were made for
+	float h = ScreenHeight / 768.0f, w = ScreenWidth / 1092.0f;
+	float s = ( w < h ? w : h ) * 0.88f;
 	float user = gEngfuncs.pfnGetCvarFloat( "rc_menu_scale" ) / 100.0f;
 	if ( user < 1.0f )
 		user = 1.0f;
