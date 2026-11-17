@@ -11,7 +11,9 @@
 
 float RcMenuScale( void )
 {
-	float scale = ScreenHeight / 720.0f;
+	// B428: from 960 lines up (was 720): at 1280 x 960 the main menu took 1.33 times its pictures and filled the
+	// screen; the player's Menu size (rc_menu_scale) still makes it larger
+	float scale = ScreenHeight / 960.0f;
 	if ( scale < 1.0f )
 		scale = 1.0f;
 	float user = gEngfuncs.pfnGetCvarFloat( "rc_menu_scale" ) / 100.0f;
