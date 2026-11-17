@@ -937,6 +937,10 @@ void V_CalcNormalRefdef ( struct ref_params_s *pparams )
 
 		gEngfuncs.pEventAPI->EV_PushPMStates();
 
+		// ReCoF (B434): both walks are bounded: from outside the world every trace starts solid and the first never
+		// ended (the game hung on a story co-op chainsaw grab, whose victim stays in this view), and a zero-length
+		// direction never leaves the sky; past the bound the camera stays at the player
+		int iRcTries = 0;
 		do
 		{
 			gEngfuncs.pEventAPI->EV_SetTraceHull( 2 );
@@ -944,14 +948,18 @@ void V_CalcNormalRefdef ( struct ref_params_s *pparams )
 
 			if ( tr.fraction == 0 )
 				vecStart[2] -= 1;
-		} while ( tr.fraction == 0 );
+		} while ( tr.fraction == 0 && ++iRcTries < 512 );
+
+		if ( tr.fraction == 0 )
+			VectorCopy( pparams->simorg, tr.endpos );
 
 		VectorSubtract( tr.endpos, vecMove, pparams->vieworg );
 
-		while ( gEngfuncs.PM_PointContents( pparams->vieworg, NULL ) == CONTENTS_SKY )
+		vec3_t vecRcBack = ( vecStart - vecEnd ).Normalize();
+		for ( iRcTries = 0; iRcTries < 64 && Length( vecRcBack ) > 0.5f &&
+			gEngfuncs.PM_PointContents( pparams->vieworg, NULL ) == CONTENTS_SKY; iRcTries++ )
 		{
-			vec3_t vecBack = ( vecStart - vecEnd ).Normalize();
-			VectorAdd( pparams->vieworg, vecBack, pparams->vieworg );
+			VectorAdd( pparams->vieworg, vecRcBack, pparams->vieworg );
 		}
 
 		vecUp = Vector( pparams->vieworg ) + Vector( 0, 0, 4096 );
