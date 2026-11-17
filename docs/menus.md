@@ -1,10 +1,10 @@
 # Menus
 
-ReCoF gives its menus one modern look: flat dark panels, plain text, one red accent and the Inter font, after cof-enhanced's (the user's choice of 2026-11-17, which replaced the picture main menu kept the same morning). Bug rows B397 to B401 and B405 in [bugs.md](bugs.md).
+ReCoF keeps Cry of Fear's picture main menu and gives its other windows one modern look: flat dark panels, plain text, one red accent and the Inter font, after cof-enhanced's (the user's choices of 2026-11-17). Bug rows B397 to B401 and B405 to B410 in [bugs.md](bugs.md).
 
 ## Look
 
-- **The main menu** is a short text list under the words CRY OF FEAR and ReCoF: New Game, Load Game, Story Co-op ([coop.md](coop.md)), Custom Campaign, Multiplayer (Find Servers, Host Server), Extras (Unlockables, Bonus Content, Language), Options and Quit. The entry under the cursor turns white with a short red bar. New Game opens a panel in the same look: the four difficulties, the developer commentary once unlocked, and Back. Game, General, **Classic main menu** (`rc_menu_classic 1`) brings Cry of Fear's picture menu back.
+- **The main menu** is Cry of Fear's pictures (white labels, red under the cursor), with a Story Co-op entry made in the same look that opens the co-op lobby ([coop.md](coop.md)). A text version of it and of the New Game screen is in the code behind `rc_menu_text 1` (console only).
 - **Every GameUI window** (Options, the console, the server list, the Esc menu) uses one dark theme in Cry of Fear's red: dark panels, light grey text in three steps, red for the selected tab, the hovered entry and the checks. It is set in GameUI.dll's code (src/gameui/RcTheme.cpp), so a mod that rewrites resource/trackerscheme.res no longer changes ReCoF's menus.
 - **The font** of those windows is Inter (SIL Open Font License, src/gameui/fonts), carried inside GameUI.dll and registered for the game's process only; nothing is installed or added to the game folder.
 

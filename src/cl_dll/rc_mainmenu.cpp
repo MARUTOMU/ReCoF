@@ -2,7 +2,7 @@
 // hidden and a short text list under a wordmark takes its place, in the look of ReCoF's other screens (rc_ui.h):
 // New Game, Load Game, Story Co-op, Custom Campaign, Multiplayer (Find Servers, Host Server), Extras (Unlockables,
 // Bonus Content, Language), Options, Quit. Every entry runs what the picture row ran (CGameMenu::ActionSignal).
-// rc_menu_classic 1 brings the picture menu back.
+// B410: only with rc_menu_text 1; Cry of Fear's picture menu is the default (the user's choice).
 #include "hud.h"
 #include "cl_util.h"
 #include "vgui_TeamFortressViewport.h"
@@ -177,7 +177,7 @@ void RcMainMenu_Apply( bool bItems )
 	if ( iModern )
 		RcMainMenu_Pictures( false );
 	else if ( s_iRcModern == 1 && bItems )
-		RcMainMenu_Pictures( true );	// rc_menu_classic was just set
+		RcMainMenu_Pictures( true );	// rc_menu_text was just cleared
 	s_iRcModern = iModern;
 	if ( bItems )
 	{
@@ -221,7 +221,7 @@ bool RcMainMenu_Modern( void )
 // commentary check) in the same look: a panel with the four difficulties as rows (Nightmare greyed until it is
 // unlocked), the commentary as a row that turns on and off (once unlocked), and Back. Each row runs what its picture
 // button ran (CDifficulty::ActionSignal 1 to 5), so the custom campaigns and the c_difficulty_settings map work as
-// before. rc_menu_classic 1 shows the picture.
+// before. Only with rc_menu_text 1 (B410); the picture is the default.
 //-----------------------------------------------------------------------------
 #include "Difficulty_guess.h"
 

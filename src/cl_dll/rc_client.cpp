@@ -768,7 +768,7 @@ void RcClient_Init( void )
 	// it falls silent at rc_voice_range units, and behind a wall it is muffled at rc_voice_wall percent of its volume
 	// B399: the menus' size in percent on top of the size for the screen (GameUI.dll RcTheme.cpp RcUiScale)
 	gEngfuncs.pfnRegisterVariable( "rc_menu_scale", "100", FCVAR_ARCHIVE );
-	gEngfuncs.pfnRegisterVariable( "rc_menu_classic", "0", FCVAR_ARCHIVE );	// B405: 1 for Cry of Fear's picture main menu
+	gEngfuncs.pfnRegisterVariable( "rc_menu_text", "0", FCVAR_ARCHIVE );	// B405, B410: 1 for the text main menu
 	gEngfuncs.pfnRegisterVariable( "rc_voice_3d", "1", FCVAR_ARCHIVE );
 	gEngfuncs.pfnRegisterVariable( "rc_voice_range", "1400", FCVAR_ARCHIVE );
 	gEngfuncs.pfnRegisterVariable( "rc_voice_wall", "10", FCVAR_ARCHIVE );	// hw.dll sets it when the user disconnects (RcCoopReconnect)

@@ -43,9 +43,10 @@ int RcUiS( float value )
 	return (int)( value * RcUiScale() + ( value >= 0 ? 0.5f : -0.5f ) );
 }
 
+// B410: the main menu and its New Game screen keep Cry of Fear's pictures unless rc_menu_text is 1
 bool RcUiModern( void )
 {
-	return gEngfuncs.pfnGetCvarFloat( "rc_menu_classic" ) == 0;
+	return gEngfuncs.pfnGetCvarFloat( "rc_menu_text" ) != 0;
 }
 
 struct RcUiFontDef_t

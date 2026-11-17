@@ -1,5 +1,5 @@
 // ReCoF story co-op (B393): the main menu's "Story Co-op" entry and its panel. The entry's picture (Cry of Fear's
-// picture menu, rc_menu_classic 1) is ReCoF's own, made in the look of the menu's other labels (280 x 38, white
+// picture menu, the default) is ReCoF's own, made in the look of the menu's other labels (280 x 38, white
 // text on a faint streak, red under the cursor) and kept here as an alpha mask, so no file is added to the game.
 // B406: the panel is the group's lobby (a Steam lobby, rc_steamnet.cpp RcLobby_*), shown before anyone enters the
 // game: the players in it, the difficulty and the game the host picks (a new game or the last co-op save), Invite

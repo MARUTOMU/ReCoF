@@ -35,7 +35,7 @@ extern const RcUiColor RCC_PANEL, RCC_BAND, RCC_BORDER, RCC_TITLE, RCC_TEXT, RCC
 float RcUiScale( void );			// the screen's height over 768, times 0.88 and Menu size (rc_menu_scale)
 int RcUiS( float value );			// a length in 768-line units at the screen's scale
 vgui::Font *RcUiFont( int role );	// made again when the scale changes
-bool RcUiModern( void );			// the main menu in the modern look (rc_menu_classic 0)
+bool RcUiModern( void );			// the main menu in the modern look (rc_menu_text 1, B410)
 
 // a text button: an entry of the main menu (text only), a row of a panel, a framed button or the panel's main
 // button (red); a selected row has the red fill and red text
