@@ -465,13 +465,17 @@ static void RcCoopStatus_f( void )
 
 // rc_coop_start [map]: a story co-op game for up to 4 players that friends join through Steam (default: the story's
 // first map)
+static char s_szCoopStart[256];
+static DWORD s_dwCoopStartAt;
+
 static void RcCoopStart_f( void )
 {
 	const char *pszMap = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "c_intro";
-	char cmd[256];
-	_snprintf( cmd, sizeof( cmd ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nmap %s\n", pszMap );
-	cmd[sizeof( cmd ) - 1] = 0;
-	gEngfuncs.pfnClientCmd( cmd );
+	// run from HUD_Frame a moment later, like rc_coop_join: on the command line (a launcher or a shortcut) this runs
+	// before the menu map InitInput queues, which would replace the co-op map
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nmap %s\n", pszMap );
+	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
+	s_dwCoopStartAt = GetTickCount() + 1500;
 }
 
 static void RcCoopInvite_f( void )
@@ -587,6 +591,11 @@ void RcCoop_Frame( void )
 	RcSteamNet_Frame();
 	RcSteamNet_Pump();
 	RcCoopReconnect();
+	if ( s_dwCoopStartAt && (long)( GetTickCount() - s_dwCoopStartAt ) >= 0 )
+	{
+		s_dwCoopStartAt = 0;
+		gEngfuncs.pfnClientCmd( s_szCoopStart );
+	}
 	if ( s_dwCoopConnectAt && (long)( GetTickCount() - s_dwCoopConnectAt ) >= 0 )
 	{
 		s_dwCoopConnectAt = 0;
