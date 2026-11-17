@@ -18,11 +18,13 @@
 #include "steamworks_sdk/steam/isteamnetworkingsockets.h"
 #include "steamworks_sdk/steam/isteamnetworkingutils.h"
 #include "steamworks_sdk/steam/steamnetworkingfakeip.h"
+#include "steamworks_sdk/steam/isteamfriends.h"
 #include "rc_steamnet.h"
 
 typedef void *( __cdecl *RcSteamClient_t )( void );
 typedef int ( __cdecl *RcSteamHandle_t )( void );
 typedef void ( __cdecl *RcSteamVoid_t )( void );
+typedef void ( __cdecl *RcSteamRegister_t )( class CCallbackBase *pCallback, int iCallback );
 typedef void *( __thiscall *RcGetGenericInterface_t )( void *self, int hUser, int hPipe, const char *pchVersion );
 typedef int ( PASCAL *RcSendto_t )( SOCKET s, const char *buf, int len, int flags, const struct sockaddr *to, int tolen );
 typedef int ( PASCAL *RcRecvfrom_t )( SOCKET s, char *buf, int len, int flags, struct sockaddr *from, int *fromlen );
@@ -33,6 +35,9 @@ static RcSteamPrint_t s_pfnPrint;
 static ISteamNetworkingUtils *s_pUtils;
 static ISteamNetworkingSockets *s_pSockets;
 static ISteamNetworkingFakeUDPPort *s_pPort;
+static ISteamFriends *s_pFriends;
+static bool s_bJoinRegistered;	// the join request callback is registered on client.dll's Steam connection
+static char s_szConnect[64];	// the rich presence connect value, "+rc_coop_join a.b.c.d:port"
 static RcSteamVoid_t s_pfnRunCallbacks;
 static int s_iMode;
 static bool s_bMap127;
@@ -289,14 +294,36 @@ static bool RcInstallHooks( void )
 	return true;
 }
 
+// ISteamClient012 slot 12 for a version string, through the game's own steam_api.dll
+static void *RcGetInterface( const char *pszVersion )
+{
+	HMODULE hApi = GetModuleHandleA( "steam_api.dll" );
+	if ( !hApi )
+		return NULL;
+	RcSteamClient_t pfnClient = (RcSteamClient_t)GetProcAddress( hApi, "SteamClient" );
+	RcSteamHandle_t pfnUser = (RcSteamHandle_t)GetProcAddress( hApi, "SteamAPI_GetHSteamUser" );
+	RcSteamHandle_t pfnPipe = (RcSteamHandle_t)GetProcAddress( hApi, "SteamAPI_GetHSteamPipe" );
+	void *pClient = pfnClient ? pfnClient() : NULL;
+	int hUser = pfnUser ? pfnUser() : 0, hPipe = pfnPipe ? pfnPipe() : 0;
+	if ( !pClient || !hUser || !hPipe )
+		return NULL;
+	RcGetGenericInterface_t pfnGeneric = ( *(RcGetGenericInterface_t **)pClient )[12];
+	return pfnGeneric( pClient, hUser, hPipe, pszVersion );
+}
+
+static ISteamFriends *RcFriends( void )
+{
+	if ( !s_pFriends )
+		s_pFriends = (ISteamFriends *)RcGetInterface( STEAMFRIENDS_INTERFACE_VERSION );
+	return s_pFriends;
+}
+
 static bool RcStart( bool bRelayOnly )
 {
 	static bool s_bInit;
-	if ( !s_bInit )
-	{
+	if ( !s_bInit && !s_bJoinRegistered )
 		InitializeCriticalSection( &s_csLog );
-		s_bInit = true;
-	}
+	s_bInit = true;
 	if ( s_pSockets )
 		return true;
 	HMODULE hApi = GetModuleHandleA( "steam_api.dll" );
@@ -435,6 +462,16 @@ void RcSteamNet_Frame( void )
 				s_FakeIP.SetIPv4( r.m_unIP, r.m_unPorts[0] );
 				s_pfnPrint( "ReCoF co-op: your friends join with: rc_coop_join %s\n", sz );
 				RcLog( "FAKEIP %s", sz );
+				// Steam's Join Game and the overlay's Invite to Game hand this to the friend's game
+				_snprintf( s_szConnect, sizeof( s_szConnect ) - 1, "+rc_coop_join %s", sz );
+				s_szConnect[sizeof( s_szConnect ) - 1] = 0;
+				if ( RcFriends() )
+				{
+					bool bOk = s_pFriends->SetRichPresence( "connect", s_szConnect );
+					s_pFriends->SetRichPresence( "status", "Playing Cry of Fear co-op (ReCoF)" );
+					RcLog( "rich presence connect %s", bOk ? "set" : "refused" );
+					s_pfnPrint( "ReCoF co-op: friends can join from Steam now; rc_coop_invite opens Steam's invite list\n" );
+				}
 				char path[MAX_PATH];
 				GetModuleFileNameA( NULL, path, sizeof( path ) );
 				char *slash = strrchr( path, '\\' );
@@ -482,4 +519,76 @@ void RcSteamNet_Status( RcSteamPrint_t pfnPrint )
 		s_pUtils->GetRelayNetworkStatus( &st );
 		pfnPrint( "ReCoF co-op: relay network %d: %s\n", (int)st.m_eAvail, st.m_debugMsg );
 	}
+}
+
+// rc_coop_invite: Steam's overlay picker that sends the connect value to the friends chosen (no lobby needed)
+void RcSteamNet_Invite( RcSteamPrint_t pfnPrint )
+{
+	if ( !s_szConnect[0] )
+	{
+		pfnPrint( "ReCoF co-op: host a co-op game first (rc_coop_start); invites are possible once Steam gave it an address\n" );
+		return;
+	}
+	if ( !RcFriends() )
+	{
+		pfnPrint( "ReCoF co-op: Steam's friends interface is not available\n" );
+		return;
+	}
+	s_pFriends->ActivateGameOverlayInviteDialogConnectString( s_szConnect );
+	pfnPrint( "ReCoF co-op: Steam's invite list is open (Shift+Tab if the overlay does not show); friends can also type: rc_coop_join %s\n", s_szConnect + 14 );
+	RcLog( "invite dialog opened" );
+}
+
+// a friend accepted an invite or clicked Join Game while this game runs: Steam sends the host's connect value here
+class RcJoinCallback : public CCallbackBase
+{
+public:
+	RcSteamJoin_t m_pfnJoin;
+
+	virtual void Run( void *pvParam )
+	{
+		GameRichPresenceJoinRequested_t *p = (GameRichPresenceJoinRequested_t *)pvParam;
+		char sz[k_cchMaxRichPresenceValueLength + 1];
+		memcpy( sz, p->m_rgchConnect, k_cchMaxRichPresenceValueLength );
+		sz[k_cchMaxRichPresenceValueLength] = 0;
+		RcLog( "join request: %s", sz );
+		if ( m_pfnJoin )
+			m_pfnJoin( sz );
+	}
+	virtual void Run( void *pvParam, bool bIOFailure, SteamAPICall_t hSteamAPICall )
+	{
+		Run( pvParam );
+	}
+	virtual int GetCallbackSizeBytes()
+	{
+		return sizeof( GameRichPresenceJoinRequested_t );
+	}
+};
+
+static RcJoinCallback s_JoinCallback;
+
+void RcSteamNet_InitCallbacks( RcSteamJoin_t pfnJoin )
+{
+	static bool s_bInit;
+	if ( !s_bInit )
+	{
+		InitializeCriticalSection( &s_csLog );
+		s_bInit = true;
+	}
+	HMODULE hApi = GetModuleHandleA( "steam_api.dll" );
+	RcSteamRegister_t pfnRegister = hApi ? (RcSteamRegister_t)GetProcAddress( hApi, "SteamAPI_RegisterCallback" ) : NULL;
+	if ( !s_pfnRunCallbacks && hApi )
+		s_pfnRunCallbacks = (RcSteamVoid_t)GetProcAddress( hApi, "SteamAPI_RunCallbacks" );
+	if ( !pfnRegister || !s_pfnRunCallbacks || s_bJoinRegistered )
+		return;
+	s_JoinCallback.m_pfnJoin = pfnJoin;
+	pfnRegister( &s_JoinCallback, GameRichPresenceJoinRequested_t::k_iCallback );
+	s_bJoinRegistered = true;
+}
+
+// every frame: Steam's callbacks of client.dll's own connection (the engine reads only its own)
+void RcSteamNet_Pump( void )
+{
+	if ( s_bJoinRegistered && s_iMode == RCSN_OFF && s_pfnRunCallbacks )
+		s_pfnRunCallbacks();
 }

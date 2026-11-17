@@ -457,6 +457,37 @@ static void RcCoopStatus_f( void )
 	RcSteamNet_Status( RcCoopPrint );
 }
 
+// rc_coop_start [map]: a story co-op game for up to 4 players that friends join through Steam (default: the story's
+// first map)
+static void RcCoopStart_f( void )
+{
+	const char *pszMap = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "c_intro";
+	char cmd[256];
+	_snprintf( cmd, sizeof( cmd ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nmap %s\n", pszMap );
+	cmd[sizeof( cmd ) - 1] = 0;
+	gEngfuncs.pfnClientCmd( cmd );
+}
+
+static void RcCoopInvite_f( void )
+{
+	RcSteamNet_Invite( RcCoopPrint );
+}
+
+// Steam's Join Game or an accepted invite: the host's connect value is "+rc_coop_join a.b.c.d:port"
+static void RcCoopSteamJoin( const char *pszConnect )
+{
+	unsigned a, b, c, d, port;
+	if ( sscanf( pszConnect, "+rc_coop_join %u.%u.%u.%u:%u", &a, &b, &c, &d, &port ) != 5 || a != 169 || b != 254 )
+	{
+		RcCoopPrint( "ReCoF co-op: Steam asked to join a game this version does not know how to reach\n" );
+		return;
+	}
+	char cmd[96];
+	_snprintf( cmd, sizeof( cmd ) - 1, "rc_coop_join %u.%u.%u.%u:%u\n", a, b, c, d, port );
+	cmd[sizeof( cmd ) - 1] = 0;
+	gEngfuncs.pfnClientCmd( cmd );
+}
+
 // test runs: rc_coop_autotest <seconds> prints the counters and takes a screenshot halfway, then quits
 static DWORD s_dwCoopShot, s_dwCoopQuit;
 
@@ -509,6 +540,7 @@ void RcCoop_Frame( void )
 {
 	RcCoopCmdFile();
 	RcSteamNet_Frame();
+	RcSteamNet_Pump();
 	if ( s_dwCoopConnectAt && (long)( GetTickCount() - s_dwCoopConnectAt ) >= 0 )
 	{
 		s_dwCoopConnectAt = 0;
@@ -561,6 +593,9 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_join", RcCoopJoin_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_autotest", RcCoopAutotest_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_start", RcCoopStart_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
+	RcSteamNet_InitCallbacks( RcCoopSteamJoin );	// Join Game and invites from Steam
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect
 	// request, and again when it changes); servers take ReCoF players only (hl.dll ClientConnect, rc_require_recof)
