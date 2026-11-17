@@ -497,6 +497,8 @@ static void RcCoopSyncKeys( void )
 static int s_iRcTeamPad[5];
 static int s_iRcTeamKeypad = -1;
 static int s_iRcKeypadSet[33];	// what this player's keypad code was set to by the group (to tell his own news)
+static int s_iRcTeamKeypadType = -1;	// the keypad picture (m_iKeypadType: 0 off, 1 panel 2, 2 keypad 3), the same way
+static int s_iRcKeypadTypeSet[33];
 
 static void RcCoopSyncCodes( void )
 {
@@ -524,6 +526,10 @@ static void RcCoopSyncCodes( void )
 				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: keypad code %d is the group's now\n", code ) );
 			s_iRcTeamKeypad = code;
 		}
+		// the keypad a code is for: the screen shows its picture by the opener's own type (cof_keypad), and a type
+		// a player was given himself (cof_keypad2, 3 and 4) is the group's
+		if ( pPlayer->m_iKeypadType != s_iRcTeamKeypadType && pPlayer->m_iKeypadType != s_iRcKeypadTypeSet[i] )
+			s_iRcTeamKeypadType = pPlayer->m_iKeypadType;
 	}
 	for ( i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
 	{
@@ -539,6 +545,9 @@ static void RcCoopSyncCodes( void )
 		if ( s_iRcTeamKeypad >= 0 && pPlayer->m_iKeypadNumber != s_iRcTeamKeypad )
 			pPlayer->m_iKeypadNumber = s_iRcTeamKeypad;
 		s_iRcKeypadSet[i] = pPlayer->m_iKeypadNumber;
+		if ( s_iRcTeamKeypadType >= 0 && pPlayer->m_iKeypadType != s_iRcTeamKeypadType )
+			pPlayer->m_iKeypadType = s_iRcTeamKeypadType;
+		s_iRcKeypadTypeSet[i] = pPlayer->m_iKeypadType;
 	}
 }
 
@@ -892,8 +901,9 @@ static void RcCoopDump( void )
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d use: phone or computer %d, call %d, ladder %d, reviving %d, padlock open %d, next use in %.1f\n", i,
 			pPlayer->m_iUsingComputerOrPhone, pPlayer->m_bInPhoneCall ? 1 : 0, pPlayer->IsOnLadder() ? 1 : 0, pPlayer->pPlayerToRevive ? 1 : 0,
 			pPlayer->m_pPadlock != NULL ? 1 : 0, pPlayer->m_fUseTime - gpGlobals->time ) );
-		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d\n", i, szSlots,
-			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber ) );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d type %d, render %.0f\n", i, szSlots,
+			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber,
+			pPlayer->m_iKeypadType, pPlayer->pev->renderamt ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
