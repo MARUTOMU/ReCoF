@@ -243,6 +243,11 @@ extern CBaseEntity	*UTIL_PlayerByIndex( int playerIndex );
 extern CBaseEntity	*UTIL_FirstPlayer_rc( void );
 extern CBaseEntity	*UTIL_FirstPlayerInstance_rc( void );
 extern edict_t		*UTIL_FirstPlayerEdict_rc( void );
+// ReCoF story co-op (B387): the player who set an entity off (a present player activator), else the first player as
+// UTIL_FirstPlayer_rc; outside story co-op always the first player (rc_coop.cpp)
+extern CBaseEntity	*RcCoop_User( CBaseEntity *pActivator );
+// ReCoF: true in a story co-op game (rc_coop.cpp)
+extern bool		RcCoop_Story( void );
 // ReCoF (B328): a player's own setting, from the private userinfo key ReCoF's client sends (util.cpp)
 extern float		UTIL_PlayerSetting_rc( CBaseEntity *pPlayer, const char *key, const char *cvar );
 

@@ -743,6 +743,15 @@ bool RcCoop_Story( void )
 	return RcCoopRules() != NULL;
 }
 
+// G7 (B387): "the player" of story code written for one player is, in story co-op, the one who set it off (its
+// activator, when that is a player in the game); otherwise, and outside story co-op, the first player as before
+CBaseEntity *RcCoop_User( CBaseEntity *pActivator )
+{
+	if ( RcCoopRules() && pActivator && pActivator->IsPlayer() && pActivator->pev->fuser4 == 0 )
+		return pActivator;
+	return UTIL_FirstPlayer_rc();
+}
+
 bool RcPoliceMP( void )
 {
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();

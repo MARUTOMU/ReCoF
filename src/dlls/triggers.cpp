@@ -5956,7 +5956,8 @@ void CTriggerCamera::FollowTarget( )
 
 			if ( pSkipTarget )
 			{
-				CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+				// ReCoF story co-op (B387): the player the camera started for, as the skip path above
+				CBaseEntity *pPlayer = RcCoop_User( m_hPlayer );
 
 				if ( pPlayer )
 					pSkipTarget->Use( pPlayer, pPlayer, USE_TOGGLE, 0 );

@@ -12049,7 +12049,7 @@ void CBasePlayer::InventoryUse( int slotnum )
 						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
 					}
 
-					pButton->UnlockDoor();
+					pButton->UnlockDoor( this );	// ReCoF (B387)
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
 					CloseInventory();
 					return;
@@ -12130,7 +12130,7 @@ void CBasePlayer::InventoryUse( int slotnum )
 						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
 					}
 
-					pButton->UnlockDoor();
+					pButton->UnlockDoor( this );	// ReCoF (B387)
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
 					CloseInventory();
 					return;

@@ -5618,7 +5618,8 @@ public:
 	
 	void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 	{
-		CBaseEntity *pEnt = UTIL_FirstPlayerInstance_rc();
+		// ReCoF story co-op (B387): the player who set it off
+		CBaseEntity *pEnt = ( pActivator && pActivator->IsPlayer() ) ? RcCoop_User( pActivator ) : UTIL_FirstPlayerInstance_rc();
 		if (pEnt && pEnt->IsPlayer())
 		{
 			USE_TYPE send = USE_TOGGLE;
@@ -6879,7 +6880,7 @@ void CCofKeypad4::Spawn( void )
 
 void CCofKeypad4::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
+	CBaseEntity *player = RcCoop_User( pActivator );	// ReCoF story co-op (B387): the keypad of the one who pressed
 
 	if ( player )
 	{
@@ -9422,6 +9423,10 @@ void CCoFDoctorWeaponTrigger::Use( CBaseEntity *pActivator, CBaseEntity *pCaller
 	{
 		int value = GetClassPtr( (CBasePlayer *)pPlayer->pev )->m_iDoctorWeapon;
 
+		// ReCoF story co-op (B387): the weapon is the group's choice (cof_doctorweaponset writes the first player); the
+		// targets go to the one who set this off
+		pPlayer = RcCoop_User( pActivator );
+
 		if ( value == 1 )
 		{
 			if ( pev->target )
@@ -9460,7 +9465,7 @@ void CCoFLookAt::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE us
 	if ( !pActivator )
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcCoop_User( pActivator );	// ReCoF story co-op (B387): the view of the one who set it off
 
 	if ( pPlayer )
 	{
@@ -11904,7 +11909,7 @@ void CCoFClothesMenu::SendInitMessage( CBasePlayer *player )
 
 void CCoFClothesMenu::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
+	CBaseEntity *player = RcCoop_User( pActivator );	// ReCoF story co-op (B387)
 
 	if ( player )
 	{
