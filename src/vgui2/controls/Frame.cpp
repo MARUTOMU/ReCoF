@@ -852,7 +852,9 @@ void Frame::PerformLayout()
 	_minimizeToSysTrayButton->MoveToFront();
 
 	_menuButton->SetBounds(5+2, 5+3, 18, 18);
+#ifndef GLQUAKE	// ReCoF (B415): GameUI.dll's windows only; hw.dll compiles this file too and keeps retail's
 	_menuButton->SetVisible( false );	// ReCoF (B413): no icon in the title bar
+#endif
 
 	float scale = 1;
 	if (IsProportional())
@@ -902,9 +904,12 @@ void Frame::PerformLayout()
 //-----------------------------------------------------------------------------
 // Purpose: Set the text in the title bar.
 //-----------------------------------------------------------------------------
-#include <wctype.h>	// ReCoF (B413): towupper
+// ReCoF (B413): window titles in capitals, as cof-enhanced's (the text after its localization). B415: GameUI.dll's
+// windows only: hw.dll compiles this file too (with GLQUAKE), and its code and data must stay where retail has them
+// for LiveSplit and BunnymodXT (tools/check_runner.py)
+#ifndef GLQUAKE
+#include <wctype.h>	// towupper
 
-// ReCoF (B413): window titles in capitals, as cof-enhanced's (the text after its localization)
 static void RcUpperTitle( TextImage *title )
 {
 	wchar_t text[256];
@@ -915,6 +920,9 @@ static void RcUpperTitle( TextImage *title )
 		*p = towupper( *p );
 	title->SetText( text );
 }
+#else
+#define RcUpperTitle( title )
+#endif
 
 void Frame::SetTitle(const char *title, bool surfaceTitle)
 {
@@ -1206,13 +1214,18 @@ void Frame::PaintBackground()
 
 		float scale = ( (float)( screenH ) / (float)( proH ) );
 
+#ifndef GLQUAKE
 		// ReCoF (B413): the title band across the whole window, a hairline under it, the title in capitals where the
-		// icon was
+		// icon was (B415: GameUI.dll's windows only)
 		int band = (int)(28 * scale);
 		surface()->DrawSetColor(titleColor);
 		surface()->DrawFilledRect(1, 1, wide - 1, band);
 		surface()->DrawSetColor(255, 255, 255, 36);
 		surface()->DrawFilledRect(1, band, wide - 1, band + 1);
+#else
+		surface()->DrawSetColor(titleColor);
+		surface()->DrawFilledRect(5, 5, wide - 5, (int)(28 * scale));
+#endif
 
 		if (_title)
 		{
@@ -1224,7 +1237,11 @@ void Frame::PaintBackground()
 			{
 				_title->SetColor(_titleBarDisabledFgColor);
 			}
+#ifndef GLQUAKE
 			_title->SetPos((int)(12 * scale), ( band - tall ) / 2 + 1);
+#else
+			_title->SetPos(28, 9);
+#endif
 			_title->SetSize(wide - 72, tall);
 			_title->Paint();
 		}
@@ -1244,7 +1261,11 @@ void Frame::ApplySchemeSettings(IScheme *pScheme)
 	_titleBarDisabledFgColor = GetSchemeColor("TitleBarDisabledFgColor", pScheme);
 	_titleBarDisabledBgColor = GetSchemeColor("TitleBarDisabledBgColor", pScheme);
 
+#ifndef GLQUAKE
 	_title->SetFont(pScheme->GetFont("DefaultBold", IsProportional()));	// ReCoF (B413)
+#else
+	_title->SetFont(pScheme->GetFont("Default", IsProportional()));
+#endif
 	_title->ResizeImageToContent();
 
 	HFont marfont_guess = pScheme->GetFont("Marlett", IsProportional());
