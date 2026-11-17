@@ -14,6 +14,8 @@
 extern int iMenuMode_guess;
 
 void IrrKlangStop_guess( float flFadeTime );
+void RcNewGame_Create( CDifficulty *pPanel );	// ReCoF (B409), rc_mainmenu.cpp
+void RcNewGame_Show( void );
 
 CDifficulty::CDifficulty() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 {
@@ -88,6 +90,8 @@ CDifficulty::CDifficulty() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	pButton->setArmedColor( 0, 0, 0, 255 );
 
 	setBgColor( 0, 0, 0, 255 );
+
+	RcNewGame_Create( this );	// ReCoF (B409): the screen in the modern look
 
 	Initialize();
 }
@@ -218,5 +222,7 @@ void CDifficulty::setVisible( bool state )
 			m_pSkill4Button_guess->setVisible( false );
 			m_pImagePanel_guess->setImage( vgui_LoadTGA( "gfx/vgui/640_difficultylocked.tga" ) );
 		}
+
+		RcNewGame_Show();	// ReCoF (B409)
 	}
 }

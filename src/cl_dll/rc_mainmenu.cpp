@@ -7,6 +7,7 @@
 #include "cl_util.h"
 #include "vgui_TeamFortressViewport.h"
 #include "GameMenu_guess.h"
+#include "..\game_shared\vgui_checkbutton2.h"
 #include "rc_ui.h"
 
 void RcCoopMenu_Open( void );
@@ -213,4 +214,106 @@ void RcMainMenu_Solve( void )
 bool RcMainMenu_Modern( void )
 {
 	return s_iRcModern == 1;
+}
+
+//-----------------------------------------------------------------------------
+// B409: the New Game screen (CDifficulty, a 640 x 480 picture with four difficulty buttons, Back and a developer
+// commentary check) in the same look: a panel with the four difficulties as rows (Nightmare greyed until it is
+// unlocked), the commentary as a row that turns on and off (once unlocked), and Back. Each row runs what its picture
+// button ran (CDifficulty::ActionSignal 1 to 5), so the custom campaigns and the c_difficulty_settings map work as
+// before. rc_menu_classic 1 shows the picture.
+//-----------------------------------------------------------------------------
+#include "Difficulty_guess.h"
+
+static CDifficulty *s_pRcNew;
+static CRcUiFrame *s_pRcNewFrame;
+static CRcUiButton *s_pRcNewSkill[4], *s_pRcNewCommentary, *s_pRcNewBack;
+static float s_flRcNewScale;
+
+class CRcNewHandler : public ActionSignal
+{
+public:
+	CRcNewHandler( int cmd ) { m_cmd = cmd; }
+	virtual void actionPerformed( Panel *panel )
+	{
+		if ( !s_pRcNew )
+			return;
+		if ( m_cmd == 4 && !( gHUD.m_iUnlocks_guess & 32 ) )
+			return;
+		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+		if ( m_cmd == 6 )
+		{
+			// the developer commentary
+			bool bOn = gEngfuncs.pfnGetCvarFloat( "dev_commentary" ) == 0;
+			gEngfuncs.pfnClientCmd( bOn ? "dev_commentary 1\n" : "dev_commentary 0\n" );
+			gEngfuncs.Cvar_SetValue( "dev_commentary", bOn ? 1 : 0 );	// shown at once
+			s_pRcNewCommentary->setRcSelected( bOn );
+			s_pRcNewCommentary->setRcText( bOn ? "Developer commentary: on" : "Developer commentary: off" );
+			return;
+		}
+		s_pRcNew->ActionSignal( m_cmd );
+	}
+private:
+	int m_cmd;
+};
+
+static void RcNewGame_Layout( void )
+{
+	s_flRcNewScale = RcUiScale();
+	int W = RcUiS( 440 ), pitch = RcUiS( 44 ), rowTall = RcUiS( 38 );
+	int band = s_pRcNewFrame->bandTall(), pad = RcUiS( 24 );
+	int comment = s_pRcNewCommentary->isVisible() ? RcUiS( 10 ) + pitch : 0;	// the commentary's row, once unlocked
+	int H = band + RcUiS( 18 ) + 4 * pitch + comment + RcUiS( 18 ) + RcUiS( 34 ) + RcUiS( 20 );
+	s_pRcNewFrame->setBounds( ( ScreenWidth - W ) / 2, ( ScreenHeight - H ) / 2, W, H );
+	int y = band + RcUiS( 18 );
+	for ( int i = 0; i < 4; i++ )
+		s_pRcNewSkill[i]->setBounds( pad, y + i * pitch, W - 2 * pad, rowTall );
+	y += 4 * pitch + RcUiS( 10 );
+	s_pRcNewCommentary->setBounds( pad, y, W - 2 * pad, rowTall );
+	s_pRcNewBack->setBounds( W - pad - RcUiS( 120 ), H - RcUiS( 20 ) - RcUiS( 34 ), RcUiS( 120 ), RcUiS( 34 ) );
+}
+
+// CDifficulty::CDifficulty, at its end
+void RcNewGame_Create( CDifficulty *pPanel )
+{
+	static const char *s_pszSkill[4] = { "Easy", "Normal", "Hard", "Nightmare" };
+	s_pRcNew = pPanel;
+	s_pRcNewFrame = new CRcUiFrame( "New Game", 0, 0, 10, 10 );
+	s_pRcNewFrame->setParent( pPanel );
+	for ( int i = 0; i < 4; i++ )
+	{
+		s_pRcNewSkill[i] = new CRcUiButton( s_pszSkill[i], 0, 0, 10, 10, CRcUiButton::STYLE_ROW, RCF_BODY );
+		s_pRcNewSkill[i]->setParent( s_pRcNewFrame );
+		s_pRcNewSkill[i]->addActionSignal( new CRcNewHandler( i + 1 ) );
+	}
+	s_pRcNewCommentary = new CRcUiButton( "", 0, 0, 10, 10, CRcUiButton::STYLE_ROW, RCF_BODY );
+	s_pRcNewCommentary->setParent( s_pRcNewFrame );
+	s_pRcNewCommentary->addActionSignal( new CRcNewHandler( 6 ) );
+	s_pRcNewBack = new CRcUiButton( "Back", 0, 0, 10, 10, CRcUiButton::STYLE_BOX, RCF_BUTTON );
+	s_pRcNewBack->setParent( s_pRcNewFrame );
+	s_pRcNewBack->addActionSignal( new CRcNewHandler( 5 ) );
+	s_pRcNewFrame->setVisible( false );
+}
+
+// CDifficulty::setVisible( true ), after it chose its picture: the panel in the modern look, or the picture
+void RcNewGame_Show( void )
+{
+	if ( !s_pRcNew )
+		return;
+	bool bModern = RcUiModern();
+	s_pRcNew->m_pImagePanel_guess->setVisible( !bModern );
+	if ( bModern )
+		s_pRcNew->m_CommentaryButton_guess.setVisible( false );
+	s_pRcNewFrame->setVisible( bModern );
+	if ( !bModern )
+		return;
+	bool bCampaign = gViewPort && gViewPort->m_pGameMenu_guess && gViewPort->m_pGameMenu_guess->m_pszCampaign_guess;
+	s_pRcNewFrame->setRcTitle( bCampaign ? "Custom Campaign" : "New Game" );
+	s_pRcNewSkill[3]->setRcDisabled( !( gHUD.m_iUnlocks_guess & 32 ) );
+	s_pRcNewSkill[3]->setRcText( ( gHUD.m_iUnlocks_guess & 32 ) ? "Nightmare" : "Nightmare (locked)" );
+	bool bOn = gEngfuncs.pfnGetCvarFloat( "dev_commentary" ) != 0;
+	s_pRcNewCommentary->setRcSelected( bOn );
+	s_pRcNewCommentary->setRcText( bOn ? "Developer commentary: on" : "Developer commentary: off" );
+	s_pRcNewCommentary->setVisible( ( gHUD.m_iUnlocks_guess & 0x400000 ) != 0 );
+	RcNewGame_Layout();
 }
