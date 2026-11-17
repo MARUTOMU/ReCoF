@@ -22,6 +22,9 @@
 #include <vgui_controls/Slider.h>
 #include <vgui_controls/TextEntry.h>
 
+#include <windows.h>
+#include <mmsystem.h>	// B422: the microphones
+
 #undef PostMessage	// windows.h, through the engine headers, renames vgui's
 
 using namespace vgui2;
@@ -34,6 +37,7 @@ enum
 	RC_INT,			// a slider of whole numbers
 	RC_FLOAT,		// a slider with two decimals
 	RC_TEXT,		// a text box (colors, positions, the name)
+	RC_LISTSTR,		// B422: a list whose values are text, not numbers (the microphones)
 };
 
 struct RcOption
@@ -53,6 +57,9 @@ struct RcOption
 // Every option of ReCoF's tabs, in the order they are shown. The launcher's options (recof-cvars.json) use
 // the same names; the ones only the launcher has start the game (-novid, -noborder, crash reports).
 //-----------------------------------------------------------------------------
+// B422: the microphones for the Talking page, "Text=value|..." with the Windows names (RcFillMics)
+static char s_szRcMics[1024] = "Windows default=";
+
 static const RcOption s_RcOptions[] =
 {
 	// Game, General
@@ -271,6 +278,14 @@ static const RcOption s_RcOptions[] =
 	{ "mp_coop", "rc_voice_wall", RC_INT, "Voice behind a wall (%)", "10", 0, 100, NULL,
 		"How loud a friend behind a wall still is, in percent." },
 
+	// B422: Audio, Talking (client.dll rc_voice.cpp)
+	{ "audio_voice", "rc_voice_mode", RC_LIST, "How you talk", "0", 0, 0, "Push to talk=0|Open mic=1",
+		"Push to talk: hold the voice key. Open mic: sends when you speak." },
+	{ "audio_voice", "rc_voice_open_level", RC_INT, "Open mic threshold (%)", "4", 1, 30, NULL,
+		"How loud you must be for the open mic to send. Higher ignores more noise." },
+	{ "audio_voice", "rc_voice_mic", RC_LISTSTR, "Microphone", "", 0, 0, s_szRcMics,
+		"The microphone the game records. A new choice applies from the next map." },
+
 	// ReCoF
 	{ "about", "rc_discord", RC_BOOL, "Discord status", "1", 0, 0, NULL,
 		"Shows on your Discord profile that you are playing ReCoF." },
@@ -305,6 +320,32 @@ static bool RcGetChoice( const RcOption *option, int n, char *text, int textSize
 	}
 
 	return false;
+}
+
+// B422: the Windows microphones into s_szRcMics, named as client.dll's rc_voice.cpp matches them (no characters a
+// cvar value or this list cannot hold)
+static void RcFillMics( void )
+{
+	strcpy( s_szRcMics, "Windows default=" );
+	UINT n = waveInGetNumDevs();
+	for ( UINT i = 0; i < n; i++ )
+	{
+		WAVEINCAPSA caps;
+		if ( waveInGetDevCapsA( i, &caps, sizeof( caps ) ) != MMSYSERR_NOERROR )
+			continue;
+		caps.szPname[sizeof( caps.szPname ) - 1] = 0;
+		for ( char *p = caps.szPname; *p; p++ )
+		{
+			if ( *p == '"' || *p == ';' || *p == '|' || *p == '=' || *p == '\n' || *p == '\r' )
+				*p = ' ';
+		}
+		if ( !caps.szPname[0] || strlen( s_szRcMics ) + 2 * strlen( caps.szPname ) + 3 >= sizeof( s_szRcMics ) )
+			continue;
+		strcat( s_szRcMics, "|" );
+		strcat( s_szRcMics, caps.szPname );
+		strcat( s_szRcMics, "=" );
+		strcat( s_szRcMics, caps.szPname );
+	}
 }
 
 // the cvar's value; empty when the cvar does not exist
@@ -360,6 +401,7 @@ CRcOptionRow::CRcOptionRow( vgui::Panel *parent, const RcOption *option, vgui::P
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96], value[32];
 		int count = 0;
@@ -439,12 +481,13 @@ void CRcOptionRow::SetValue( const char *value )
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96], choice[32];
 		int row = 0;
 		for ( int i = 0; RcGetChoice( o, i, text, sizeof( text ), choice, sizeof( choice ) ); i++ )
 		{
-			if ( RcSameNumber( choice, value ) )
+			if ( o->type == RC_LISTSTR ? !strcmp( choice, value ) : RcSameNumber( choice, value ) )
 				row = i;
 		}
 		m_pCombo->ActivateItemByRow( row );
@@ -487,6 +530,7 @@ void CRcOptionRow::GetValue( char *out, int size )
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96];
 		if ( !RcGetChoice( o, m_pCombo->GetActiveItem(), text, sizeof( text ), out, size ) )
@@ -546,7 +590,7 @@ void CRcOptionRow::Apply( void )
 	char value[64];
 	GetValue( value, sizeof( value ) );
 
-	bool same = m_pOption->type == RC_TEXT ? !strcmp( value, m_szLoaded ) : RcSameNumber( value, m_szLoaded );
+	bool same = m_pOption->type == RC_TEXT || m_pOption->type == RC_LISTSTR ? !strcmp( value, m_szLoaded ) : RcSameNumber( value, m_szLoaded );
 	if ( same && m_szLoaded[0] )
 		return;
 
@@ -728,6 +772,9 @@ CRcOptionsPage::CRcOptionsPage( vgui::Panel *parent, const char *tab, const char
 	m_pPreview = NULL;
 
 	m_pList = new CPanelListPanel( this, "Options" );
+
+	if ( !stricmp( tab, "audio_voice" ) )
+		RcFillMics();	// B422
 
 	for ( unsigned int i = 0; i < RC_NUM_OPTIONS && m_nRows < 40; i++ )
 	{

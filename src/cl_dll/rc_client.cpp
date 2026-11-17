@@ -730,8 +730,12 @@ static void RcCoopReconnect( void )
 	gEngfuncs.pfnClientCmd( s_szCoopConnect );
 }
 
+void RcVoice_Init( void );	// B422, rc_voice.cpp
+void RcVoice_Frame( void );
+
 void RcCoop_Frame( void )
 {
+	RcVoice_Frame();	// B422
 	RcCoopCmdFile();
 	RcSteamNet_Frame();
 	RcSteamNet_Pump();
@@ -798,6 +802,7 @@ void RcClient_Init( void )
 	gEngfuncs.pfnRegisterVariable( "rc_voice_3d", "1", FCVAR_ARCHIVE );
 	gEngfuncs.pfnRegisterVariable( "rc_voice_range", "1400", FCVAR_ARCHIVE );
 	gEngfuncs.pfnRegisterVariable( "rc_voice_wall", "10", FCVAR_ARCHIVE );	// hw.dll sets it when the user disconnects (RcCoopReconnect)
+	RcVoice_Init();	// B422: push to talk or open mic, the microphone
 	gEngfuncs.pfnAddCommand( "rc_coop_host", RcCoopHost_f );	// co-op spike: Steam relay networking
 	gEngfuncs.pfnAddCommand( "rc_coop_join", RcCoopJoin_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );

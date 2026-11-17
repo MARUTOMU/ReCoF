@@ -230,8 +230,9 @@ static int PASCAL RcRecvfrom( SOCKET s, char *buf, int len, int flags, struct so
 	return s_pfnRecvfrom( s, buf, len, flags, from, fromlen );
 }
 
-// the WSOCK32 import of hw.dll for this ordinal (sendto 20, recvfrom 17)
-static void **RcFindImport( HMODULE hModule, const char *pszDll, int iOrdinal, void *pCurrent )
+// the WSOCK32 import of hw.dll for this ordinal (sendto 20, recvfrom 17), or the import now pointing at pCurrent
+// (B422: rc_voice.cpp's waveInOpen)
+void **RcFindImport( HMODULE hModule, const char *pszDll, int iOrdinal, void *pCurrent )
 {
 	BYTE *base = (BYTE *)hModule;
 	IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
@@ -256,7 +257,7 @@ static void **RcFindImport( HMODULE hModule, const char *pszDll, int iOrdinal, v
 	return NULL;
 }
 
-static bool RcPatch( void **ppSlot, void *pNew, void **ppOld )
+bool RcPatch( void **ppSlot, void *pNew, void **ppOld )
 {
 	DWORD old;
 	if ( !VirtualProtect( ppSlot, sizeof( void * ), PAGE_READWRITE, &old ) )

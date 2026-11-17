@@ -1590,6 +1590,10 @@
           "source": "src/cl_dll/rc_simonmodel.cpp"
         },
         {
+          "name": "cl_dll/rc_voice",
+          "source": "src/cl_dll/rc_voice.cpp"
+        },
+        {
           "name": "external/discord-rpc/src/discord_rpc",
           "source": "src/external/discord-rpc/src/discord_rpc.cpp",
           "includes": [
@@ -1840,6 +1844,7 @@
           "cl_dll/rc_ui",
           "cl_dll/rc_mainmenu",
           "cl_dll/rc_simonmodel",
+          "cl_dll/rc_voice",
           "external/discord-rpc/src/discord_rpc",
           "external/discord-rpc/src/rpc_connection",
           "external/discord-rpc/src/serialization",
@@ -4208,6 +4213,7 @@
         "libs": [
           "kernel32.lib",
           "user32.lib",
+          "winmm.lib",
           "wsock32.lib",
           "@vgui_controls.lib"
         ],

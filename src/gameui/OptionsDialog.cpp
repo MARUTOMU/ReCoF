@@ -72,6 +72,7 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new COptionsSubAudio( sheet ), "Sound" );
 	sheet->AddPage( new COptionsSubVoice( sheet ), "#GameUI_Voice" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "audio_voice", "" ), "Talking" );	// ReCoF (B422)
 	AddPage( sheet, "Audio" );
 
 	sheet = new CRcOptionsSheet( this, "MultiplayerSheet" );

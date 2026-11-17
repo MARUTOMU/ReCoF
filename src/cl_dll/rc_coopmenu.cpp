@@ -351,7 +351,7 @@ struct RcLobbySetting_t
 };
 
 #define RC_SET_HOST	6
-#define RC_SET_ALL	9
+#define RC_SET_ALL	10
 #define RC_SET_SIMON	5
 
 static const RcLobbySetting_t s_RcSet[RC_SET_ALL] =
@@ -365,6 +365,7 @@ static const RcLobbySetting_t s_RcSet[RC_SET_ALL] =
 	{ "Voices from where friends stand", "rc_voice_3d", false, 2, { 0, 1 }, { "Off", "On" } },
 	{ "Voice range", "rc_voice_range", false, 4, { 800, 1400, 2000, 3000 }, { "Short", "Normal", "Long", "Very long" } },
 	{ "Voices behind walls", "rc_voice_wall", false, 5, { 0, 10, 25, 50, 100 }, { "Silent", "10%", "25%", "50%", "Full" } },
+	{ "Talk", "rc_voice_mode", false, 2, { 0, 1 }, { "Push to talk", "Open mic" } },	// B422
 };
 
 // the difficulties' rules (hl.dll rc_coop.cpp s_flRcPreset, B396): exit wait, back after dying, monster health,

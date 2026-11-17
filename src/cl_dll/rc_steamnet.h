@@ -37,6 +37,9 @@ enum { RCLOBBY_NONE, RCLOBBY_ASKED, RCLOBBY_IN };
 bool RcLobby_Create( void );
 void RcLobby_Join( unsigned long long ulLobby );
 bool RcLobby_InItsGame( void );	// B421
+// B422: an import of a module (by ordinal, or the one now pointing at pCurrent) and its replacement
+void **RcFindImport( HMODULE hModule, const char *pszDll, int iOrdinal, void *pCurrent );
+bool RcPatch( void **ppSlot, void *pNew, void **ppOld );
 void RcLobby_Leave( void );
 int RcLobby_State( void );
 const char *RcLobby_Note( void );
