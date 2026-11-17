@@ -186,3 +186,10 @@ void RcCoop_Loaded( void )
 	rc_flTransition = realtime;
 	Con_Printf( rc_szLoaded, n );
 }
+
+// Host_TogglePause_f, Host_Pause_f and Host_Unpause_f: in story co-op only the host's own client (the loopback one)
+// pauses; a guest's pause, and the pause GameUI asks for when a guest opens his menu, are refused
+int RcCoop_GuestPause( void )
+{
+	return RcCoop_On() && host_client && host_client->netchan.remote_address.type != NA_LOOPBACK;
+}

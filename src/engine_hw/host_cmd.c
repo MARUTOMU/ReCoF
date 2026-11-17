@@ -3486,6 +3486,9 @@ void Host_Kill_f( void )
 	gEntityInterface.pfnClientKill( sv_player );
 }
 
+// ReCoF: the three pause commands are in the story co-op section (rc_coop.c), where only the host may pause
+#pragma code_seg( ".rctext" )
+
 /*
 ==================
 Host_TogglePause_f
@@ -3500,7 +3503,7 @@ void Host_TogglePause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 	{
 		SV_ClientPrintf( "Pause not allowed.\n" );
 		return;
@@ -3535,7 +3538,7 @@ void Host_Pause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 		return;
 
 	sv.paused = true;
@@ -3562,7 +3565,7 @@ void Host_Unpause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 		return;
 
 	sv.paused = false;
@@ -3571,6 +3574,7 @@ void Host_Unpause_f( void )
 	MSG_WriteByte( &sv.reliable_datagram, svc_setpause );
 	MSG_WriteByte( &sv.reliable_datagram, sv.paused );
 }
+#pragma code_seg()
 
 //===========================================================================
 
