@@ -503,9 +503,18 @@ static DWORD s_dwCoopStartAt;
 static void RcCoopStart_f( void )
 {
 	const char *pszMap = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "c_intro";
+	// B392: rc_coop_start <map> <classic | casual | hardcore> sets the host's preset first (hl.dll rc_coop_preset)
+	const char *pszPreset = gEngfuncs.Cmd_Argc() > 2 ? gEngfuncs.Cmd_Argv( 2 ) : "";
+	if ( stricmp( pszPreset, "classic" ) && stricmp( pszPreset, "casual" ) && stricmp( pszPreset, "hardcore" ) )
+		pszPreset = "";
+	char szPreset[48];
+	szPreset[0] = 0;
+	if ( pszPreset[0] )
+		_snprintf( szPreset, sizeof( szPreset ) - 1, "rc_coop_preset %s\n", pszPreset );
+	szPreset[sizeof( szPreset ) - 1] = 0;
 	// run from HUD_Frame a moment later, like rc_coop_join: on the command line (a launcher or a shortcut) this runs
 	// before the menu map InitInput queues, which would replace the co-op map
-	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nmap %s\n", pszMap );
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\n%src_coop_host\nmap %s\n", szPreset, pszMap );
 	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }

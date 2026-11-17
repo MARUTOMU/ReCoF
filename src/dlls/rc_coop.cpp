@@ -1073,10 +1073,90 @@ void RcCoop_SkipVote( CBasePlayer *pPlayer, bool bSkippable )
 	}
 }
 
+// B392: the host's co-op settings: presets, and the settings each co-op save keeps. The order of the values in a
+// save: exit wait, respawn time, autosave, monster health, skip vote
+static cvar_t *s_pRcSet[] = { &rc_coop_exit_wait, &rc_coop_respawn_time, &rc_coop_autosave, &rc_coop_monster_health, &rc_coop_skip_vote };
+static const char *s_pszRcPreset[3] = { "classic", "casual", "hardcore" };
+static const float s_flRcPreset[3][5] = {
+	{ 60, 10, 1, 25, 1 },	// classic: the defaults
+	{ 60, 5, 1, 0, 1 },	// casual: quick respawn, monsters as in single player
+	{ 60, 0, 0, 50, 1 },	// hardcore: Cry of Fear's own death rule, tape recorders only, monsters +50% a player
+};
+
+static void RcCoopShowSettings( const char *pszWhy )
+{
+	int iMatch = -1;
+	for ( int p = 0; p < 3 && iMatch < 0; p++ )
+	{
+		bool bSame = true;
+		for ( int k = 0; k < 5; k++ )
+			bSame = bSame && s_pRcSet[k]->value == s_flRcPreset[p][k];
+		if ( bSame )
+			iMatch = p;
+	}
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op %s: %s; exit wait %g s, respawn %g s%s, autosave %g, monster health +%g%% a player, guests' skip vote %g\n",
+		pszWhy, iMatch >= 0 ? s_pszRcPreset[iMatch] : "custom", rc_coop_exit_wait.value, rc_coop_respawn_time.value,
+		rc_coop_respawn_time.value == 0 ? " (Cry of Fear's own rule)" : "", rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value ) );
+}
+
+// rc_coop_preset [classic | casual | hardcore]: sets the co-op settings, or shows them
+static void RcCoopPreset( void )
+{
+	if ( CMD_ARGC() < 2 )
+	{
+		RcCoopShowSettings( "settings" );
+		g_engfuncs.pfnServerPrint( "usage: rc_coop_preset classic | casual | hardcore\n" );
+		return;
+	}
+	for ( int p = 0; p < 3; p++ )
+	{
+		if ( stricmp( CMD_ARGV( 1 ), s_pszRcPreset[p] ) )
+			continue;
+		for ( int k = 0; k < 5; k++ )
+			CVAR_SET_FLOAT( s_pRcSet[k]->name, s_flRcPreset[p][k] );
+		RcCoopShowSettings( "preset" );
+		return;
+	}
+	g_engfuncs.pfnServerPrint( "usage: rc_coop_preset classic | casual | hardcore\n" );
+}
+
+// CBasePlayer::Save: in story co-op every saved player keeps the host's co-op settings
+void RcCoop_SettingsSave( CBasePlayer *pPlayer )
+{
+	if ( !RcCoopRules() )
+		return;
+	_snprintf( pPlayer->m_szRcCoopSet, sizeof( pPlayer->m_szRcCoopSet ) - 1, "%g %g %g %g %g", rc_coop_exit_wait.value,
+		rc_coop_respawn_time.value, rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value );
+	pPlayer->m_szRcCoopSet[sizeof( pPlayer->m_szRcCoopSet ) - 1] = 0;
+}
+
+// CBasePlayer::Restore: a story co-op save (or the carry of a level change) brings its settings back; a save from
+// before (no settings) and single player keep the host's
+void RcCoop_SettingsLoad( CBasePlayer *pPlayer )
+{
+	if ( !RcCoopRules() || !pPlayer->m_szRcCoopSet[0] )
+		return;
+	float v[5];
+	if ( sscanf( pPlayer->m_szRcCoopSet, "%f %f %f %f %f", &v[0], &v[1], &v[2], &v[3], &v[4] ) != 5 )
+		return;
+	bool bChanged = false;
+	for ( int k = 0; k < 5; k++ )
+	{
+		if ( s_pRcSet[k]->value != v[k] )
+		{
+			CVAR_SET_FLOAT( s_pRcSet[k]->name, v[k] );
+			bChanged = true;
+		}
+	}
+	if ( bChanged )
+		RcCoopShowSettings( "settings from the save" );
+}
+
 void RcCoop_Init( void )
 {
 	g_engfuncs.pfnAddServerCommand( "rc_coop_dump", RcCoopDump );
 	g_engfuncs.pfnAddServerCommand( "rc_coop_go", RcCoopGo );
+	g_engfuncs.pfnAddServerCommand( "rc_coop_preset", RcCoopPreset );	// B392
 	CVAR_REGISTER( &rc_coop_exit_wait );
 	CVAR_REGISTER( &rc_coop_respawn_time );
 	CVAR_REGISTER( &rc_coop_autosave );

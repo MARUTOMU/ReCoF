@@ -780,6 +780,7 @@ TYPEDESCRIPTION	CBasePlayer::m_playerSaveData[] =
 	DEFINE_FIELD( CBasePlayer, m_vPreviousOrigin, FIELD_VECTOR ),
 	DEFINE_FIELD( CBasePlayer, m_flNextDistanceCheckTime, FIELD_TIME ),
 	DEFINE_ARRAY( CBasePlayer, playerstats, FIELD_CHARACTER, sizeof( statistics ) ),
+	DEFINE_ARRAY( CBasePlayer, m_szRcCoopSet, FIELD_CHARACTER, sizeof( ((CBasePlayer *)0)->m_szRcCoopSet ) ),	// ReCoF (B392)
 	DEFINE_FIELD( CBasePlayer, m_iGoodPoints, FIELD_INTEGER ),
 	DEFINE_FIELD( CBasePlayer, m_bBossHealthBar, FIELD_BOOLEAN ),
 	DEFINE_FIELD( CBasePlayer, m_sBossBarEmpty, FIELD_STRING ),
@@ -7621,8 +7622,13 @@ void CBasePlayer :: Precache( void )
 }
 
 
+void RcCoop_SettingsSave( CBasePlayer *pPlayer );	// ReCoF story co-op (B392), rc_coop.cpp
+void RcCoop_SettingsLoad( CBasePlayer *pPlayer );
+
 int CBasePlayer::Save( CSave &save )
 {
+	RcCoop_SettingsSave( this );	// ReCoF (B392): the co-op settings go with the save
+
 	if ( !CBaseMonster::Save(save) )
 		return 0;
 
@@ -7650,6 +7656,8 @@ int CBasePlayer::Restore( CRestore &restore )
 		return 0;
 
 	int status = restore.ReadFields( "PLAYER", this, m_playerSaveData, ARRAYSIZE(m_playerSaveData) );
+
+	RcCoop_SettingsLoad( this );	// ReCoF (B392): a co-op save plays by the settings it was saved with
 
 	SAVERESTOREDATA *pSaveData = (SAVERESTOREDATA *)gpGlobals->pSaveData;
 	// landmark isn't present.

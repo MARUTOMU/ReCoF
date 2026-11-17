@@ -456,6 +456,8 @@ public:
 	int m_iRcRoomType;
 	int RcRoomType( void );
 	void RcSetRoomType( int type );
+	// ReCoF story co-op (B392): the host's co-op settings when this player was saved (rc_coop.cpp RcCoop_SettingsSave)
+	char m_szRcCoopSet[48];
 	int InventoryIsFull( void );
 	void KeypadNumberCheck( int number );
 	void ViewKnock( float Amount );
