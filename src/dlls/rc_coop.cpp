@@ -15,6 +15,9 @@
 
 // G1: how long an exit a player walks into waits for the rest of the group before it brings them (0: at once)
 cvar_t	rc_coop_exit_wait = { "rc_coop_exit_wait", "60", FCVAR_SERVER };
+// G12: seconds before a dead player comes back next to the group, with his things (0: Cry of Fear's own rule, jump
+// after 60 s or wait sv_auto_respawn_time, without them)
+cvar_t	rc_coop_respawn_time = { "rc_coop_respawn_time", "10", FCVAR_SERVER };
 
 static CHalfLifeStoryCoop *RcCoopRules( void )
 {
@@ -65,6 +68,9 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 		m_bProtected[i] = false;
 		m_flOldTakeDamage[i] = DAMAGE_AIM;
 		m_bArmed[i] = false;
+		m_bWasAlive[i] = false;
+		m_bRestore[i] = false;
+		m_iSnapItems[i] = 0;
 	}
 }
 
@@ -123,6 +129,44 @@ void CHalfLifeStoryCoop::Think( void )
 			if ( pEnt->pev->takedamage == DAMAGE_NO )
 				pEnt->pev->takedamage = m_flOldTakeDamage[i];
 		}
+
+		// G12: when a player dies, note his weapons and ammo and bring his respawn forward; when he is back (the
+		// respawn takes everything away), give them back
+		CBasePlayer *pPl = (CBasePlayer *)pEnt;
+		bool bAlive = pEnt->IsAlive() && pEnt->pev->deadflag == DEAD_NO;
+		if ( m_bWasAlive[i] && !bAlive && pEnt->pev->fuser4 == 0 && rc_coop_respawn_time.value > 0 )
+		{
+			m_iSnapItems[i] = 0;
+			for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
+			{
+				for ( CBasePlayerItem *pItem = pPl->m_rgpPlayerItems[s]; pItem && m_iSnapItems[i] < 24; pItem = pItem->m_pNext )
+					m_iszSnapItem[i][m_iSnapItems[i]++] = pItem->pev->classname;
+			}
+			memcpy( m_rgSnapAmmo[i], pPl->m_rgAmmo, sizeof( m_rgSnapAmmo[i] ) );
+			m_bRestore[i] = true;
+			float flBack = gpGlobals->time + rc_coop_respawn_time.value;
+			if ( pPl->m_flDeadAutoReviveTime == 0 || pPl->m_flDeadAutoReviveTime > flBack )
+				pPl->m_flDeadAutoReviveTime = flBack;
+			if ( pPl->m_flCoopRespawnDelayTime > flBack )
+				pPl->m_flCoopRespawnDelayTime = flBack;
+		}
+		else if ( !m_bWasAlive[i] && bAlive && m_bRestore[i] )
+		{
+			m_bRestore[i] = false;
+			for ( int n = 0; n < m_iSnapItems[i]; n++ )
+			{
+				const char *pszName = STRING( m_iszSnapItem[i][n] );
+				if ( !pPl->HasNamedPlayerItem( pszName ) )
+					pPl->GiveNamedItem( pszName, false, true );
+			}
+			for ( int a = 0; a < MAX_AMMO_SLOTS; a++ )
+			{
+				if ( m_rgSnapAmmo[i][a] > pPl->m_rgAmmo[a] )
+					pPl->m_rgAmmo[a] = m_rgSnapAmmo[i][a];
+			}
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is back with %d weapons\n", STRING( pEnt->pev->netname ), m_iSnapItems[i] ) );
+		}
+		m_bWasAlive[i] = bAlive;
 
 		// G2: a player who arrived inside an exit (the way back, often) arms its exits once he has stood outside all
 		if ( !m_bArmed[i] && !bLoading )
@@ -372,4 +416,5 @@ void RcCoop_Init( void )
 	g_engfuncs.pfnAddServerCommand( "rc_coop_dump", RcCoopDump );
 	g_engfuncs.pfnAddServerCommand( "rc_coop_go", RcCoopGo );
 	CVAR_REGISTER( &rc_coop_exit_wait );
+	CVAR_REGISTER( &rc_coop_respawn_time );
 }

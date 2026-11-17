@@ -406,6 +406,12 @@ public:
 	bool m_bProtected[33];	// G3: made untouchable while loading
 	float m_flOldTakeDamage[33];
 	bool m_bArmed[33];	// G2: has been outside every level exit since the level began
+	// G12: what a player had when he died, given back when he respawns
+	bool m_bWasAlive[33];
+	bool m_bRestore[33];
+	int m_iSnapItems[33];
+	string_t m_iszSnapItem[33][24];
+	int m_rgSnapAmmo[33][MAX_AMMO_SLOTS];
 };
 
 extern DLL_GLOBAL CGameRules*	g_pGameRules;
