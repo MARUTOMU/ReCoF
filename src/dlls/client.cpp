@@ -1602,7 +1602,7 @@ void ClientCommand( edict_t *pEntity )
 		if ( pPlayer && !pPlayer->IsAlive() )
 			return;
 
-		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && RcPoliceMP() )
+		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && RcCoopPolice() )	// B411
 		{
 			int value = atoi( CMD_ARGV(1) );
 

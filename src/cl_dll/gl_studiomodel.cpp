@@ -1795,6 +1795,12 @@ void CStudioModelRenderer::GL_DrawPoints ( )
 	if (gEngfuncs.GetMaxClients() > 1)
 		bMultiplayer = true;
 
+	// ReCoF (B411): in the main campaign's story co-op (physinfo "rcs" 1, hl.dll rc_coop.cpp) the weapons have Simon's
+	// sleeves and hands, as in single player, not the police officer's
+	const char *pszRcSimon = gEngfuncs.PhysInfo_ValueForKey( "rcs" );
+	if (bMultiplayer && pszRcSimon && pszRcSimon[0] == '1')
+		bMultiplayer = false;
+
 	// Cry of Fear: no view model while the view is on the boat, the attach camera or the telescope
 	int isViewModel = (m_pCurrentEntity == gEngfuncs.GetViewModel()) ? TRUE : FALSE;
 	if (isViewModel && (iBoat_guess || pAttachCamEnt_guess || pTelescopeEnt_guess))

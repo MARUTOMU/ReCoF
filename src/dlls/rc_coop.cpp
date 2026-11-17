@@ -28,6 +28,9 @@ cvar_t	rc_coop_monster_health = { "rc_coop_monster_health", "25", FCVAR_SERVER }
 cvar_t	rc_coop_skip = { "rc_coop_skip", "0" };
 // G6 (B390): 1 lets the guests skip a scene too: once every player watching it has pressed Enter; 0 only the host
 cvar_t	rc_coop_skip_vote = { "rc_coop_skip_vote", "1", FCVAR_SERVER };
+// B411: the players are Simon (his voice, his sleeves and hands on the weapons) in the main campaign, Cry of Fear's
+// police officers in a custom campaign; the lobby sets it with the campaign, a co-op save keeps it
+cvar_t	rc_coop_simon = { "rc_coop_simon", "1", FCVAR_SERVER };
 static bool s_bRcSkipVote[33];	// this player asked to skip the scene he is in
 
 extern bool m_bSpawningSimon;	// multiplay_gamerules.cpp: the police co-op's hunting Simon
@@ -405,6 +408,10 @@ void CHalfLifeStoryCoop::Think( void )
 		// client.dll shows the map's sky to story co-op players (gl_sky.cpp)
 		if ( strcmp( g_engfuncs.pfnGetPhysicsKeyValue( pEnt->edict(), "rcc" ), "1" ) )
 			g_engfuncs.pfnSetPhysicsKeyValue( pEnt->edict(), "rcc", "1" );
+		// B411: client.dll draws Simon's sleeves and hands on the weapons (gl_studiomodel.cpp)
+		const char *pszSimon = rc_coop_simon.value ? "1" : "0";
+		if ( strcmp( g_engfuncs.pfnGetPhysicsKeyValue( pEnt->edict(), "rcs" ), pszSimon ) )
+			g_engfuncs.pfnSetPhysicsKeyValue( pEnt->edict(), "rcs", pszSimon );
 
 		// G12: when a player dies, note his weapons and ammo and bring his respawn forward; when he is back (the
 		// respawn takes everything away), give them back
@@ -935,6 +942,12 @@ bool RcPoliceMP( void )
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();
 }
 
+// B411: a police officer's voice and arms: Cry of Fear's own multiplayer, and story co-op outside the main campaign
+bool RcCoopPolice( void )
+{
+	return RcPoliceMP() || ( RcCoopRules() && rc_coop_simon.value == 0 );
+}
+
 // a spot near vecBase where a standing player's hull fits (no floor or line of sight asked), rings of 8 at 36 to 96
 // units, then up a step; vecBase itself when there is none
 static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
@@ -1264,8 +1277,9 @@ void RcCoop_SettingsSave( CBasePlayer *pPlayer )
 {
 	if ( !RcCoopRules() )
 		return;
-	_snprintf( pPlayer->m_szRcCoopSet, sizeof( pPlayer->m_szRcCoopSet ) - 1, "%g %g %g %g %g %d", rc_coop_exit_wait.value,
-		rc_coop_respawn_time.value, rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value, RcCoopDifficulty() );
+	_snprintf( pPlayer->m_szRcCoopSet, sizeof( pPlayer->m_szRcCoopSet ) - 1, "%g %g %g %g %g %d %d", rc_coop_exit_wait.value,
+		rc_coop_respawn_time.value, rc_coop_autosave.value, rc_coop_monster_health.value, rc_coop_skip_vote.value, RcCoopDifficulty(),
+		rc_coop_simon.value ? 1 : 0 );
 	pPlayer->m_szRcCoopSet[sizeof( pPlayer->m_szRcCoopSet ) - 1] = 0;
 }
 
@@ -1276,10 +1290,15 @@ void RcCoop_SettingsLoad( CBasePlayer *pPlayer )
 	if ( !RcCoopRules() || !pPlayer->m_szRcCoopSet[0] )
 		return;
 	float v[5];
-	int iSkill = 0;
-	if ( sscanf( pPlayer->m_szRcCoopSet, "%f %f %f %f %f %d", &v[0], &v[1], &v[2], &v[3], &v[4], &iSkill ) < 5 )
+	int iSkill = 0, iSimon = 1;	// B411: a save from before the campaigns is the main campaign's
+	if ( sscanf( pPlayer->m_szRcCoopSet, "%f %f %f %f %f %d %d", &v[0], &v[1], &v[2], &v[3], &v[4], &iSkill, &iSimon ) < 5 )
 		return;
 	bool bChanged = false;
+	if ( ( iSimon ? 1 : 0 ) != ( rc_coop_simon.value ? 1 : 0 ) )
+	{
+		CVAR_SET_FLOAT( "rc_coop_simon", iSimon ? 1 : 0 );
+		bChanged = true;
+	}
 	if ( iSkill >= 1 && iSkill <= 4 && iSkill != RcCoopDifficulty() )
 	{
 		RcCoopSetDifficulty( iSkill );
@@ -1308,4 +1327,5 @@ void RcCoop_Init( void )
 	CVAR_REGISTER( &rc_coop_monster_health );
 	CVAR_REGISTER( &rc_coop_skip );
 	CVAR_REGISTER( &rc_coop_skip_vote );
+	CVAR_REGISTER( &rc_coop_simon );
 }

@@ -1387,7 +1387,7 @@ void CBasePlayer :: Pain( void )
 {
 	if ( pev->waterlevel < 3 )
 	{
-		if ( RcPoliceMP() )
+		if ( RcCoopPolice() )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsPolice[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 		else if ( pev->vuser1.x )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsDoctor[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1415,7 +1415,7 @@ void CBasePlayer :: Pain( void )
 
 void CBasePlayer :: MorphineSound( void )
 {
-	if ( RcPoliceMP() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSounds[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1423,7 +1423,7 @@ void CBasePlayer :: MorphineSound( void )
 
 void CBasePlayer :: LowHealthSound( void )
 {
-	if ( RcPoliceMP() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsDoctor[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1433,7 +1433,7 @@ void CBasePlayer :: LowHealthSound( void )
 
 void CBasePlayer :: SwingSound( void )
 {
-	if ( RcPoliceMP() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsPolice[ RANDOM_LONG( 0, 5 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsDoctor[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1443,7 +1443,7 @@ void CBasePlayer :: SwingSound( void )
 
 void CBasePlayer :: DeathSound( void )
 {
-	if ( RcPoliceMP() )
+	if ( RcCoopPolice() )
 	{
 		if ( pev->waterlevel < 3 )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_AUTO, pDeathSoundsPolice[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );

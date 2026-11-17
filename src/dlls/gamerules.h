@@ -424,3 +424,4 @@ extern DLL_GLOBAL CGameRules*	g_pGameRules;
 // the multiplayer branches that make Simon a police officer (voices, no hints, no dual wield, monster damage) ask
 // it, so story co-op keeps Simon's single-player behaviour
 bool RcPoliceMP( void );
+bool RcCoopPolice( void );	// B411: the police voice and arms, also in story co-op outside the main campaign
