@@ -119,6 +119,13 @@ static const RcOption s_RcOptions[] =
 	{ "gfx_effects", "cl_smokeparticlelimit", RC_INT, "Gun smoke particles", "5", 0, 20, NULL,
 		"The most gun smoke particles at a time." },
 
+	// B400: from the Language and Difficulty screens
+	{ "game_general", "cof_subtitlelanguage", RC_LIST, "Subtitle language", "1", 0, 0,
+		"English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
+		"The language of the subtitles and the texts on screen (the main menu's Language)." },
+	{ "game_general", "dev_commentary", RC_BOOL, "Developer commentary", "0", 0, 0, NULL,
+		"Commentary nodes from the developers in the levels (also on the difficulty screen of a new game)." },
+
 	// B399: the menus' size
 	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
 		"How large the menus and this window are, in percent of their size for your screen (they grow with its "
@@ -246,6 +253,24 @@ static const RcOption s_RcOptions[] =
 	{ "mp_player", "cl_coop_language", RC_LIST, "Co-op language", "1", 0, 0,
 		"Default (English)=0|English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
 		"The language of the co-op texts." },
+
+	// B400: Multiplayer, Co-op: the story co-op host's rules (they are the host's: a guest's do nothing) and the voice
+	{ "mp_coop", "rc_coop_exit_wait", RC_INT, "Exit waits for the group (s)", "60", 0, 180, NULL,
+		"Host: how long a level exit waits for the whole group before it brings the others to it. 0 changes level at once." },
+	{ "mp_coop", "rc_coop_respawn_time", RC_INT, "Back after dying (s)", "10", 0, 60, NULL,
+		"Host: seconds before a dead player comes back next to the group, with his things. 0 keeps Cry of Fear's own rule. The difficulty sets it too." },
+	{ "mp_coop", "rc_coop_monster_health", RC_INT, "Monster health per friend (%)", "25", 0, 100, NULL,
+		"Host: how much more health monsters have for each player beyond the first, at most double. The difficulty sets it too." },
+	{ "mp_coop", "rc_coop_autosave", RC_BOOL, "Autosave on each level", "1", 0, 0, NULL,
+		"Host: saves the group's game as coop_auto once everyone is in on a new level." },
+	{ "mp_coop", "rc_coop_skip_vote", RC_BOOL, "Friends vote to skip scenes", "1", 0, 0, NULL,
+		"Host: a friend's Enter in a scene is a vote, and the scene is skipped once everyone watching has pressed it. Off: only the host skips." },
+	{ "mp_coop", "rc_voice_3d", RC_BOOL, "Voices from where friends stand", "1", 0, 0, NULL,
+		"A friend's voice comes from where he is, fades with distance and sounds muffled behind walls. Off: the flat radio voice of the original game." },
+	{ "mp_coop", "rc_voice_range", RC_INT, "Voice range", "1400", 400, 4000, NULL,
+		"How far a friend's voice carries, in game units." },
+	{ "mp_coop", "rc_voice_wall", RC_INT, "Voice behind a wall (%)", "10", 0, 100, NULL,
+		"How loud a friend behind a wall still is, in percent." },
 
 	// ReCoF
 	{ "about", "rc_discord", RC_BOOL, "Discord status", "1", 0, 0, NULL,
@@ -535,6 +560,10 @@ void CRcOptionRow::Apply( void )
 
 	char command[160];
 	_snprintf( command, sizeof( command ), "%s \"%s\"\n", m_pOption->cvar, value );
+	// B400: the subtitle language goes through the game's subtitleset (the Language screen's), which also keeps it in
+	// the statistics that a game from the beginning sets it back from
+	if ( !strcmp( m_pOption->cvar, "cof_subtitlelanguage" ) )
+		_snprintf( command, sizeof( command ), "cof_subtitlelanguage \"%s\"\ncmd subtitleset %s\n", value, value );
 	command[sizeof( command ) - 1] = 0;
 	engine->pfnClientCmd( command );
 

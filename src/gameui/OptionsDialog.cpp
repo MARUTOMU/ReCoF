@@ -78,6 +78,7 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new CRcOptionsPage( sheet, "mp_player", "Point at an option to see what it does." ), "Player" );
 	sheet->AddPage( new COptionsSubSpray( sheet ), "Spray" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "mp_coop", "Point at an option to see what it does. The rules are the host's." ), "Co-op" );	// ReCoF (B400)
 	AddPage( sheet, "Multiplayer" );
 
 	AddPage( new CRcAboutPage( this ), "ReCoF" );

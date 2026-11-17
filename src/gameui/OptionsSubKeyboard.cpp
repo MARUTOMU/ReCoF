@@ -390,6 +390,32 @@ void COptionsSubKeyboard::ParseActionDescriptions( void )
 		m_pKeyBindList->AddItem( sectionIndex, item );
 		item->deleteThis();
 	}
+
+	// ReCoF (B400): ReCoF's own actions, which could only be bound from the console
+	static const char *s_pszRcKeys[][2] =
+	{
+		{ "Duck-tap (ReCoF)", "+rc_ducktap" },
+		{ "Skip a scene", "rc_cutscene_skip" },
+		{ "Run timer: start", "rc_timer_start" },
+		{ "Run timer: stop", "rc_timer_stop" },
+		{ "Run timer: reset", "rc_timer_reset" },
+		{ "Options", "rc_options" },
+	};
+	if ( sectionIndex > 0 )
+	{
+		for ( int k = 0; k < (int)( sizeof( s_pszRcKeys ) / sizeof( s_pszRcKeys[0] ) ); k++ )
+		{
+			if ( GetItemForBinding( s_pszRcKeys[k][1] ) )
+				continue;
+			item = new KeyValues( "Item" );
+			item->SetString( "Action", s_pszRcKeys[k][0] );
+			item->SetString( "Binding", s_pszRcKeys[k][1] );
+			item->SetString( "Key", "" );
+			item->SetString( "AltKey", "" );
+			m_pKeyBindList->AddItem( sectionIndex, item );
+			item->deleteThis();
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
