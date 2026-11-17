@@ -658,6 +658,9 @@ float DistanceTo_guess( vec3_t a, vec3_t b )
 // Cry of Fear: flashlights of the other players in multiplayer
 // (called from StudioCalcAttachments, the light starts at attachment 3 of the player model)
 //
+// ReCoF (B439): the players' lights are keyed -1000 - index: with -index, player 1's took the key of the local
+// flashlight (view.cpp -1) and player 2's of its reduced light (-2), so the host's phone light became a point light
+// at his chest and a guest's was taken over every frame (charliee1w 87c6f21e)
 void DrawPlayerFlashlights_guess( void )
 {
 	cl_entity_t *localplayer = gEngfuncs.GetLocalPlayer();
@@ -693,7 +696,7 @@ void DrawPlayerFlashlights_guess( void )
 			{
 				vec3_t end = forward * 32 + origin;
 				pmtrace_t *tr = gEngfuncs.PM_TraceLine(origin, end, PM_TRACELINE_PHYSENTSONLY, 1, -1);
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = tr->endpos;
 				dl->angles = ent->angles;
 				dl->radius = 60;
@@ -705,7 +708,7 @@ void DrawPlayerFlashlights_guess( void )
 			{
 				vec3_t end = forward * 4096 + origin;
 				pmtrace_t *tr = gEngfuncs.PM_TraceLine(origin, end, PM_TRACELINE_PHYSENTSONLY, 1, -1);
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = tr->endpos;
 				dl->angles = ent->angles;
 				dl->radius = 60;
@@ -730,7 +733,7 @@ void DrawPlayerFlashlights_guess( void )
 				if (localplayer == ent && !CL_IsThirdPerson())
 					lightorg = v_origin;
 
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = lightorg;
 				dl->angles = angles;
 				dl->radius = 700;
