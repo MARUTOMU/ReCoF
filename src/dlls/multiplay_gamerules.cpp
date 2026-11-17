@@ -1662,6 +1662,14 @@ int CHalfLifeMultiplay :: IPointsForKill( CBasePlayer *pAttacker, CBasePlayer *p
 //=========================================================
 void CHalfLifeMultiplay :: PlayerKilled( CBasePlayer *pVictim, entvars_t *pKiller, entvars_t *pInflictor )
 {
+	// ReCoF (B432): a monster's direct kill (Killed without TakeDamage: the chainsaw grab, Book Simon's sledgehammer)
+	// comes with no inflictor, or no killer, and DeathNotice read their classnames: the host crashed (charliee1w
+	// 10811392, cof-coop issue 7). The world, and the killer as his own inflictor
+	if ( !pKiller )
+		pKiller = VARS( INDEXENT( 0 ) );
+	if ( !pInflictor )
+		pInflictor = pKiller;
+
 	DeathNotice( pVictim, pKiller, pInflictor );
 
 	pVictim->m_iDeaths += 1;
