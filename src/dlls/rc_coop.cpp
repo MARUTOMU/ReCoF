@@ -66,6 +66,8 @@ static bool RcCoopSpotFree( const Vector &vecFrom, const Vector &vecSpot, edict_
 
 CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 {
+	m_bAutosaved = false;
+	m_flLevelStart = -1;
 	for ( int i = 0; i < 33; i++ )
 	{
 		m_flSeen[i] = 0;
@@ -111,8 +113,6 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 static void RcCoopSyncKeys( void );
 static void RcCoopSyncCodes( void );
 static float s_flRcNextKeySync;
-static string_t s_iszRcAutosaved;	// the level the last autosave was made on
-static float s_flRcLevelStart;
 
 void CHalfLifeStoryCoop::Think( void )
 {
@@ -125,10 +125,10 @@ void CHalfLifeStoryCoop::Think( void )
 		RcCoopSyncCodes();
 
 		// G13: an autosave once every player is in on a new level
-		if ( s_iszRcAutosaved != gpGlobals->mapname || s_flRcLevelStart > gpGlobals->time )
+		if ( !m_bAutosaved )
 		{
-			if ( s_flRcLevelStart == 0 || s_flRcLevelStart > gpGlobals->time )
-				s_flRcLevelStart = gpGlobals->time;
+			if ( m_flLevelStart < 0 || m_flLevelStart > gpGlobals->time )
+				m_flLevelStart = gpGlobals->time;
 			bool bAllIn = true;
 			int nIn = 0;
 			for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
@@ -140,10 +140,9 @@ void CHalfLifeStoryCoop::Think( void )
 					bAllIn = false;
 				nIn++;
 			}
-			if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - s_flRcLevelStart > 3 )
+			if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - m_flLevelStart > 3 )
 			{
-				s_iszRcAutosaved = gpGlobals->mapname;
-				s_flRcLevelStart = 0;
+				m_bAutosaved = true;
 				SERVER_COMMAND( "save coop_auto\n" );
 				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: autosave on %s (load coop_auto)\n", STRING( gpGlobals->mapname ) ) );
 			}
@@ -678,8 +677,11 @@ edict_t *CHalfLifeStoryCoop::GetPlayerSpawnSpot( CBasePlayer *pPlayer )
 }
 
 // rc_coop_dump (server command): every player's slot, health, place and weapons, for tests
+static void RcCoopAutosaveState( void );
+
 static void RcCoopDump( void )
 {
+	RcCoopAutosaveState();
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: map %s, %d slots, rules %s\n", STRING( gpGlobals->mapname ), gpGlobals->maxClients,
 		g_pGameRules && g_pGameRules->IsCoOp() && !g_pGameRules->IsDeathmatch() ? "story co-op" : "other" ));
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
@@ -716,12 +718,24 @@ static void RcCoopDump( void )
 				strcat( szSlots, pszShort[0] ? pszShort : "-" );
 			}
 		}
+		CHalfLifeStoryCoop *pRules = RcCoopRules();
+		if ( pRules && i <= 32 )
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d\n", i,
+				pRules->m_flSeen[i], gpGlobals->time, pRules->m_bProtected[i], pRules->m_bArmed[i] ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d\n", i, szSlots,
 			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
 	}
+}
+
+static void RcCoopAutosaveState( void )
+{
+	CHalfLifeStoryCoop *pRules = RcCoopRules();
+	if ( pRules )
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: autosaved %d, level start %.1f, time %.1f\n",
+			pRules->m_bAutosaved, pRules->m_flLevelStart, gpGlobals->time ) );
 }
 
 void RcCoop_Init( void )

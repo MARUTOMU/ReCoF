@@ -407,6 +407,8 @@ public:
 	float m_flOldTakeDamage[33];
 	bool m_bArmed[33];	// G2: has been outside every level exit since the level began
 	// G12: what a player had when he died, given back when he respawns
+	bool m_bAutosaved;	// G13: this level's autosave is done
+	float m_flLevelStart;	// G13: the first Think of this level
 	bool m_bWasAlive[33];
 	bool m_bRestore[33];
 	int m_iSnapItems[33];
