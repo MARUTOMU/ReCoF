@@ -62,6 +62,7 @@ enum
 class CGameRules
 {
 public:
+	CGameRules();	// ReCoF: clears the vote kick and lobby fields below, which retail never set
 	bool IsMapperMode_guess( void );	// CoF 1.6a: dynamic_cast to CHalfLifeRules, its byte at +0xDC
 
 	virtual void RefreshSkillData( void );// fill skill data struct with proper values

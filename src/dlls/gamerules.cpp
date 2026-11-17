@@ -364,6 +364,35 @@ CGameRules *InstallGameRules( void )
 }
 
 //=========================================================
+// ReCoF: retail never set the vote kick and lobby fields, so a new rules object (one per map) started with whatever
+// the heap held there; VoteKickThink then read a garbage victim id when the bytes made m_bInVoteKick true (a crash
+// in CHalfLifeMultiplay::Think on the first frame of a map)
+//=========================================================
+CGameRules::CGameRules()
+{
+	int i;
+
+	m_sVoteKickVictimID = NULL;
+	m_bInVoteKick = false;
+	m_flVoteKickTime = 0;
+	m_iVotesForKick = 0;
+	m_iVotesAgainstKick = 0;
+	pVoteKickVictimID = NULL;
+	for ( i = 0; i < 33; i++ )
+	{
+		pVoted[i] = NULL;
+		m_bReady[i] = false;
+	}
+	m_flNextDevDonatorCheckTime = 0;
+	m_flNextLobbyUpdateTime = 0;
+	m_bInLobby = false;
+	m_flNextLobbyCountDownTime = 0;
+	m_iLobbyCount = 0;
+	m_bStartingGameFromLobby = false;
+	m_flLobbyStartOverrideTime = 0;
+}
+
+//=========================================================
 // CoF 1.6a: set by CHalfLifeRules only (the byte at +0xDC)
 //=========================================================
 bool CGameRules::IsMapperMode_guess( void )
