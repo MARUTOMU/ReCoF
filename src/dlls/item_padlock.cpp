@@ -33,6 +33,20 @@ public:
 
 LINK_ENTITY_TO_CLASS( item_padlock, CItemPadlock );
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
+// ReCoF story co-op (B386): the player who has the padlock open (euser1, set by Use), or NULL once he has left the
+// game; in single player, and for a padlock opened before this (an older save), the first player as before
+static CBaseEntity *RcPadlockUser( CBaseEntity *pPadlock )
+{
+	if ( !RcCoop_Story() || !pPadlock->pev->euser1 )
+		return UTIL_FirstPlayer_rc();
+	CBaseEntity *pUser = CBaseEntity::Instance( pPadlock->pev->euser1 );
+	if ( !pUser || !pUser->IsPlayer() || UTIL_PlayerByIndex( pUser->entindex() ) != pUser || pUser->pev->fuser4 != 0 )
+		return NULL;
+	return pUser;
+}
+
 void CItemPadlock::Spawn( void )
 {
 	Precache();
@@ -52,7 +66,15 @@ void CItemPadlock::Spawn( void )
 
 void CItemPadlock::Finished( void )
 {
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPadlockUser( this );
+
+	// ReCoF story co-op (B386): the padlock is nobody's again; its target fires even when the one who solved it left
+	if ( RcCoop_Story() && pev->euser1 )
+	{
+		pev->euser1 = NULL;
+		if ( !pPlayer )
+			FireTargets( STRING( pev->target ), this, this, USE_TOGGLE, 0 );
+	}
 
 	if ( pPlayer )
 	{
@@ -107,7 +129,10 @@ int GetRotationForNumber( int number )
 
 void CItemPadlock::Cancel( void )
 {
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcPadlockUser( this );
+
+	if ( RcCoop_Story() )
+		pev->euser1 = NULL;	// ReCoF story co-op (B386): free for a teammate
 
 	if ( pPlayer )
 	{
@@ -138,7 +163,7 @@ void CItemPadlock::Check( void )
 
 		pev->body = 1;
 
-		CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+		CBaseEntity *pPlayer = RcPadlockUser( this );	// ReCoF story co-op (B386): the one who dialled it
 
 		if ( pPlayer )
 		{
@@ -230,6 +255,16 @@ void CItemPadlock::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 	if ( !pEntity )
 		return;
+
+	// ReCoF story co-op (B386): one player at a time, and the padlock remembers who has it open
+	if ( RcCoop_Story() && pev->euser1 && pev->euser1 != pPlayer->edict() )
+	{
+		CBaseEntity *pOther = RcPadlockUser( this );
+		if ( pOther && (CBaseEntity *)( (CBasePlayer *)pOther )->m_pPadlock == this )
+			return;
+	}
+	if ( RcCoop_Story() )
+		pev->euser1 = pPlayer->edict();
 
 	pPlayer->m_pPadlock = this;
 

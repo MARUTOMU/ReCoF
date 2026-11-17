@@ -889,6 +889,9 @@ static void RcCoopDump( void )
 			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d, movetype %d, solid %d, flags %x, scene %d\n", i,
 				pRules->m_flSeen[i], gpGlobals->time, pRules->m_bProtected[i], pRules->m_bArmed[i], pPlayer->pev->movetype, pPlayer->pev->solid,
 				pPlayer->pev->flags, pPlayer->IsInCutscene() ) );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d use: phone or computer %d, call %d, ladder %d, reviving %d, padlock open %d, next use in %.1f\n", i,
+			pPlayer->m_iUsingComputerOrPhone, pPlayer->m_bInPhoneCall ? 1 : 0, pPlayer->IsOnLadder() ? 1 : 0, pPlayer->pPlayerToRevive ? 1 : 0,
+			pPlayer->m_pPadlock != NULL ? 1 : 0, pPlayer->m_fUseTime - gpGlobals->time ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d\n", i, szSlots,
 			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
@@ -912,6 +915,12 @@ static void RcCoopDump( void )
 				pEdict->v.health, pEdict->v.max_health, pMonster->m_flRcCoopScale ) );
 	}
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %d live monsters, group scale %.2f\n", nMonsters, RcCoop_MonsterHealthScale() ) );
+
+	// B386: the padlocks, open or not, and who has one open
+	CBaseEntity *pPad = NULL;
+	while ( ( pPad = UTIL_FindEntityByClassname( pPad, "item_padlock" ) ) != NULL )
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: padlock %s open %d, used by player %d\n", STRING( pPad->pev->targetname ), pPad->pev->body,
+			pPad->pev->euser1 ? ENTINDEX( pPad->pev->euser1 ) : 0 ) );
 }
 
 static void RcCoopAutosaveState( void )
