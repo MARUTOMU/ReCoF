@@ -7486,6 +7486,12 @@ void CBasePlayer::Spawn( void )
 	m_fTrippingTime = 0;
 	m_fFallingTime = 0;
 	m_iUsingComputerOrPhone = 0;
+	// ReCoF (B441): a respawn kept the holds the player died with (a phone call or its ring, a fall, a reload, the
+	// syringe heal): he came back unable to move or jump (charliee1w d3ab8125, cof-coop cd19547)
+	pev->fuser3 = 0;
+	pev->vuser4.x = 0;
+	m_bInPhoneCall = false;
+	m_bShouldFallFreeze = false;
 
 	SetCorrectView();
 	SetCorrectMo();
