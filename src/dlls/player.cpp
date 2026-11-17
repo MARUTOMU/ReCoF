@@ -2524,7 +2524,9 @@ void CBasePlayer::MultiplayerKilled( entvars_t *pevAttacker, int iGib )
 			someonealive = true;
 	}
 
-	if ( !someonealive )
+	// ReCoF story co-op: no game over and map restart; every player comes back with his things after rc_coop_respawn_time
+	// (rc_coop.cpp, B373), at the level's start when nobody is left standing
+	if ( !someonealive && !( g_pGameRules && g_pGameRules->IsMultiplayer() && !RcPoliceMP() ) )
 	{
 		if ( survivalmode )
 		{
