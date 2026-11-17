@@ -478,6 +478,14 @@ static void RcCoopJoin_f( void )
 	if ( RcSteamNet_Join( addr, RcCoopHasArg( "relay" ) != 0, RcCoopPrint ) )
 	{
 		RcCoopDefaultName();
+		// B442: a guest at the engine's 1998 rates (20 updates and 30 commands a second, 25000 bytes) saw his
+		// teammates move in steps; raised for co-op, never lowered (they are the player's own, kept in config.cfg)
+		static const struct { const char *cvar; float value; } s_Rates[] = { { "cl_updaterate", 60 }, { "cl_cmdrate", 60 }, { "rate", 100000 } };
+		for ( int r = 0; r < 3; r++ )
+		{
+			if ( gEngfuncs.pfnGetCvarFloat( (char *)s_Rates[r].cvar ) < s_Rates[r].value )
+				gEngfuncs.Cvar_SetValue( (char *)s_Rates[r].cvar, s_Rates[r].value );
+		}
 		// connect from HUD_Frame in 3 s: on the command line this runs before the menu map that InitInput queues,
 		// which would cancel the connect
 		_snprintf( s_szCoopConnect, sizeof( s_szCoopConnect ) - 1, "connect %s\n", addr );
@@ -525,7 +533,8 @@ static void RcCoopStart_f( void )
 	else if ( pszMap[0] )
 		_snprintf( szRules, sizeof( szRules ) - 1, "rc_coop_simon %d\n", strcmp( pszMap, "c_intro" ) ? 0 : 1 );	// B411
 	szRules[sizeof( szRules ) - 1] = 0;
-	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\n%s%src_coop_host\nmap %s\n", szPreset, szRules, pszMap );
+	// B442: the rates for a story co-op host (sv_lan 1 capped each guest at sv_lan_rate, 20000 bytes a second)
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nsv_lan_rate 100000\nsv_maxupdaterate 60\nrc_coop 1\n%s%src_coop_host\nmap %s\n", szPreset, szRules, pszMap );
 	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }
@@ -565,7 +574,7 @@ static void RcCoopContinue_f( void )
 		}
 	}
 	szRules[sizeof( szRules ) - 1] = 0;
-	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nload %s\n%s", gEngfuncs.Cmd_Argv( 1 ), szRules );
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nsv_lan_rate 100000\nsv_maxupdaterate 60\nrc_coop 1\nrc_coop_host\nload %s\n%s", gEngfuncs.Cmd_Argv( 1 ), szRules );	// B442
 	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }
