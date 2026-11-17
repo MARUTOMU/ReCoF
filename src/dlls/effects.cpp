@@ -6566,6 +6566,7 @@ class CCofGiveItems : public CBaseEntity
 public:
 	virtual void Spawn( void );
 	virtual void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
+	void GiveTo( CBasePlayer *pPlayer );	// ReCoF (B404): the gift to one player, as Use gave it
 };
 
 LINK_ENTITY_TO_CLASS( cof_giveitems, CCofGiveItems );
@@ -6591,6 +6592,27 @@ void CCofGiveItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 	if ( !pPlayer )
 		return;
 
+	GiveTo( pPlayer );
+
+	// ReCoF story co-op (B404): a weapon the map gives "the player" (c_nightmare's camera) goes to every player in the
+	// game who has none yet; an inventory item (flag 1) stays with the one who set it off, the group's keys come by
+	// themselves (rc_coop.cpp G9)
+	if ( RcCoop_Story() && !( pev->spawnflags & 1 ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || pEnt == pPlayer || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !pEnt->IsAlive() )
+				continue;
+			CBasePlayer *pOther = (CBasePlayer *)pEnt;
+			if ( !pOther->HasNamedPlayerItem( STRING( pev->message ) ) )
+				GiveTo( pOther );
+		}
+	}
+}
+
+void CCofGiveItems::GiveTo( CBasePlayer *pPlayer )
+{
 	pPlayer->m_bSilentGive = false;
 
 	if ( pev->spawnflags & 1 )
