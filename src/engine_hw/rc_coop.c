@@ -89,6 +89,8 @@ int RcCoop_Carried( client_t *cl )
 {
 	int	i;
 
+	if ( !RcCoop_On() )
+		return 0;	// single player and other multiplayer games never skip the game DLL's connect
 	i = cl - svs.clients;
 	if ( i < 0 || i >= RC_MAX_CLIENTS || !rc_iCarried[i] )
 		return 0;
