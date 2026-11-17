@@ -3175,6 +3175,8 @@ static void RcTriggerColour( edict_t *ent, struct entity_state_s *state )
 	state->rendercolor.b = b;
 }
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
 int AddToFullPack( struct entity_state_s *state, int e, edict_t *ent, edict_t *host, int hostflags, int player, unsigned char *pSet )
 {
 	RcSvScope rcsv( RCSV_FULLPACK );	// ReCoF (B337): rc_svprof
@@ -3200,7 +3202,10 @@ int AddToFullPack( struct entity_state_s *state, int e, edict_t *ent, edict_t *h
 
 	// Ignore if not the host and not touching a PVS/PAS leaf
 	// If pSet is NULL, then the test will always succeed and the entity will be added to the update
-	if ( ent != host && ent->v.renderfx != 70 && ent->v.renderfx != 137 && ent->v.renderfx != 85 ) // buz: always send 3d skybox ents
+	// ReCoF (B431): in story co-op the other players are always sent: a teammate's voice plays where his entity is
+	// (hw.dll rc_coop.c, B394) and stayed at the map's origin, silent, while he was outside the listener's PVS
+	if ( ent != host && ent->v.renderfx != 70 && ent->v.renderfx != 137 && ent->v.renderfx != 85 && // buz: always send 3d skybox ents
+		!( player && RcCoop_Story() ) )
 	{
 		if ( !ENGINE_CHECK_VISIBILITY( (const struct edict_s *)ent, pSet ) )
 		{
