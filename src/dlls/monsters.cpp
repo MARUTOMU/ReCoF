@@ -2302,6 +2302,8 @@ void CBaseMonster::MoveExecute( CBaseEntity *pTargetEnt, const Vector &vecDir, f
 // initialization that should take place for all monsters
 // goes here.
 //=========================================================
+float RcCoop_MonsterHealthScale( void );	// ReCoF story co-op (rc_coop.cpp): 1 outside story co-op
+
 void CBaseMonster :: MonsterInit ( void )
 {
 	if ( g_pGameRules && !g_pGameRules->FAllowMonsters() )
@@ -2322,6 +2324,10 @@ void CBaseMonster :: MonsterInit ( void )
 //		pev->takedamage		= DAMAGE_NO;
 //	else
 		pev->takedamage		= DAMAGE_AIM;
+
+	// ReCoF story co-op (G16): more health with more players (rc_coop.cpp), in place of the police co-op's damage
+	// multiplier
+	pev->health *= RcCoop_MonsterHealthScale();
 
 	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && false )
 	{

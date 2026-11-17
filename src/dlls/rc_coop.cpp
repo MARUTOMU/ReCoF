@@ -22,6 +22,10 @@ cvar_t	rc_coop_exit_wait = { "rc_coop_exit_wait", "60", FCVAR_SERVER };
 cvar_t	rc_coop_respawn_time = { "rc_coop_respawn_time", "10", FCVAR_SERVER };
 // G13: 1 saves the group's game as coop_auto once every player is in on a new level
 cvar_t	rc_coop_autosave = { "rc_coop_autosave", "1", FCVAR_SERVER };
+// G16: percent more monster health for each player beyond the first (at most double); 0 keeps single player's
+cvar_t	rc_coop_monster_health = { "rc_coop_monster_health", "25", FCVAR_SERVER };
+
+extern bool m_bSpawningSimon;	// multiplay_gamerules.cpp: the police co-op's hunting Simon
 
 static CHalfLifeStoryCoop *RcCoopRules( void )
 {
@@ -94,6 +98,53 @@ static bool RcCoopPresent( CBaseEntity *pEnt )
 	return pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() && pEnt->pev->deadflag == DEAD_NO;
 }
 
+// G18: a player who joins the game (not a respawn, which gets his own things back) gets the weapons of the teammate
+// he comes in next to, so a late joiner is not left with nothing; the group's keys come by themselves (G9)
+void CHalfLifeStoryCoop::PlayerSpawn( CBasePlayer *pPlayer )
+{
+	CHalfLifeMultiplay::PlayerSpawn( pPlayer );
+
+	int i = ENTINDEX( pPlayer->edict() );
+	if ( i < 1 || i > 32 || m_bRestore[i] )
+		return;
+	CBasePlayer *pAnchor = RcCoopAnchor( pPlayer );
+	if ( !pAnchor )
+		return;
+	int nGiven = 0;
+	for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
+	{
+		for ( CBasePlayerItem *pItem = pAnchor->m_rgpPlayerItems[s]; pItem; pItem = pItem->m_pNext )
+		{
+			const char *pszName = STRING( pItem->pev->classname );
+			if ( !pPlayer->HasNamedPlayerItem( pszName ) )
+			{
+				pPlayer->GiveNamedItem( pszName, false, true );
+				nGiven++;
+			}
+		}
+	}
+	if ( nGiven )
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s got %d weapons like %s's\n", STRING( pPlayer->pev->netname ), nGiven, STRING( pAnchor->pev->netname ) ) );
+}
+
+// G16 (CBaseMonster::MonsterInit): story co-op monsters have more health with more players present, bounded
+float RcCoop_MonsterHealthScale( void )
+{
+	if ( !RcCoopRules() || rc_coop_monster_health.value <= 0 )
+		return 1;
+	int n = 0;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+			n++;
+	}
+	if ( n <= 1 )
+		return 1;
+	float flScale = 1 + ( n - 1 ) * rc_coop_monster_health.value / 100.0;
+	return flScale > 2 ? 2 : flScale;
+}
+
 void CHalfLifeStoryCoop::PlayerThink( CBasePlayer *pPlayer )
 {
 	CHalfLifeMultiplay::PlayerThink( pPlayer );
@@ -116,6 +167,9 @@ static float s_flRcNextKeySync;
 
 void CHalfLifeStoryCoop::Think( void )
 {
+	// the police co-op sometimes sends a monster Simon after the players; not in Simon's own story
+	m_bSpawningSimon = false;
+
 	CHalfLifeMultiplay::Think();
 
 	if ( gpGlobals->time >= s_flRcNextKeySync || gpGlobals->time < s_flRcNextKeySync - 2 )
@@ -751,4 +805,5 @@ void RcCoop_Init( void )
 	CVAR_REGISTER( &rc_coop_exit_wait );
 	CVAR_REGISTER( &rc_coop_respawn_time );
 	CVAR_REGISTER( &rc_coop_autosave );
+	CVAR_REGISTER( &rc_coop_monster_health );
 }
