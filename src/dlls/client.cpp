@@ -1027,6 +1027,12 @@ void ClientCommand( edict_t *pEntity )
 
 	if ( FStrEq(pcmd, "VModEnable") ) //LRC - shut up about VModEnable...
 	{
+		// ReCoF (B426): in multiplayer the voice manager needs it (game_shared/voice_gamemgr.cpp): until a player's
+		// game answers its ReqState with VModEnable 1 he hears nobody, and the engine routed no voice at all, so in
+		// Cry of Fear's multiplayer only the radio click of one's own key was heard. Single player keeps retail's
+		// silence
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			g_pGameRules->ClientCommand( GetClassPtr( (CBasePlayer *)pev ), pcmd );
 		return;
 	}
 	else if ( FStrEq(pcmd, "hud_color") ) //LRC
