@@ -31,6 +31,7 @@
 extern "C"
 {
 #include "pm_shared.h"
+#include "pm_defs.h"	// ReCoF (B417): HUD_PlayerMove reads the physents
 }
 
 #include <string.h>
@@ -147,6 +148,24 @@ char DLLEXPORT HUD_PlayerMoveTexture( char *name )
 
 void DLLEXPORT HUD_PlayerMove( struct playermove_s *ppmove, int server )
 {
+	// ReCoF (B417): in multiplayer the server makes players that touch each other non-solid (hl.dll player.cpp
+	// PostThink), so they pass through each other; the engine still gave the prediction the other players as
+	// solid boxes (cl_ents.c CL_SetSolidPlayers), and walking into a player stopped the predicted move until the
+	// server's answer came back, then the view jumped ahead. The prediction leaves the other players out
+	if ( !server && gEngfuncs.GetMaxClients() > 1 )
+	{
+		int iKept = 0;
+		for ( int i = 0; i < ppmove->numphysent; i++ )
+		{
+			if ( ppmove->physents[i].player )
+				continue;
+			if ( iKept != i )
+				ppmove->physents[iKept] = ppmove->physents[i];
+			iKept++;
+		}
+		ppmove->numphysent = iKept;
+	}
+
 	PM_Move( ppmove, server );
 }
 
