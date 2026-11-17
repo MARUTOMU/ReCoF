@@ -519,6 +519,22 @@ static void RcCoopStart_f( void )
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }
 
+void RcCoopMenu_Open( void );	// B393, rc_coopmenu.cpp
+
+// B393: rc_coop_continue <save>: the host's story co-op game from a co-op save (the main menu's Continue), as
+// rc_coop_start sets it up; the save brings its own settings (B392)
+static void RcCoopContinue_f( void )
+{
+	if ( gEngfuncs.Cmd_Argc() < 2 )
+	{
+		RcCoopPrint( "usage: rc_coop_continue <save, for example coop_auto>\n" );
+		return;
+	}
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nload %s\n", gEngfuncs.Cmd_Argv( 1 ) );
+	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
+	s_dwCoopStartAt = GetTickCount() + 1500;
+}
+
 static void RcCoopInvite_f( void )
 {
 	RcSteamNet_Invite( RcCoopPrint );
@@ -708,6 +724,8 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_autotest", RcCoopAutotest_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_start", RcCoopStart_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_continue", RcCoopContinue_f );	// B393
+	gEngfuncs.pfnAddCommand( "rc_coop_menu", RcCoopMenu_Open );	// B393: the main menu's Story Co-op panel
 	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_leave", RcCoopLeave_f );
 	RcSteamNet_InitCallbacks( RcCoopSteamJoin );	// Join Game and invites from Steam

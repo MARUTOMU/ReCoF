@@ -17,6 +17,13 @@
 #include "Difficulty_guess.h"
 #include "rc_version.h"
 #include "..\game_shared\vgui_loadtga.h"
+
+// ReCoF story co-op (B393): the Story Co-op entry, in the row between Host Server and Language (rc_coopmenu.cpp)
+void RcCoopMenu_Create( CGameMenu *pMenu, int x, int y, int wide, int tall );
+void RcCoopMenu_SetPos( int x, int y );
+void RcCoopMenu_Show( bool bShow );
+void RcCoopMenu_Solve( void );
+void RcCoopMenu_Reset( void );
 #include <windows.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -119,22 +126,22 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 
 	m_pNewGame_guess = new ImagePanel( m_pNewGameImage_guess );
 	m_pNewGame_guess->setParent( this );
-	m_pNewGame_guess->setPos( x, y - tall * 10 );
+	m_pNewGame_guess->setPos( x, y - tall * 11 );
 	m_pNewGame_guess->setVisible( true );
 
 	m_pLoadGame_guess = new ImagePanel( m_pLoadGameImage_guess );
 	m_pLoadGame_guess->setParent( this );
-	m_pLoadGame_guess->setPos( x, y - tall * 9 );
+	m_pLoadGame_guess->setPos( x, y - tall * 10 );
 	m_pLoadGame_guess->setVisible( true );
 
 	m_pCustom_guess = new ImagePanel( m_pCustomImage_guess );
 	m_pCustom_guess->setParent( this );
-	m_pCustom_guess->setPos( x, y - tall * 8 );
+	m_pCustom_guess->setPos( x, y - tall * 9 );
 	m_pCustom_guess->setVisible( true );
 
 	m_pJoinServer_guess = new ImagePanel( m_pJoinServerImage_guess );
 	m_pJoinServer_guess->setParent( this );
-	m_pJoinServer_guess->setPos( x, y - tall * 7 );
+	m_pJoinServer_guess->setPos( x, y - tall * 8 );
 	m_pJoinServer_guess->setVisible( true );
 
 	m_pOptions_guess = new ImagePanel( m_pOptionsImage_guess );
@@ -159,7 +166,7 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 
 	m_pHostServer_guess = new ImagePanel( m_pHostServerImage_guess );
 	m_pHostServer_guess->setParent( this );
-	m_pHostServer_guess->setPos( x, y - tall * 6 );
+	m_pHostServer_guess->setPos( x, y - tall * 7 );
 	m_pHostServer_guess->setVisible( true );
 
 	m_pQuit_guess = new ImagePanel( m_pQuitImage_guess );
@@ -167,19 +174,19 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pQuit_guess->setPos( x, y - tall );
 	m_pQuit_guess->setVisible( true );
 
-	m_pNewGameButton_guess = new ColorButton( "", x, y - tall * 10, wide, tall, false, true );
+	m_pNewGameButton_guess = new ColorButton( "", x, y - tall * 11, wide, tall, false, true );
 	m_pNewGameButton_guess->setParent( this );
 	m_pNewGameButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 1 ) );
 
-	m_pLoadGameButton_guess = new ColorButton( "", x, y - tall * 9, wide, tall, false, true );
+	m_pLoadGameButton_guess = new ColorButton( "", x, y - tall * 10, wide, tall, false, true );
 	m_pLoadGameButton_guess->setParent( this );
 	m_pLoadGameButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 2 ) );
 
-	m_pCustomButton_guess = new ColorButton( "", x, y - tall * 8, wide, tall, false, true );
+	m_pCustomButton_guess = new ColorButton( "", x, y - tall * 9, wide, tall, false, true );
 	m_pCustomButton_guess->setParent( this );
 	m_pCustomButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 3 ) );
 
-	m_pJoinServerButton_guess = new ColorButton( "", x, y - tall * 7, wide, tall, false, true );
+	m_pJoinServerButton_guess = new ColorButton( "", x, y - tall * 8, wide, tall, false, true );
 	m_pJoinServerButton_guess->setParent( this );
 	m_pJoinServerButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 4 ) );
 
@@ -199,13 +206,15 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pExtrasButton_guess->setParent( this );
 	m_pExtrasButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 8 ) );
 
-	m_pHostServerButton_guess = new ColorButton( "", x, y - tall * 6, wide, tall, false, true );
+	m_pHostServerButton_guess = new ColorButton( "", x, y - tall * 7, wide, tall, false, true );
 	m_pHostServerButton_guess->setParent( this );
 	m_pHostServerButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 9 ) );
 
 	m_pQuitButton_guess = new ColorButton( "", x, y - tall, wide, tall, false, true );
 	m_pQuitButton_guess->setParent( this );
 	m_pQuitButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 10 ) );
+
+	RcCoopMenu_Create( this, x, y - tall * 6, wide, tall );	// ReCoF (B393)
 
 	// list of the custom campaigns
 	int iCancelWide = ScreenWidth;
@@ -339,6 +348,7 @@ void CGameMenu::ActionSignal( int cmd )
 		m_pQuit_guess->setVisible( false );
 		m_pCancelButton_guess->setVisible( true );
 		m_pCampaignList_guess->setVisible( true );
+		RcCoopMenu_Show( false );	// ReCoF (B393)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -415,6 +425,7 @@ void CGameMenu::ActionSignal( int cmd )
 		m_pQuit_guess->setVisible( true );
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );
+		RcCoopMenu_Show( true );	// ReCoF (B393)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -466,6 +477,7 @@ int MsgGameMenu_guess( const char *pszName, int iSize, void *pbuf )
 		gViewPort->m_pGameMenu_guess->m_pExtras_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/extras.tga" ) );
 		gViewPort->m_pGameMenu_guess->m_pHostServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/hserver.tga" ) );
 		gViewPort->m_pGameMenu_guess->m_pQuit_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/quit.tga" ) );
+		RcCoopMenu_Reset();	// ReCoF (B393)
 
 		gViewPort->m_pGameMenu_guess->setVisible( true );
 		gViewPort->UpdateCursorState();
@@ -598,16 +610,17 @@ void CGameMenu::ResetButtonPositions_guess()
 
 	m_pLogoImage_guess->getSize( logoWide, logoTall );
 
-	m_pNewGame_guess->setPos( x, y - tall * 10 );
-	m_pLoadGame_guess->setPos( x, y - tall * 9 );
-	m_pCustom_guess->setPos( x, y - tall * 8 );
-	m_pJoinServer_guess->setPos( x, y - tall * 7 );
+	m_pNewGame_guess->setPos( x, y - tall * 11 );
+	m_pLoadGame_guess->setPos( x, y - tall * 10 );
+	m_pCustom_guess->setPos( x, y - tall * 9 );
+	m_pJoinServer_guess->setPos( x, y - tall * 8 );
 	m_pOptions_guess->setPos( x, y - tall * 2 );
 	m_pLanguage_guess->setPos( x, y - tall * 5 );
 	m_pUnlockables_guess->setPos( x, y - tall * 4 );
 	m_pExtras_guess->setPos( x, y - tall * 3 );
-	m_pHostServer_guess->setPos( x, y - tall * 6 );
+	m_pHostServer_guess->setPos( x, y - tall * 7 );
 	m_pQuit_guess->setPos( x, y - tall );
+	RcCoopMenu_SetPos( x, y - tall * 6 );	// ReCoF (B393)
 }
 
 void VGUI_GameMenuInit_guess()
@@ -672,6 +685,7 @@ void CGameMenu::setVisible( bool state )
 		m_pQuit_guess->setVisible( true );
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );
+		RcCoopMenu_Show( true );	// ReCoF (B393)
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 
 		for ( int i = 0; i < MAX_CAMPAIGNS_guess; i++ )
@@ -689,6 +703,8 @@ void CGameMenu::solve()
 		return;
 
 	m_pLogoImage_guess->setColor( Color( 255, 255, 255, gEngfuncs.pfnRandomLong( 0, 50 ) ) );
+
+	RcCoopMenu_Solve();	// ReCoF (B393)
 
 	if ( m_pNewGameButton_guess->isArmed() )
 	{

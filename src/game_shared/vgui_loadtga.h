@@ -17,6 +17,8 @@
 
 vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename);
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename);
+// ReCoF (B393): a TGA file already in memory (as vgui_LoadTGA, alpha inverted for VGUI)
+vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len);
 
 
 #endif // VGUI_LOADTGA_H

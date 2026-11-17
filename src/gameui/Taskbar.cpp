@@ -393,6 +393,44 @@ void CTaskbar::CreatePlatformMenu()
 }
 
 //-----------------------------------------------------------------------------
+// ReCoF story co-op (B393): the menu's co-op lines, put before Options (the entry numbered 20 and the ones after it)
+// in code, so the game's GameMenu.res stays as it is: host a story game for Steam friends (hidden in a multiplayer
+// game), invite Steam friends and leave the game (only in a multiplayer game). The commands are client.dll's
+//-----------------------------------------------------------------------------
+static void RcAddCoopMenuItems( KeyValues *datafile )
+{
+	static const char *s_pszItems[3][4] =
+	{
+		{ "RcCoopHost", "Host story co-op (Steam friends)", "engine rc_coop_start", "notmulti" },
+		{ "RcCoopInvite", "Invite Steam friends to co-op", "engine rc_coop_invite", "notsingle" },
+		{ "RcCoopLeave", "Leave the co-op game", "engine rc_coop_leave", "notsingle" },
+	};
+
+	KeyValues *pPrev = NULL;
+	for ( KeyValues *dat = datafile->GetFirstSubKey(); dat != NULL; dat = dat->GetNextKey() )
+	{
+		if ( atoi( dat->GetName() ) >= 20 )
+			break;
+		pPrev = dat;
+	}
+	if ( !pPrev )
+		return;
+
+	// after pPrev, the last first so they keep their order
+	for ( int i = 2; i >= 0; i-- )
+	{
+		KeyValues *kv = new KeyValues( s_pszItems[i][0] );
+		kv->SetString( "label", s_pszItems[i][1] );
+		kv->SetString( "command", s_pszItems[i][2] );
+		kv->SetInt( s_pszItems[i][3], 1 );
+		if ( i > 0 )
+			kv->SetInt( "OnlyInGame", 1 );
+		kv->SetNextKey( pPrev->GetNextKey() );
+		pPrev->SetNextKey( kv );
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: loads the game menu from Resource/GameMenu.res
 //-----------------------------------------------------------------------------
 void CTaskbar::CreateGameMenu()
@@ -401,6 +439,7 @@ void CTaskbar::CreateGameMenu()
 	KeyValues *datafile = new KeyValues( "GameMenu" );
 	if ( datafile->LoadFromFile( filesystem(), "Resource/GameMenu.res" ) )
 	{
+		RcAddCoopMenuItems( datafile );	// ReCoF (B393)
 		m_pGameMenu = RecursiveLoadGameMenu( datafile );
 		datafile->deleteThis();
 	}

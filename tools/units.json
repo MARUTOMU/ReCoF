@@ -1570,6 +1570,10 @@
           "source": "src/cl_dll/rc_steamnet.cpp"
         },
         {
+          "name": "cl_dll/rc_coopmenu",
+          "source": "src/cl_dll/rc_coopmenu.cpp"
+        },
+        {
           "name": "external/discord-rpc/src/discord_rpc",
           "source": "src/external/discord-rpc/src/discord_rpc.cpp",
           "includes": [
@@ -1815,6 +1819,7 @@
           "cl_dll/rc_discord",
           "cl_dll/rc_practice",
           "cl_dll/rc_steamnet",
+          "cl_dll/rc_coopmenu",
           "external/discord-rpc/src/discord_rpc",
           "external/discord-rpc/src/rpc_connection",
           "external/discord-rpc/src/serialization",

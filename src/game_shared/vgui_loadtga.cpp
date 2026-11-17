@@ -77,6 +77,17 @@ vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename)
 	return pRet;
 }
 
+// ReCoF (B393): a TGA file already in memory (the main menu's Story Co-op label, client.dll rc_coopmenu.cpp)
+vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len)
+{
+	MemoryInputStream stream;
+
+	stream.m_pData = pData;
+	stream.m_DataLen = len;
+	stream.m_ReadPos = 0;
+	return new vgui::BitmapTGA(&stream, true);
+}
+
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename)
 {
 	MemoryInputStream stream;
