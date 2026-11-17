@@ -481,6 +481,32 @@ void CHalfLifeStoryCoop::Think( void )
 			}
 		}
 
+		// B419: the same rule kept such a player off every other trigger: after c_nightmare both players arrive on
+		// one spot in c_start, inside the black box (func_wall_toggle "block") whose trigger_once (the same box)
+		// starts the opening scene and opens it; neither touched it, the scene never started and B403 below found no
+		// room in the box. A player non-solid only because he overlaps a teammate touches the triggers he stands in,
+		// as the engine does for a solid one (exits keep their own rules above)
+		if ( !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype == MOVETYPE_WALK &&
+			!pPl->IsInCutscene() )
+		{
+			bool bOverlap = false;
+			for ( int j = 1; j <= gpGlobals->maxClients && !bOverlap; j++ )
+			{
+				CBaseEntity *pOther = UTIL_PlayerByIndex( j );
+				bOverlap = pOther != pEnt && RcCoopPresent( pOther ) && pOther->Intersects( pEnt );
+			}
+			CBaseEntity *pList[64];
+			int nList = bOverlap ? UTIL_EntitiesInBox( pList, 64, pEnt->pev->absmin, pEnt->pev->absmax, 0 ) : 0;
+			for ( int n = 0; n < nList; n++ )
+			{
+				CBaseEntity *pTrig = pList[n];
+				if ( pTrig == pEnt || pTrig->pev->solid != SOLID_TRIGGER || ( pTrig->pev->flags & FL_KILLME ) ||
+					FClassnameIs( pTrig->pev, "trigger_changelevel" ) )
+					continue;
+				pTrig->Touch( pEnt );
+			}
+		}
+
 		// B403: the same rule leaves players a level change brings in on top of each other (a scene's end puts every
 		// player on one spot) SOLID_NOT for good, and the new map's triggers where they arrive never go off (c_nightmare's
 		// opening scene and camera): once they have stood together 1.5 s outside any scene, the later one steps aside
