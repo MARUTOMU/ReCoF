@@ -14,6 +14,15 @@
 
 #include "vgui_bitmaptga.h"
 
+// ReCoF (B401): every TGA the functions below make; its pixels are open to CRcImagePanel (cl_dll rc_vgui1.cpp), which
+// draws a picture at the menus' scale
+class CRcTGA : public vgui::BitmapTGA
+{
+public:
+	CRcTGA( vgui::InputStream *is, bool invertAlpha ) : vgui::BitmapTGA( is, invertAlpha ) {}
+	const unsigned char *RcRGBA( void ) { return _rgba; }
+};
+
 
 vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename);
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename);

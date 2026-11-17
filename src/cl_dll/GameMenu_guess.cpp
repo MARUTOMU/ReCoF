@@ -17,6 +17,7 @@
 #include "Difficulty_guess.h"
 #include "rc_version.h"
 #include "..\game_shared\vgui_loadtga.h"
+#include "rc_vgui1.h"	// ReCoF (B401)
 
 // ReCoF story co-op (B393): the Story Co-op entry, in the row between Host Server and Language (rc_coopmenu.cpp)
 void RcCoopMenu_Create( CGameMenu *pMenu, int x, int y, int wide, int tall );
@@ -107,69 +108,76 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 
 	m_pNewGameImage_guess->getSize( wide, tall );
 	m_pLogoTSImage_guess->getSize( tsWide, tsTall );
+	// ReCoF (B401): the pictures at the menus' scale (CRcImagePanel), the column laid out at it too
+	wide = RcMenuScaled( wide );
+	tall = RcMenuScaled( tall );
+	tsWide = RcMenuScaled( tsWide );
+	tsTall = RcMenuScaled( tsTall );
 	y = ScreenHeight - tall;
 	x = ScreenWidth / 2 - wide / 2;
 
 	m_pLogoImage_guess->getSize( logoWide, logoTall );
+	logoWide = RcMenuScaled( logoWide );
+	logoTall = RcMenuScaled( logoTall );
 	logoX = ScreenWidth / 2 - logoWide / 2;
 	logoY = ScreenHeight / 2 - logoTall * 3;
 
-	m_pLogo_guess = new ImagePanel( m_pLogoImage_guess );
+	m_pLogo_guess = new CRcImagePanel( m_pLogoImage_guess );
 	m_pLogo_guess->setParent( this );
 	m_pLogo_guess->setPos( logoX, logoY );
 	m_pLogo_guess->setVisible( true );
 
-	m_pLogoTS_guess = new ImagePanel( m_pLogoTSImage_guess );
+	m_pLogoTS_guess = new CRcImagePanel( m_pLogoTSImage_guess );
 	m_pLogoTS_guess->setParent( this );
 	m_pLogoTS_guess->setPos( ScreenWidth - tsWide - 15, ScreenHeight - tsTall - 15 );
 	m_pLogoTS_guess->setVisible( true );
 
-	m_pNewGame_guess = new ImagePanel( m_pNewGameImage_guess );
+	m_pNewGame_guess = new CRcImagePanel( m_pNewGameImage_guess );
 	m_pNewGame_guess->setParent( this );
 	m_pNewGame_guess->setPos( x, y - tall * 11 );
 	m_pNewGame_guess->setVisible( true );
 
-	m_pLoadGame_guess = new ImagePanel( m_pLoadGameImage_guess );
+	m_pLoadGame_guess = new CRcImagePanel( m_pLoadGameImage_guess );
 	m_pLoadGame_guess->setParent( this );
 	m_pLoadGame_guess->setPos( x, y - tall * 10 );
 	m_pLoadGame_guess->setVisible( true );
 
-	m_pCustom_guess = new ImagePanel( m_pCustomImage_guess );
+	m_pCustom_guess = new CRcImagePanel( m_pCustomImage_guess );
 	m_pCustom_guess->setParent( this );
 	m_pCustom_guess->setPos( x, y - tall * 9 );
 	m_pCustom_guess->setVisible( true );
 
-	m_pJoinServer_guess = new ImagePanel( m_pJoinServerImage_guess );
+	m_pJoinServer_guess = new CRcImagePanel( m_pJoinServerImage_guess );
 	m_pJoinServer_guess->setParent( this );
 	m_pJoinServer_guess->setPos( x, y - tall * 8 );
 	m_pJoinServer_guess->setVisible( true );
 
-	m_pOptions_guess = new ImagePanel( m_pOptionsImage_guess );
+	m_pOptions_guess = new CRcImagePanel( m_pOptionsImage_guess );
 	m_pOptions_guess->setParent( this );
 	m_pOptions_guess->setPos( x, y - tall * 2 );
 	m_pOptions_guess->setVisible( true );
 
-	m_pLanguage_guess = new ImagePanel( m_pLanguageImage_guess );
+	m_pLanguage_guess = new CRcImagePanel( m_pLanguageImage_guess );
 	m_pLanguage_guess->setParent( this );
 	m_pLanguage_guess->setPos( x, y - tall * 5 );
 	m_pLanguage_guess->setVisible( true );
 
-	m_pUnlockables_guess = new ImagePanel( m_pUnlockablesImage_guess );
+	m_pUnlockables_guess = new CRcImagePanel( m_pUnlockablesImage_guess );
 	m_pUnlockables_guess->setParent( this );
 	m_pUnlockables_guess->setPos( x, y - tall * 4 );
 	m_pUnlockables_guess->setVisible( true );
 
-	m_pExtras_guess = new ImagePanel( m_pExtrasImage_guess );
+	m_pExtras_guess = new CRcImagePanel( m_pExtrasImage_guess );
 	m_pExtras_guess->setParent( this );
 	m_pExtras_guess->setPos( x, y - tall * 3 );
 	m_pExtras_guess->setVisible( true );
 
-	m_pHostServer_guess = new ImagePanel( m_pHostServerImage_guess );
+	m_pHostServer_guess = new CRcImagePanel( m_pHostServerImage_guess );
 	m_pHostServer_guess->setParent( this );
 	m_pHostServer_guess->setPos( x, y - tall * 7 );
 	m_pHostServer_guess->setVisible( true );
 
-	m_pQuit_guess = new ImagePanel( m_pQuitImage_guess );
+	m_pQuit_guess = new CRcImagePanel( m_pQuitImage_guess );
 	m_pQuit_guess->setParent( this );
 	m_pQuit_guess->setPos( x, y - tall );
 	m_pQuit_guess->setVisible( true );
@@ -605,6 +613,8 @@ void CGameMenu::ResetButtonPositions_guess()
 
 	m_pNewGameImage_guess->getSize( wide, tall );
 	m_pLogoTSImage_guess->getSize( tsWide, tsTall );
+	wide = RcMenuScaled( wide );	// ReCoF (B401)
+	tall = RcMenuScaled( tall );
 	y = ScreenHeight - tall;
 	x = ScreenWidth / 2 - wide / 2;
 

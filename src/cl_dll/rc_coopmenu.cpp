@@ -9,6 +9,7 @@
 #include "vgui_TeamFortressViewport.h"
 #include "GameMenu_guess.h"
 #include "..\game_shared\vgui_loadtga.h"
+#include "rc_vgui1.h"
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
@@ -230,7 +231,7 @@ private:
 };
 
 static CGameMenu *s_pRcMenu;
-static ImagePanel *s_pRcItem;
+static CRcImagePanel *s_pRcItem;	// B401: drawn at the menus' scale
 static ColorButton *s_pRcItemButton;
 static BitmapTGA *s_pRcLabel, *s_pRcLabelArmed;
 static bool s_bRcArmed;
@@ -521,7 +522,7 @@ void RcCoopMenu_Create( CGameMenu *pMenu, int x, int y, int wide, int tall )
 	s_pRcLabel = RcCoopLabel( 255, 255, 255 );
 	s_pRcLabelArmed = RcCoopLabel( 217, 0, 0 );
 
-	s_pRcItem = new ImagePanel( s_pRcLabel );
+	s_pRcItem = new CRcImagePanel( s_pRcLabel );
 	s_pRcItem->setParent( pMenu );
 	s_pRcItem->setPos( x, y );
 	s_pRcItem->setVisible( true );

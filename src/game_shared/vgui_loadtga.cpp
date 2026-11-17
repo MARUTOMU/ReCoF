@@ -71,7 +71,7 @@ vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename)
 		return NULL;
 	
 	stream.m_ReadPos = 0;
-	vgui::BitmapTGA *pRet = new vgui::BitmapTGA(&stream, true);
+	vgui::BitmapTGA *pRet = new CRcTGA(&stream, true);
 	gEngfuncs.COM_FreeFile(stream.m_pData);
 	
 	return pRet;
@@ -85,7 +85,7 @@ vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len)
 	stream.m_pData = pData;
 	stream.m_DataLen = len;
 	stream.m_ReadPos = 0;
-	return new vgui::BitmapTGA(&stream, true);
+	return new CRcTGA(&stream, true);
 }
 
 // ReCoF (B397): the picture menus' hover pictures, each loaded once (retail loaded one at every hover and never freed
@@ -120,7 +120,7 @@ vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename)
 		return NULL;
 	
 	stream.m_ReadPos = 0;
-	vgui::BitmapTGA *pRet = new vgui::BitmapTGA(&stream, false);
+	vgui::BitmapTGA *pRet = new CRcTGA(&stream, false);
 	gEngfuncs.COM_FreeFile(stream.m_pData);
 	
 	return pRet;
