@@ -44,6 +44,7 @@
 #include <stdarg.h>
 #include <malloc.h>
 #include <ctype.h>
+#include "rc_coop.h"	// ReCoF: story co-op
 
 typedef struct
 {
@@ -1492,7 +1493,7 @@ void SV_WriteSpawn( sizebuf_t *msg )
 	client_t	*client;
 
 	// run the entrance script
-	if ( sv.loadgame )
+	if ( RcCoop_Loadgame( host_client ) )	// ReCoF: sv.loadgame, per carried player in story co-op
 	{
 		// loaded games are fully inited allready
 		// if this is the last client on a loadgame, restore the players
@@ -1560,7 +1561,7 @@ void SV_WriteSpawn( sizebuf_t *msg )
 
 		SV_WriteClientdataToMessage( host_client, msg );
 
-		if ( sv.loadgame )
+		if ( RcCoop_Loadgame( host_client ) )
 		{
 			Q_memset( &currentLevelData, 0, sizeof( currentLevelData ) );
 			gGlobalVariables.pSaveData = &currentLevelData;
@@ -1575,7 +1576,7 @@ void SV_WriteSpawn( sizebuf_t *msg )
 			for ( i = 0; i < currentLevelData.connectionCount; i++ )
 				MSG_WriteString( msg, currentLevelData.levelList[i].mapName );
 
-			sv.loadgame = FALSE;
+			RcCoop_Spawned( host_client );	// ReCoF: was sv.loadgame = FALSE
 			gGlobalVariables.pSaveData = NULL;
 		}
 	}
@@ -1678,6 +1679,11 @@ void SV_New_f( void )
 
 	host_client->hasusrmsgs = TRUE;
 
+	// ReCoF: a player carried through a story co-op transition keeps his restored player: no disconnect and no
+	// connect from the game DLL
+	if ( RcCoop_Carried( host_client ) )
+		goto rc_carried;
+
 	// If the client was connected, tell the game dll to disconnect him/her.
 	if ( ( host_client->active || host_client->spawned ) && host_client->edict )
 		gEntityInterface.pfnClientDisconnect( host_client->edict );
@@ -1696,6 +1702,7 @@ void SV_New_f( void )
 		return;
 	}
 
+rc_carried:
 	MSG_WriteByte( &msg, svc_stufftext );
 	MSG_WriteString( &msg, va( "fullserverinfo \"%s\"\n", Info_Serverinfo() ) );
 
@@ -6243,7 +6250,8 @@ int SV_SpawnServer( qboolean bIsDemo, char *server, char *startspot )
 				continue;
 			}
 
-			gEntityInterface.pfnClientDisconnect( cl->edict );
+			if ( !RcCoop_Carried( cl ) )	// ReCoF: story co-op keeps carried players
+				gEntityInterface.pfnClientDisconnect( cl->edict );
 		}
 	}
 

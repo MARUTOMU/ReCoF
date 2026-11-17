@@ -1947,6 +1947,10 @@
           "source": "src/engine_hw/sv_main.c"
         },
         {
+          "name": "engine/rc_coop",
+          "source": "src/engine_hw/rc_coop.c"
+        },
+        {
           "name": "engine/CL_PARSE",
           "source": "src/engine_hw/CL_PARSE.C"
         },
@@ -3695,6 +3699,9 @@
           "/debug",
           "/pdb:build/link/hw/hw.pdb",
           "/base:0x1D00000",
+          "/MERGE:.rctext=.rcdata",
+          "/MERGE:.rcbss=.rcdata",
+          "/SECTION:.rcdata,ERW",
           "/nodefaultlib:libc.lib",
           "/nodefaultlib:libcp.lib"
         ],
@@ -4045,7 +4052,8 @@
           "bzip2/blocksort",
           "bzip2/huffman",
           "bzip2/crctable",
-          "bzip2/randtable"
+          "bzip2/randtable",
+          "engine/rc_coop"
         ]
       }
     },

@@ -28,6 +28,7 @@
 #include "hashpak.h"
 #include "sv_log.h"
 #include "pmove.h"
+#include "rc_coop.h"	// ReCoF: story co-op
 #include "cdll_int.h"
 #include "vgui_int.h"
 #include "eiface.h"
@@ -3111,7 +3112,8 @@ void Host_Changelevel2_f( void )
 		return;
 	}
 
-	if ( svs.maxclients > 1 )
+	// ReCoF: story co-op carries every player through the transition (rc_coop.c)
+	if ( svs.maxclients > 1 && !RcCoop_AllowChangelevel2( Cmd_Argv( 1 ) ) )
 	{
 		Con_Printf( "changelevel2 <levelname> : not for use with multiplayer games\n" );
 		return;
@@ -3169,6 +3171,7 @@ void Host_Changelevel2_f( void )
 	if ( newUnit && sv_newunit.value )
 		Host_ClearSaveDirectory();
 
+	RcCoop_Inactivate();	// ReCoF: story co-op, the carried clients wait for their spawn as new ones do
 	SV_ActivateServer( 0 );
 }
 
