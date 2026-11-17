@@ -737,7 +737,9 @@ void CBasePlayerItem :: FallInit( void )
 
 int CBasePlayerItem::iMaxAmmo1( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	// ReCoF (B437): the police co-op's limits (one syringe, three clips, no flares) are not story co-op's, which
+	// plays the campaign as single player carries it (charliee1w a4ff718f, cof-coop d3b9035)
+	if ( g_pGameRules && RcPoliceMP() )
 	{
 		if ( FClassnameIs( edict(), "weapon_syringe" ) )
 			return 1;
