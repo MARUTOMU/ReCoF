@@ -62,14 +62,19 @@ void RcCutsceneSkipStop( void )
 	CVAR_SET_FLOAT( "host_framerate", 0 );
 }
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+void RcCoop_SkipScene( bool bSkippable );
+
 static void RcCutsceneSkip( CBasePlayer *pPlayer )
 {
 	CBaseEntity *pCamera = pPlayer->m_hCurrentCamera;
 	const char *pszMap = STRING( gpGlobals->mapname );
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	// ReCoF story co-op: the host skips for the group (his game is the server); a guest's skip would only speed up
+	// his own screen
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !( RcCoop_Story() && ENTINDEX( pPlayer->edict() ) == 1 ) )
 	{
-		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "rc_cutscene_skip works in single player only\n" );
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, RcCoop_Story() ? "In story co-op the host skips scenes\n" : "rc_cutscene_skip works in single player only\n" );
 		return;
 	}
 
@@ -77,6 +82,18 @@ static void RcCutsceneSkip( CBasePlayer *pPlayer )
 	if ( !pCamera || !pPlayer->IsInCutscene() || strstr( pszMap, "game_menu" ) || FStrEq( pszMap, "video_stress_test" ) )
 	{
 		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "No camera scene to skip\n" );
+		return;
+	}
+
+	// story co-op: the host's skip is the group's (the camera's own Enter check, which reads the host's keyboard
+	// wherever he types, is single player only; in co-op his client sends this command for Enter in game)
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	{
+		bool bSkippable = FClassnameIs( pCamera->pev, "trigger_camera" ) && !( pCamera->pev->spawnflags & 1024 );
+		if ( !bSkippable && !CVAR_GET_FLOAT( "sv_cheats" ) )
+			ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "The map keeps this scene from being skipped; with sv_cheats 1, rc_cutscene_skip fast forwards it\n" );
+		else
+			RcCoop_SkipScene( bSkippable );
 		return;
 	}
 

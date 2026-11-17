@@ -7832,6 +7832,7 @@ void SV_Frame( void )
 		SV_Physics();
 		sv.time += host_frametime;
 	}
+	RcCoop_SkipPhysics();	// ReCoF: the story co-op host's scene skip
 
 	SV_QueryMovevarsChanged();
 	SV_RequestMissingResourcesFromClients();

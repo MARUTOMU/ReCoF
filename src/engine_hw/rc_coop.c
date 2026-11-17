@@ -42,6 +42,7 @@ are char arrays here instead.
 #define RC_CARRY_SECONDS	90
 
 static char rc_szCoop[] = "rc_coop";
+static char rc_szSkip[] = "rc_coop_skip";	// hl.dll rc_coop.cpp, G6
 static char rc_szCarry[] = "ReCoF co-op: carrying %i players to %s\n";
 
 static int rc_iCarried[RC_MAX_CLIENTS];	// 1 while this slot's player waits to be restored on the new level
@@ -192,4 +193,35 @@ void RcCoop_Loaded( void )
 int RcCoop_GuestPause( void )
 {
 	return RcCoop_On() && host_client && host_client->netchan.remote_address.type != NA_LOOPBACK;
+}
+
+static double rc_flSkipStep = 0.1;	// a fast forward step, as a 10 fps frame (no floating point literal in code)
+static int rc_iSkipSteps = 19;		// with the frame's own step, about 2 s of game time a frame, as single player's skip
+
+// SV_Frame, after the frame's own physics: in single player a scene skip sets host_framerate 2 and the whole game
+// runs two seconds a frame; in multiplayer Host_FilterTime ignores host_framerate, as jumping realtime would time out
+// every client. In story co-op the server runs extra 0.1 s physics steps instead while hl.dll's rc_coop_skip is on
+// (the host's skip), so game time hurries and realtime, and the clients' connections, do not. hl.dll ends the skip
+// when no player is in a scene any more.
+void RcCoop_SkipPhysics( void )
+{
+	int		i;
+	double	flSave;
+	cvar_t	*v;
+
+	if ( !RcCoop_On() || !SV_IsSimulating() )
+		return;
+	v = Cvar_FindVar( rc_szSkip );
+	if ( !v || *(int *)&v->value == 0 )
+		return;
+	flSave = host_frametime;
+	host_frametime = rc_flSkipStep;
+	for ( i = 0; i < rc_iSkipSteps; i++ )
+	{
+		gGlobalVariables.frametime = host_frametime;
+		SV_Physics();
+		sv.time += host_frametime;
+	}
+	host_frametime = flSave;
+	gGlobalVariables.frametime = host_frametime;
 }

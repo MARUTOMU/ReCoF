@@ -24,8 +24,12 @@ cvar_t	rc_coop_respawn_time = { "rc_coop_respawn_time", "10", FCVAR_SERVER };
 cvar_t	rc_coop_autosave = { "rc_coop_autosave", "1", FCVAR_SERVER };
 // G16: percent more monster health for each player beyond the first (at most double); 0 keeps single player's
 cvar_t	rc_coop_monster_health = { "rc_coop_monster_health", "25", FCVAR_SERVER };
+// G6: 1 while the host's scene skip runs: hw.dll then runs the server fast (rc_coop.c RcCoop_SkipPhysics)
+cvar_t	rc_coop_skip = { "rc_coop_skip", "0" };
 
 extern bool m_bSpawningSimon;	// multiplay_gamerules.cpp: the police co-op's hunting Simon
+
+static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore );
 
 static CHalfLifeStoryCoop *RcCoopRules( void )
 {
@@ -70,6 +74,7 @@ static bool RcCoopSpotFree( const Vector &vecFrom, const Vector &vecSpot, edict_
 
 CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 {
+	CVAR_SET_FLOAT( "rc_coop_skip", 0 );	// G6: a new map or a loaded game does not go on fast forwarding
 	m_bAutosaved = false;
 	m_flLevelStart = -1;
 	for ( int i = 0; i < 33; i++ )
@@ -171,6 +176,23 @@ void CHalfLifeStoryCoop::Think( void )
 	m_bSpawningSimon = false;
 
 	CHalfLifeMultiplay::Think();
+
+	// G6: the skip ends once no player is in a scene any more
+	if ( CVAR_GET_FLOAT( "rc_coop_skip" ) != 0 )
+	{
+		bool bScene = false;
+		for ( int i = 1; i <= gpGlobals->maxClients && !bScene; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && ( (CBasePlayer *)pEnt )->IsInCutscene() )
+				bScene = true;
+		}
+		if ( !bScene )
+		{
+			CVAR_SET_FLOAT( "rc_coop_skip", 0 );
+			g_engfuncs.pfnServerPrint( "ReCoF co-op: the scene is over, normal speed again\n" );
+		}
+	}
 
 	if ( gpGlobals->time >= s_flRcNextKeySync || gpGlobals->time < s_flRcNextKeySync - 2 )
 	{
@@ -277,6 +299,21 @@ void CHalfLifeStoryCoop::Think( void )
 			if ( !bInside )
 				m_bArmed[i] = true;
 		}
+
+		// Cry of Fear makes players who overlap SOLID_NOT until they part (CBasePlayer::PreThink), and triggers do not
+		// touch a non-solid player: one standing in a level exit touches it here instead (the exit's own rules apply)
+		if ( m_bArmed[i] && !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype != MOVETYPE_NOCLIP )
+		{
+			CBaseEntity *pExit = NULL;
+			while ( ( pExit = UTIL_FindEntityByClassname( pExit, "trigger_changelevel" ) ) != NULL )
+			{
+				if ( RcCoopInside( pExit, pEnt ) )
+				{
+					pExit->Touch( pEnt );
+					break;
+				}
+			}
+		}
 	}
 }
 
@@ -309,6 +346,8 @@ static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
 				}
 			}
 		}
+		if ( !bFound )
+			vecSpot = RcCoopAnyFreeSpot( vecBase, pPlayer->edict() );
 		UTIL_SetOrigin( pPlayer, vecSpot );
 		pPlayer->pev->velocity = g_vecZero;
 		for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
@@ -527,6 +566,8 @@ void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
 				}
 			}
 		}
+		if ( !bFound )
+			vecSpot = RcCoopAnyFreeSpot( vecBase, pPlayer->edict() );
 		UTIL_SetOrigin( pPlayer, vecSpot );
 		pPlayer->m_vPreviousOrigin = vecSpot;
 		pPlayer->pev->angles = pMoved->pev->angles;
@@ -656,6 +697,29 @@ bool RcPoliceMP( void )
 	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();
 }
 
+// a spot near vecBase where a standing player's hull fits (no floor or line of sight asked), rings of 8 at 36 to 96
+// units, then up a step; vecBase itself when there is none
+static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
+{
+	static const float s_flRing[4] = { 36, 52, 72, 96 };
+	for ( int up = 0; up < 2; up++ )
+	{
+		for ( int r = 0; r < 4; r++ )
+		{
+			for ( int a = 0; a < 8; a++ )
+			{
+				float yaw = a * 45 * ( M_PI / 180.0 );
+				Vector vecTry = vecBase + Vector( cos( yaw ) * s_flRing[r], sin( yaw ) * s_flRing[r], up * 18 );
+				TraceResult tr;
+				UTIL_TraceHull( vecTry, vecTry, dont_ignore_monsters, human_hull, pIgnore, &tr );
+				if ( !tr.fStartSolid && !tr.fAllSolid )
+					return vecTry;
+			}
+		}
+	}
+	return vecBase;
+}
+
 BOOL CHalfLifeStoryCoop::IsDeathmatch( void )
 {
 	return FALSE;
@@ -780,8 +844,9 @@ static void RcCoopDump( void )
 		}
 		CHalfLifeStoryCoop *pRules = RcCoopRules();
 		if ( pRules && i <= 32 )
-			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d\n", i,
-				pRules->m_flSeen[i], gpGlobals->time, pRules->m_bProtected[i], pRules->m_bArmed[i] ) );
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d, movetype %d, solid %d, flags %x, scene %d\n", i,
+				pRules->m_flSeen[i], gpGlobals->time, pRules->m_bProtected[i], pRules->m_bArmed[i], pPlayer->pev->movetype, pPlayer->pev->solid,
+				pPlayer->pev->flags, pPlayer->IsInCutscene() ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d\n", i, szSlots,
 			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
@@ -798,6 +863,27 @@ static void RcCoopAutosaveState( void )
 			pRules->m_bAutosaved, pRules->m_flLevelStart, gpGlobals->time ) );
 }
 
+// G6: the host skips the scene he is in for the group (rc_cheats.cpp RcCutsceneSkip, sent by his client for Enter in
+// game). The game time of a scene is the world's, so it hurries for everyone: hw.dll runs extra 0.1 s server steps
+// while rc_coop_skip is 1, about two seconds of game time a frame as single player's skip, while realtime and the
+// connections go on as normal. A scene Enter may skip blacks out the screens of the players in it as single player's
+// skip does (SkipScene: their clients set host_framerate 2, which the engine ignores in multiplayer, and the host's
+// game drops the sounds the scene toggles, as single player's); one the map keeps from being skipped (sv_cheats 1)
+// is shown fast. A guest's skip is refused: it would hurry the host's world.
+extern int gmsgSkipScene;
+void RcCoop_SkipScene( bool bSkippable )
+{
+	if ( !RcCoopRules() || CVAR_GET_FLOAT( "rc_coop_skip" ) != 0 )
+		return;
+	CVAR_SET_FLOAT( "rc_coop_skip", 1 );
+	if ( bSkippable )
+	{
+		MESSAGE_BEGIN( MSG_ALL, gmsgSkipScene );
+		MESSAGE_END();
+	}
+	g_engfuncs.pfnServerPrint( "ReCoF co-op: the host skips the scene\n" );
+}
+
 void RcCoop_Init( void )
 {
 	g_engfuncs.pfnAddServerCommand( "rc_coop_dump", RcCoopDump );
@@ -806,4 +892,5 @@ void RcCoop_Init( void )
 	CVAR_REGISTER( &rc_coop_respawn_time );
 	CVAR_REGISTER( &rc_coop_autosave );
 	CVAR_REGISTER( &rc_coop_monster_health );
+	CVAR_REGISTER( &rc_coop_skip );
 }

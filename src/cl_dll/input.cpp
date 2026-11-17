@@ -471,8 +471,20 @@ HUD_Key_Event
 Return 1 to allow engine to process the key, otherwise, act on it as needed
 ============
 */
+bool IsViewEntityActive_guess( void );
+
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
+	// ReCoF story co-op: Enter skips a scene in single player (the server reads the keyboard); in co-op the host's
+	// client asks for it, for Enter in game only (the engine sends no chat or console key here), and the host's skip
+	// is the group's (hl.dll rc_cheats.cpp, rc_coop.cpp RcCoop_SkipScene)
+	if ( down && keynum == 13 && IsViewEntityActive_guess() )
+	{
+		const char *pszCoop = gEngfuncs.PhysInfo_ValueForKey( "rcc" );
+		if ( pszCoop && pszCoop[0] == '1' )
+			gEngfuncs.pfnClientCmd( "rc_cutscene_skip" );
+	}
+
 	if (gViewPort)
 		return gViewPort->KeyInput(down, keynum, pszCurrentBinding);
 	
