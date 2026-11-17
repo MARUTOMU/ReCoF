@@ -3435,6 +3435,11 @@ void CChangeLevel :: UseChangeLevel ( CBaseEntity *pActivator, CBaseEntity *pCal
 	ChangeLevelNow( pActivator );
 }
 
+// ReCoF story co-op (rc_coop.cpp): an exit touched by a player waits for the group, one used fires at once; both
+// bring the players who are not in it to the activator first
+bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTouch );
+static bool s_bRcExitTouch;
+
 void CChangeLevel :: ChangeLevelNow( CBaseEntity *pActivator )
 {
 	edict_t	*pentLandmark;
@@ -3455,6 +3460,10 @@ void CChangeLevel :: ChangeLevelNow( CBaseEntity *pActivator )
 		return;
 
 	pev->dmgtime = gpGlobals->time;
+
+	// ReCoF: story co-op waits for the group at this exit (only a story co-op game takes this path)
+	if ( !RcCoop_ExitReady( this, pActivator, s_bRcExitTouch ) )
+		return;
 
 
 	CBaseEntity *pPlayer = UTIL_FirstPlayerInstance_rc();
@@ -3508,7 +3517,9 @@ void CChangeLevel :: TouchChangeLevel( CBaseEntity *pOther )
 	if (!FClassnameIs(pOther->pev, "player"))
 		return;
 
+	s_bRcExitTouch = true;	// ReCoF: story co-op waits for the group only at exits players walk into
 	ChangeLevelNow( pOther );
+	s_bRcExitTouch = false;
 }
 
 

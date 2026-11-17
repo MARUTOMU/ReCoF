@@ -3831,6 +3831,8 @@ We're about to run this usercmd for the specified player.  We can set up groupin
 This is the time to examine the usercmd for anything extra.  This call happens even if think does not.
 =================
 */
+void RcCoop_PlayerCmd( CBasePlayer *pPlayer );	// ReCoF story co-op (rc_coop.cpp)
+
 void CmdStart( const edict_t *player, const struct usercmd_s *cmd, unsigned int random_seed )
 {
 //	ALERT(at_console, "got usercmd with lightlevel %f\n", cmd->viewangles[2]);
@@ -3840,6 +3842,8 @@ void CmdStart( const edict_t *player, const struct usercmd_s *cmd, unsigned int 
 
 	if( !pl )
 		return;
+
+	RcCoop_PlayerCmd( pl );	// ReCoF story co-op: this player's client runs (rc_coop.cpp)
 
 	pl->m_iNew16a_guess = cmd->is_donator;
 

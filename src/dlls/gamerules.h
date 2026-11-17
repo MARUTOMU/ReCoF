@@ -398,6 +398,14 @@ public:
 	virtual int PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget );
 	virtual BOOL FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity *pAttacker );
 	virtual edict_t *GetPlayerSpawnSpot( CBasePlayer *pPlayer );
+	virtual void Think( void );
+	virtual void PlayerThink( CBasePlayer *pPlayer );
+
+	CHalfLifeStoryCoop();
+	float m_flSeen[33];	// when each player's client last ran a command: 0 while it loads the level
+	bool m_bProtected[33];	// G3: made untouchable while loading
+	float m_flOldTakeDamage[33];
+	bool m_bArmed[33];	// G2: has been outside every level exit since the level began
 };
 
 extern DLL_GLOBAL CGameRules*	g_pGameRules;
