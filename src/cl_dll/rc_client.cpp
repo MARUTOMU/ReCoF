@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <windows.h>
 #include "rc_bones.h"	// ReCoF (B339)
+#include "rc_steamnet.h"	// co-op spike
+#include <stdarg.h>
 
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
@@ -386,6 +388,144 @@ void RcPrefetch_Shutdown( void )
 	s_hPrefetch = NULL;
 }
 
+// ReCoF co-op spike: the engine's UDP through Steam's relay network (rc_steamnet.cpp). rc_coop_host asks Steam for an
+// address for this listen server, rc_coop_join <169.254.x.x:port> connects to a friend's; "relay" turns off direct
+// routes, as between two homes. Nothing runs until one of them is typed.
+static void RcCoopPrint( const char *fmt, ... )
+{
+	char buf[512];
+	va_list ap;
+	va_start( ap, fmt );
+	_vsnprintf( buf, sizeof( buf ) - 1, fmt, ap );
+	va_end( ap );
+	buf[sizeof( buf ) - 1] = 0;
+	gEngfuncs.Con_Printf( "%s", buf );
+}
+
+static int RcCoopHasArg( const char *pszArg )
+{
+	for ( int i = 1; i < gEngfuncs.Cmd_Argc(); i++ )
+	{
+		if ( !stricmp( gEngfuncs.Cmd_Argv( i ), pszArg ) )
+			return 1;
+	}
+	return 0;
+}
+
+static void RcCoopHost_f( void )
+{
+	int port = (int)gEngfuncs.pfnGetCvarFloat( "hostport" );
+	if ( port <= 0 )
+		port = (int)gEngfuncs.pfnGetCvarFloat( "port" );
+	if ( port <= 0 )
+		port = 27015;
+	RcSteamNet_Host( port, RcCoopHasArg( "relay" ) != 0, !RcCoopHasArg( "nomap" ), RcCoopPrint );
+}
+
+static char s_szCoopConnect[96];
+static DWORD s_dwCoopConnectAt;
+
+static void RcCoopJoin_f( void )
+{
+	if ( gEngfuncs.Cmd_Argc() < 2 )
+	{
+		RcCoopPrint( "usage: rc_coop_join <169.254.x.x:port> [relay]\n" );
+		return;
+	}
+	// the engine's tokenizer splits "a.b.c.d:port" at the colon into three arguments: join them back
+	char addr[64];
+	addr[0] = 0;
+	for ( int i = 1; i < gEngfuncs.Cmd_Argc(); i++ )
+	{
+		const char *arg = gEngfuncs.Cmd_Argv( i );
+		if ( !stricmp( arg, "relay" ) || !stricmp( arg, "nomap" ) )
+			continue;
+		strncat( addr, arg, sizeof( addr ) - 1 - strlen( addr ) );
+	}
+	if ( RcSteamNet_Join( addr, RcCoopHasArg( "relay" ) != 0, RcCoopPrint ) )
+	{
+		// connect from HUD_Frame in 3 s: on the command line this runs before the menu map that InitInput queues,
+		// which would cancel the connect
+		_snprintf( s_szCoopConnect, sizeof( s_szCoopConnect ) - 1, "connect %s\n", addr );
+		s_szCoopConnect[sizeof( s_szCoopConnect ) - 1] = 0;
+		s_dwCoopConnectAt = GetTickCount() + 3000;
+	}
+}
+
+static void RcCoopStatus_f( void )
+{
+	RcSteamNet_Status( RcCoopPrint );
+}
+
+// test runs: rc_coop_autotest <seconds> prints the counters and takes a screenshot halfway, then quits
+static DWORD s_dwCoopShot, s_dwCoopQuit;
+
+static void RcCoopAutotest_f( void )
+{
+	int sec = gEngfuncs.Cmd_Argc() > 1 ? atoi( gEngfuncs.Cmd_Argv( 1 ) ) : 0;
+	if ( sec <= 0 )
+	{
+		s_dwCoopShot = s_dwCoopQuit = 0;
+		return;
+	}
+	s_dwCoopShot = GetTickCount() + (DWORD)sec * 500 + 1;
+	s_dwCoopQuit = GetTickCount() + (DWORD)sec * 1000 + 1;
+}
+
+// test runs only (cof.exe started with -rccmdfile): once a second, the console commands written to rc_cmd.txt next to
+// cof.exe run and the file is deleted, so a test script can drive a game it cannot type into
+static void RcCoopCmdFile( void )
+{
+	static int s_iOn = -1;
+	static DWORD s_dwNext;
+	if ( s_iOn < 0 )
+		s_iOn = gEngfuncs.CheckParm( "-rccmdfile", NULL ) ? 1 : 0;
+	if ( !s_iOn || (long)( GetTickCount() - s_dwNext ) < 0 )
+		return;
+	s_dwNext = GetTickCount() + 1000;
+
+	char path[MAX_PATH];
+	GetModuleFileNameA( NULL, path, sizeof( path ) );
+	char *slash = strrchr( path, '\\' );
+	if ( !slash )
+		return;
+	strcpy( slash + 1, "rc_cmd.txt" );
+	FILE *f = fopen( path, "rb" );
+	if ( !f )
+		return;
+	char buf[2048];
+	int n = (int)fread( buf, 1, sizeof( buf ) - 2, f );
+	fclose( f );
+	DeleteFileA( path );
+	if ( n <= 0 )
+		return;
+	if ( buf[n - 1] != '\n' )
+		buf[n++] = '\n';
+	buf[n] = 0;
+	gEngfuncs.pfnClientCmd( buf );
+}
+
+void RcCoop_Frame( void )
+{
+	RcCoopCmdFile();
+	RcSteamNet_Frame();
+	if ( s_dwCoopConnectAt && (long)( GetTickCount() - s_dwCoopConnectAt ) >= 0 )
+	{
+		s_dwCoopConnectAt = 0;
+		gEngfuncs.pfnClientCmd( s_szCoopConnect );
+	}
+	if ( s_dwCoopShot && (long)( GetTickCount() - s_dwCoopShot ) >= 0 )
+	{
+		s_dwCoopShot = 0;
+		gEngfuncs.pfnClientCmd( "rc_coop_status;status;screenshot\n" );
+	}
+	if ( s_dwCoopQuit && (long)( GetTickCount() - s_dwCoopQuit ) >= 0 )
+	{
+		s_dwCoopQuit = 0;
+		gEngfuncs.pfnClientCmd( "rc_coop_status;quit\n" );
+	}
+}
+
 void RcClient_Init( void )
 {
 	g_RcAutosplit.version = 1;
@@ -414,6 +554,13 @@ void RcClient_Init( void )
 	RcPractice_Init();	// rc_practice.cpp (B317): wallhack, novis, disable_vgui
 	RcPrefetch_Start();	// B363: the files the HUD reads during play, once in the background
 	RcMusic_Init();		// mp3.cpp (B364): rc_music_thread
+	// story co-op on the next map with more than one slot (hl.dll reads it by name; registered here too so that
+	// +rc_coop 1 on the command line works before the first map loads hl.dll)
+	gEngfuncs.pfnRegisterVariable( "rc_coop", "0", 0 );
+	gEngfuncs.pfnAddCommand( "rc_coop_host", RcCoopHost_f );	// co-op spike: Steam relay networking
+	gEngfuncs.pfnAddCommand( "rc_coop_join", RcCoopJoin_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_status", RcCoopStatus_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_autotest", RcCoopAutotest_f );
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect
 	// request, and again when it changes); servers take ReCoF players only (hl.dll ClientConnect, rc_require_recof)

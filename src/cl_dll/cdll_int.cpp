@@ -279,6 +279,7 @@ void DLLEXPORT HUD_Frame( double time )
 	RcDiscord_Frame();	// ReCoF (B316): Discord Rich Presence
 	RcPractice_Frame();	// ReCoF (B317): rc_novis
 	RcUserinfoFrame();	// ReCoF (B328): iron sights and subtitle language for servers
+	RcCoop_Frame();	// ReCoF co-op spike: Steam relay networking
 
 	RcVsyncFrame();	// ReCoF (B304)
 	RcSpeedrun_Frame();	// ReCoF (B310, B312): the run timer and the information panel

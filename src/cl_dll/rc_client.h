@@ -37,6 +37,9 @@ void RcPrefetch_Map( const char *pszLevel );	// B365: a map is loading (from CHu
 // mp3.cpp (B364): registers rc_music_thread (from RcClient_Init)
 void RcMusic_Init( void );
 
+// co-op spike: rc_steamnet.cpp's FakeIP poll and the rc_coop_autotest timer (from HUD_Frame)
+void RcCoop_Frame( void );
+
 // the run timer's view of the game: the engine's pause flag, the player's health and the map drawn (from
 // V_CalcRefdef), a map loading (from CHud::VidInit)
 void RcSpeedrun_View( int paused, int health );
