@@ -5849,6 +5849,18 @@ void CCofBlur::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useT
 	{
 		pPlayer->m_iBlurActive = 0;
 	}
+
+	// ReCoF story co-op (B436): the blur is the group's: the on and the off can come from different players, and
+	// one kept the blur for good (c_nightmare into c_start, charliee1w f92451c0); every player takes the new value
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() && pEnt != pPlayer )
+				( (CBasePlayer *)pEnt )->m_iBlurActive = pPlayer->m_iBlurActive;
+		}
+	}
 }
 
 //=========================================================
