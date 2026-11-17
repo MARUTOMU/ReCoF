@@ -734,9 +734,30 @@ void RcCoopMenu_Show( bool bShow )
 		s_pRcItemButton->setVisible( bShow );
 }
 
+// B408: rc_coop_lobby, the game menu's Story co-op: the lobby, on the main menu (its map c_game_menu1, which the
+// game menu's 3D menu loads; from a game or the game menu's own screen it is loaded first)
+static bool s_bRcLobbyOnMenu;
+
+void RcCoopMenu_Lobby( void )
+{
+	const char *pszLevel = gEngfuncs.pfnGetLevelName();
+	if ( s_pRcMenu && pszLevel && strstr( pszLevel, "game_menu" ) )
+	{
+		RcCoopMenu_Open();
+		return;
+	}
+	s_bRcLobbyOnMenu = true;
+	gEngfuncs.pfnClientCmd( "disconnect;maxplayers 1;deathmatch 0;map c_game_menu1\n" );
+}
+
 // CGameMenu::solve, each frame: the red picture and the shake under the cursor, as the menu's other entries
 void RcCoopMenu_Solve( void )
 {
+	if ( s_bRcLobbyOnMenu )
+	{
+		s_bRcLobbyOnMenu = false;
+		RcCoopMenu_Open();
+	}
 	// B406: Steam brought this player into a lobby (an invite, Join Game, +connect_lobby): the menu shows it
 	if ( RcLobby_WantPanel() )
 	{

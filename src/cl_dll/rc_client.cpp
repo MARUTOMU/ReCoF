@@ -528,6 +528,7 @@ static void RcOptions_f( void )
 	gEngfuncs.pfnServerCmd( "optionshack 2" );
 }
 void RcCoopMenu_LaunchOptions( void );	// B395
+void RcCoopMenu_Lobby( void );	// B408
 
 // B393: rc_coop_continue <save>: the host's story co-op game from a co-op save (the main menu's Continue), as
 // rc_coop_start sets it up; the save brings its own settings (B392)
@@ -783,6 +784,7 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_leave", RcCoopLeave_f );
 	gEngfuncs.pfnAddCommand( "connect_lobby", RcConnectLobby_f );	// B406
+	gEngfuncs.pfnAddCommand( "rc_coop_lobby", RcCoopMenu_Lobby );	// B408
 	gEngfuncs.pfnAddCommand( "rc_lobby", RcLobby_f );
 	RcSteamNet_InitCallbacks( RcCoopSteamJoin );	// Join Game and invites from Steam
 
