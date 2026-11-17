@@ -2,7 +2,7 @@
 
 Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
 
-The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B380 in [bugs.md](bugs.md).
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B382 in [bugs.md](bugs.md).
 
 ## Playing
 
@@ -30,6 +30,9 @@ Every player needs the same ReCoF build and Steam running.
 - **Pause.** Only the host pauses (his menu pauses everyone); a guest's menu pauses nobody.
 - **Simon, not a police officer.** Simon's voice, hints, dual wield, the slow walk at low health and the map's own sky, as in single player.
 - **A team wipe** brings everyone back at the level's start with their things, without restarting the map.
+- **Story effects for everyone.** Objectives, on-screen texts, grey fades, rain changes and the phone going dead reach every player (the music already did).
+- **Late joiners** come in with the weapons of the teammate they appear next to; the group's keys follow by themselves.
+- **Harder with more players.** Monsters get 25% more health for each player beyond the first (at most double), in place of the police co-op's damage multiplier; the police co-op's hunting monster Simon never appears.
 
 ## Settings (host)
 
@@ -39,6 +42,7 @@ Every player needs the same ReCoF build and Steam running.
 | `rc_coop_exit_wait` | 60 | seconds an exit waits for the group; 0 changes level at once |
 | `rc_coop_respawn_time` | 10 | seconds before a dead player comes back with his things; 0 keeps Cry of Fear's rule |
 | `rc_coop_autosave` | 1 | saves `coop_auto` once everyone is in on each new level |
+| `rc_coop_monster_health` | 25 | percent more monster health for each player beyond the first, at most double; 0 for single player's |
 
 These are server settings: they live in the host's game, so the host's value applies to everyone and a guest cannot change it. The same holds for the movement settings (`rc_bhopcap`, `rc_hlmovement`, `rc_ducktap`), which already reach every player's prediction.
 
@@ -48,7 +52,7 @@ These are server settings: they live in the host's game, so the host's value app
 - A load menu for co-op saves, and loading the last save after a team wipe.
 - The menu: Cry of Fear's main menu is made of pictures, so Host and Invite buttons need their own; for now the console commands and the `+rc_coop_start` launch option.
 - Starting ReCoF instead of retail Cry of Fear when a friend accepts an invite with the game closed (Steam launch options, decision 11).
-- The 28 maps that need a rule of their own (bosses, vehicles, endings) and the places where the story only looks at the first player (G7).
+- The 28 maps that need a rule of their own (bosses, vehicles, endings) and the rest of the places where the story only looks at the first player (G7): bosses, puzzles, sounds played "from the player", the look-at scenes.
 - Simon's single-player behaviour in co-op (the police co-op branches), host-only pause, the voice chat, presets.
 
 ## Tested
