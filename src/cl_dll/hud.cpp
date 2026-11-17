@@ -888,14 +888,17 @@ void CHud :: Init( void )
 
 	CVAR_CREATE( "dev_commentary", "0", FCVAR_ARCHIVE );
 	m_pZoomSpeed = gEngfuncs.pfnRegisterVariable( "cl_zoomspeed","100", 0 );
-	CVAR_CREATE( "hud_classautokill", "1", FCVAR_ARCHIVE | FCVAR_USERINFO );		// controls whether or not to suicide immediately on TF class switch
+	// ReCoF (B416): these six were also userinfo keys (FCVAR_USERINFO), which no server reads (only this client's
+	// renderer and VGUI read them), and with them the 256-character userinfo had no room left: the engine dropped the
+	// longer _recof of 0.2.3-beta.10 ("Info string length exceeded") and ReCoF servers turned the player away
+	CVAR_CREATE( "hud_classautokill", "1", FCVAR_ARCHIVE );		// controls whether or not to suicide immediately on TF class switch
 	CVAR_CREATE( "hud_takesshots", "0", FCVAR_ARCHIVE );		// controls whether or not to automatically take screenshots at the end of a round
-	CVAR_CREATE( "brightvalue", "0.5", FCVAR_ARCHIVE | FCVAR_USERINFO );
-	CVAR_CREATE( "skybrightvalue", "0.1", FCVAR_ARCHIVE | FCVAR_USERINFO );
+	CVAR_CREATE( "brightvalue", "0.5", FCVAR_ARCHIVE );
+	CVAR_CREATE( "skybrightvalue", "0.1", FCVAR_ARCHIVE );
 	CVAR_CREATE( "goro", "0", FCVAR_ARCHIVE );
-	CVAR_CREATE( "skybrightcolourr", "0.0", FCVAR_ARCHIVE | FCVAR_USERINFO );
-	CVAR_CREATE( "skybrightcolourg", "0.0", FCVAR_ARCHIVE | FCVAR_USERINFO );
-	CVAR_CREATE( "skybrightcolourb", "0.0", FCVAR_ARCHIVE | FCVAR_USERINFO );
+	CVAR_CREATE( "skybrightcolourr", "0.0", FCVAR_ARCHIVE );
+	CVAR_CREATE( "skybrightcolourg", "0.0", FCVAR_ARCHIVE );
+	CVAR_CREATE( "skybrightcolourb", "0.0", FCVAR_ARCHIVE );
 	iGoro_guess = CVAR_GET_FLOAT( "goro" );
 
 	HOOK_MESSAGE( PlayMP3 );
