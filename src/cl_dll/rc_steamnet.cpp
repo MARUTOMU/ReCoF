@@ -389,10 +389,13 @@ bool RcLobby_Create( void )
 	return true;
 }
 
+void RcCoopMenu_LeaveForLobby( unsigned long long ulLobby );	// B421, rc_coopmenu.cpp
+
 void RcLobby_Join( unsigned long long ulLobby )
 {
 	if ( !ulLobby || !RcMM() )
 		return;
+	RcCoopMenu_LeaveForLobby( ulLobby );	// B421: from a game, to the menu where the lobby opens
 	if ( s_ulLobby == ulLobby )
 	{
 		s_bLobbyWantPanel = true;
@@ -438,6 +441,12 @@ unsigned long long RcLobby_Id( void )
 const char *RcLobby_Note( void )
 {
 	return s_szLobbyNote;
+}
+
+// B421: this player is in the lobby's own game (he made the lobby, or followed its connect value)
+bool RcLobby_InItsGame( void )
+{
+	return s_ulLobby && ( RcLobby_Owner() || s_szLobbyJoined[0] );
 }
 
 bool RcLobby_WantPanel( void )

@@ -1020,6 +1020,20 @@ void RcCoopMenu_Lobby( void )
 	gEngfuncs.pfnClientCmd( "disconnect;maxplayers 1;deathmatch 0;map c_game_menu1\n" );
 }
 
+// B421: Steam brought this player into a lobby (an invite accepted, Join Game in the friends list, connect_lobby)
+// while he plays: the lobby opened only once he went back to the menu by himself. He leaves that game for the menu,
+// which opens the lobby (RcCoopMenu_Solve below, the map's own menus closed by the map change); in the lobby's own
+// game already, he stays
+void RcCoopMenu_LeaveForLobby( unsigned long long ulLobby )
+{
+	const char *pszLevel = gEngfuncs.pfnGetLevelName();
+	if ( !pszLevel || !pszLevel[0] || strstr( pszLevel, "game_menu" ) )
+		return;	// on the menu, or no game: the menu opens the lobby itself
+	if ( ulLobby == RcLobby_Id() && RcLobby_InItsGame() )
+		return;
+	gEngfuncs.pfnClientCmd( "disconnect;maxplayers 1;deathmatch 0;map c_game_menu1\n" );
+}
+
 // CGameMenu::solve, each frame: the red picture and the shake under the cursor, as the menu's other entries
 void RcCoopMenu_Solve( void )
 {

@@ -36,6 +36,7 @@ void RcSteamNet_Pump( void );
 enum { RCLOBBY_NONE, RCLOBBY_ASKED, RCLOBBY_IN };
 bool RcLobby_Create( void );
 void RcLobby_Join( unsigned long long ulLobby );
+bool RcLobby_InItsGame( void );	// B421
 void RcLobby_Leave( void );
 int RcLobby_State( void );
 const char *RcLobby_Note( void );
