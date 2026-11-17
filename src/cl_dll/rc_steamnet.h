@@ -17,6 +17,9 @@ void RcSteamNet_Frame( void );
 
 void RcSteamNet_Status( RcSteamPrint_t pfnPrint );
 
+// this game joined a host through Steam (rc_coop_join)
+int RcSteamNet_Joined( void );
+
 // Steam's invite list for the host's game (rc_coop_invite)
 void RcSteamNet_Invite( RcSteamPrint_t pfnPrint );
 

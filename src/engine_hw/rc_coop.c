@@ -127,6 +127,7 @@ void RcCoop_Spawned( client_t *cl )
 			return;
 	}
 	sv.loadgame = FALSE;
+	rc_bTransition = 0;
 }
 
 // Host_Changelevel2_f, after the players were restored and before SV_ActivateServer sends "reconnect": a carried
@@ -151,4 +152,37 @@ void RcCoop_Inactivate( void )
 		SZ_Clear( &cl->netchan.message );
 		SZ_Clear( &cl->datagram );
 	}
+}
+
+// Host_ValidSave: the story co-op host may save the party's game (every player slot is in the save)
+int RcCoop_Enabled( void )
+{
+	return RcCoop_On();
+}
+
+static char rc_szLoaded[] = "ReCoF co-op: %i saved players wait for their players to come back\n";
+
+// Host_Load, after Host_Map loaded the save: LoadGamestate created every saved player, but the load dropped every
+// client and SV_WriteSpawn would keep a restored player only for the first to spawn. Each slot with a saved player is
+// carried, as on a level change, so the client that takes it back keeps it (the host's first; the others in the order
+// they come back, within 90 s)
+void RcCoop_Loaded( void )
+{
+	int		i, n;
+	edict_t	*ent;
+
+	if ( !RcCoop_On() || !sv.loadgame )
+		return;
+	n = 0;
+	for ( i = 0; i < svs.maxclients && i < RC_MAX_CLIENTS; i++ )
+	{
+		ent = EDICT_NUM( i + 1 );
+		rc_iCarried[i] = ( ent && !ent->free && ent->pvPrivateData ) ? 1 : 0;
+		n += rc_iCarried[i];
+	}
+	if ( !n )
+		return;
+	rc_bTransition = 1;
+	rc_flTransition = realtime;
+	Con_Printf( rc_szLoaded, n );
 }

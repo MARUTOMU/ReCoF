@@ -1590,7 +1590,8 @@ int Host_ValidSave( void )
 	// ReCoF (B361): in Half-Life movement (the player's physinfo "hlm", which pm_shared moves by) the game saves
 	// anywhere, as Half-Life does: save <name>, and the quick save. BunnymodXT finds this function by the test of
 	// cmd_source above, which stays as it was
-	if ( !g_bSaveAllowed_guess && !( sv.active && svs.clients && Q_atoi( Info_ValueForKey( svs.clients->physinfo, rc_szHLMovementKey ) ) ) )
+	// ReCoF: the story co-op host saves the party's game too (rc_coop.c)
+	if ( !g_bSaveAllowed_guess && !( sv.active && svs.clients && Q_atoi( Info_ValueForKey( svs.clients->physinfo, rc_szHLMovementKey ) ) ) && !RcCoop_Enabled() )
 	{
 		Con_Printf( "Use save points to save your progress.\n" );
 		return 0;
@@ -1602,7 +1603,7 @@ int Host_ValidSave( void )
 		return 0;
 	}
 
-	if ( svs.maxclients != 1 )
+	if ( svs.maxclients != 1 && !RcCoop_Enabled() )
 	{
 		Con_Printf( "Can't save multiplayer games.\n" );
 		return 0;
@@ -2102,6 +2103,7 @@ int Host_Load( const char *pName )
 	_snprintf( name, sizeof( name ), "map %s\n", gameHeader.mapName );
 	CL_Disconnect();
 	Host_Map( false, name, gameHeader.mapName, true );
+	RcCoop_Loaded();	// ReCoF: story co-op, each saved player waits for a client
 
 	return 1;
 }

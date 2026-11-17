@@ -22,6 +22,7 @@
 #include <windows.h>
 #include "rc_bones.h"	// ReCoF (B339)
 #include "rc_steamnet.h"	// co-op spike
+#include "net_api.h"
 #include <stdarg.h>
 
 #ifndef M_PI
@@ -424,6 +425,8 @@ static void RcCoopHost_f( void )
 
 static char s_szCoopConnect[96];
 static DWORD s_dwCoopConnectAt;
+static int s_bCoopWasIn, s_iCoopRetries, s_bCoopLeft;	// the guest's reconnect (RcCoopReconnect)
+static DWORD s_dwCoopRetryAt;
 
 static void RcCoopJoin_f( void )
 {
@@ -449,6 +452,9 @@ static void RcCoopJoin_f( void )
 		_snprintf( s_szCoopConnect, sizeof( s_szCoopConnect ) - 1, "connect %s\n", addr );
 		s_szCoopConnect[sizeof( s_szCoopConnect ) - 1] = 0;
 		s_dwCoopConnectAt = GetTickCount() + 3000;
+		s_bCoopLeft = 0;
+		s_bCoopWasIn = 0;
+		s_iCoopRetries = 0;
 	}
 }
 
@@ -536,11 +542,51 @@ static void RcCoopCmdFile( void )
 	gEngfuncs.pfnClientCmd( buf );
 }
 
+// a story co-op guest the host dropped (a load of a co-op save, a map restart) connects again: up to 10 tries, 12 s
+// apart, while this game is not connected to a 169.254 (Steam) address; rc_coop_leave stops it
+static void RcCoopLeave_f( void )
+{
+	s_bCoopLeft = 1;
+	gEngfuncs.pfnClientCmd( "disconnect\n" );
+	RcCoopPrint( "ReCoF co-op: left the game; rc_coop_join to come back\n" );
+}
+
+static void RcCoopReconnect( void )
+{
+	if ( !RcSteamNet_Joined() || s_bCoopLeft || !s_szCoopConnect[0] || s_dwCoopConnectAt )
+		return;
+	net_status_t st;
+	memset( &st, 0, sizeof( st ) );
+	gEngfuncs.pNetAPI->Status( &st );
+	bool bIn = st.connected && st.remote_address.ip[0] == 169 && st.remote_address.ip[1] == 254;
+	if ( bIn )
+	{
+		s_bCoopWasIn = 1;
+		s_iCoopRetries = 0;
+		s_dwCoopRetryAt = 0;
+		return;
+	}
+	if ( !s_bCoopWasIn || s_iCoopRetries >= 10 )
+		return;
+	if ( !s_dwCoopRetryAt )
+	{
+		s_dwCoopRetryAt = GetTickCount() + 3000;
+		return;
+	}
+	if ( (long)( GetTickCount() - s_dwCoopRetryAt ) < 0 )
+		return;
+	s_iCoopRetries++;
+	s_dwCoopRetryAt = GetTickCount() + 12000;
+	RcCoopPrint( "ReCoF co-op: the host dropped this game, connecting again (%d)\n", s_iCoopRetries );
+	gEngfuncs.pfnClientCmd( s_szCoopConnect );
+}
+
 void RcCoop_Frame( void )
 {
 	RcCoopCmdFile();
 	RcSteamNet_Frame();
 	RcSteamNet_Pump();
+	RcCoopReconnect();
 	if ( s_dwCoopConnectAt && (long)( GetTickCount() - s_dwCoopConnectAt ) >= 0 )
 	{
 		s_dwCoopConnectAt = 0;
@@ -595,6 +641,7 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_autotest", RcCoopAutotest_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_start", RcCoopStart_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
+	gEngfuncs.pfnAddCommand( "rc_coop_leave", RcCoopLeave_f );
 	RcSteamNet_InitCallbacks( RcCoopSteamJoin );	// Join Game and invites from Steam
 
 	// B319: tells a multiplayer server this is ReCoF, through the private userinfo key _recof (sent with the connect

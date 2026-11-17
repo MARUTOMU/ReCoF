@@ -508,6 +508,11 @@ void RcSteamNet_Frame( void )
 	}
 }
 
+int RcSteamNet_Joined( void )
+{
+	return s_iMode == RCSN_JOIN;
+}
+
 void RcSteamNet_Status( RcSteamPrint_t pfnPrint )
 {
 	static const char *s_szMode[3] = { "off", "host", "join" };
