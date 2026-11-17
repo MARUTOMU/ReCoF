@@ -11348,6 +11348,8 @@ void CBasePlayer::ViewPunch( float p, float y, float r )
 
 
 
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF story co-op (rc_coop.cpp)
+
 int CBasePlayer::InventoryAddCheck( CBaseEntity *pEntity )
 {
 	if ( !strncmp( STRING( pEntity->pev->classname ), "weapon_", 7 ) )
@@ -11993,7 +11995,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pDoor->m_sLockedBy ) ) )
 				{
 					if ( !( pDoor->pev->spawnflags & 1 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pDoor->UnlockDoor( this );
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
@@ -12035,7 +12041,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pButton->m_iszLockedBy ) ) )
 				{
 					if ( !( pButton->pev->spawnflags & 1024 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pButton->UnlockDoor();
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
@@ -12066,7 +12076,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pDoor->m_sLockedBy ) ) )
 				{
 					if ( !( pDoor->pev->spawnflags & 1 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pDoor->UnlockDoor( this );
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
@@ -12108,7 +12122,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pButton->m_iszLockedBy ) ) )
 				{
 					if ( !( pButton->pev->spawnflags & 1024 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pButton->UnlockDoor();
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );

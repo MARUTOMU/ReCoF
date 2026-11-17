@@ -44,6 +44,8 @@ class CKeyitemModel : public CBaseAnimating
 
 LINK_ENTITY_TO_CLASS( item_key, CKeyitemModel );
 
+void RcCoop_KeyTaken( CBaseEntity *pKey );	// ReCoF story co-op (rc_coop.cpp)
+
 TYPEDESCRIPTION CKeyitemModel::m_SaveData[] =
 {
 	DEFINE_FIELD( CKeyitemModel, m_useTime, FIELD_TIME ),
@@ -228,6 +230,7 @@ void CKeyitemModel::KeyitemUse( CBaseEntity *pActivator, CBaseEntity *pCaller, U
 
 		if ( pPlayer->InventoryAddCheck( this ) )
 		{
+			RcCoop_KeyTaken( this );	// ReCoF story co-op: the group's (rc_coop.cpp)
 			if ( ( pev->spawnflags & 1 ) && CVAR_GET_FLOAT( "difficulty" ) == 4 )
 				pPlayer->m_iTapes = 5;
 

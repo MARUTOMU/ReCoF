@@ -104,9 +104,18 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 		pRules->m_flSeen[i] = gpGlobals->time > 0 ? gpGlobals->time : 0.001;
 }
 
+static void RcCoopSyncKeys( void );
+static float s_flRcNextKeySync;
+
 void CHalfLifeStoryCoop::Think( void )
 {
 	CHalfLifeMultiplay::Think();
+
+	if ( gpGlobals->time >= s_flRcNextKeySync || gpGlobals->time < s_flRcNextKeySync - 2 )
+	{
+		s_flRcNextKeySync = gpGlobals->time + 1;
+		RcCoopSyncKeys();
+	}
 
 	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
 	{
@@ -218,6 +227,101 @@ static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
 				UTIL_SetOrigin( pItem, vecSpot );
 		}
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s brought to the exit\n", STRING( pPlayer->pev->netname ) ) );
+	}
+}
+
+// G9: the item_key pickups (keys, fuses, story objects) belong to the group: each living player carries as many of
+// each as the group picked up and has not used, so any of them can open the lock; a lock that takes one takes it from
+// everyone. Kept across level changes with the players' inventories.
+#define RC_TEAM_KEYS	16
+static string_t s_iszKeyName[RC_TEAM_KEYS], s_iszKeyModel[RC_TEAM_KEYS], s_iszKeyClass[RC_TEAM_KEYS];
+static int s_iKeyCount[RC_TEAM_KEYS];
+
+static int RcCoopKeySlot( const char *pszName )
+{
+	for ( int k = 0; k < RC_TEAM_KEYS; k++ )
+	{
+		if ( s_iszKeyName[k] && !strcmp( STRING( s_iszKeyName[k] ), pszName ) )
+			return k;
+	}
+	return -1;
+}
+
+static int RcCoopCopies( CBasePlayer *pPlayer, const char *pszName )
+{
+	int n = 0, last = pPlayer->m_bThreeSlots ? 3 : 6;
+	for ( int s = 1; s <= last; s++ )
+	{
+		if ( pPlayer->inventorySlot[s] && FStrEq( STRING( pPlayer->inventorySlot[s] ), pszName ) )
+			n++;
+	}
+	return n;
+}
+
+// CKeyitemModel::Use, after the item went into the taker's inventory
+void RcCoop_KeyTaken( CBaseEntity *pKey )
+{
+	if ( !RcCoopRules() || FStringNull( pKey->pev->message ) )
+		return;
+	int k = RcCoopKeySlot( STRING( pKey->pev->message ) );
+	if ( k < 0 )
+	{
+		for ( k = 0; k < RC_TEAM_KEYS && s_iszKeyName[k]; k++ )
+			;
+		if ( k >= RC_TEAM_KEYS )
+			return;
+		s_iszKeyName[k] = pKey->pev->message;
+		s_iszKeyModel[k] = pKey->pev->model;
+		s_iszKeyClass[k] = pKey->pev->classname;
+		s_iKeyCount[k] = 0;
+	}
+	s_iKeyCount[k]++;
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is the group's now (%d)\n", STRING( s_iszKeyName[k] ), s_iKeyCount[k] ) );
+}
+
+// CCofYesNo took the item from the player who used it: one fewer for the group, and from everyone
+void RcCoop_KeyUsed( const char *pszItem )
+{
+	if ( !RcCoopRules() )
+		return;
+	int k = RcCoopKeySlot( pszItem );
+	if ( k < 0 )
+		return;
+	if ( s_iKeyCount[k] > 0 )
+		s_iKeyCount[k]--;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() )
+			continue;
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		while ( RcCoopCopies( pPlayer, pszItem ) > s_iKeyCount[k] )
+			pPlayer->HasItemInSlot( (char *)pszItem, true );
+	}
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s used, the group has %d\n", pszItem, s_iKeyCount[k] ) );
+	if ( s_iKeyCount[k] == 0 )
+		s_iszKeyName[k] = 0;
+}
+
+// every second from Think: each living player gets the group's items he lacks (a newcomer, a respawn, the others
+// after a pickup), if his inventory has room
+static void RcCoopSyncKeys( void )
+{
+	for ( int k = 0; k < RC_TEAM_KEYS; k++ )
+	{
+		if ( !s_iszKeyName[k] || s_iKeyCount[k] <= 0 )
+			continue;
+		const char *pszName = STRING( s_iszKeyName[k] );
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !RcCoopPresent( pEnt ) )
+				continue;
+			CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+			int n = RcCoopCopies( pPlayer, pszName );
+			while ( n < s_iKeyCount[k] && pPlayer->AddItemToInventory( s_iszKeyName[k], s_iszKeyModel[k], s_iszKeyClass[k] ) )
+				n++;
+		}
 	}
 }
 
@@ -405,6 +509,20 @@ static void RcCoopDump( void )
 				nItems++;
 			}
 		}
+		char szSlots[256];
+		szSlots[0] = 0;
+		for ( int s = 1; s <= 6; s++ )
+		{
+			const char *pszSlot = pPlayer->inventorySlot[s] ? STRING( pPlayer->inventorySlot[s] ) : "";
+			const char *pszShort = strrchr( pszSlot, '/' );
+			pszShort = pszShort ? pszShort + 1 : pszSlot;
+			if ( strlen( szSlots ) + strlen( pszShort ) + 2 < sizeof( szSlots ) )
+			{
+				strcat( szSlots, " " );
+				strcat( szSlots, pszShort[0] ? pszShort : "-" );
+			}
+		}
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s\n", i, szSlots ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));

@@ -7462,6 +7462,8 @@ void CCofShowHint::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 //=========================================================
 LINK_ENTITY_TO_CLASS( cof_yesno, CCofYesNo );
 
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF story co-op (rc_coop.cpp)
+
 TYPEDESCRIPTION	CCofYesNo::m_SaveData[] =
 {
 	DEFINE_FIELD( CCofYesNo, m_cvarvalue, FIELD_INTEGER ),
@@ -7568,6 +7570,7 @@ void CCofYesNo::YesActivate( CBaseEntity *pActivator )
 				if ( m_sItem )
 				{
 					pPlayer->HasItemInSlot( (char *)STRING(m_sItem), true );
+					RcCoop_KeyUsed( STRING(m_sItem) );	// ReCoF story co-op: used up for the whole group
 				}
 			}
 		}
