@@ -497,7 +497,7 @@ static void RcCoopStatus_f( void )
 
 // rc_coop_start [map]: a story co-op game for up to 4 players that friends join through Steam (default: the story's
 // first map)
-static char s_szCoopStart[256];
+static char s_szCoopStart[512];
 static DWORD s_dwCoopStartAt;
 
 static void RcCoopStart_f( void )
@@ -515,7 +515,17 @@ static void RcCoopStart_f( void )
 	szPreset[sizeof( szPreset ) - 1] = 0;
 	// run from HUD_Frame a moment later, like rc_coop_join: on the command line (a launcher or a shortcut) this runs
 	// before the menu map InitInput queues, which would replace the co-op map
-	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\n%src_coop_host\nmap %s\n", szPreset, pszMap );
+	// B412: the lobby's rules after the preset: <exit wait> <back after dying> <autosave> <monster health> <skip vote> <simon>
+	char szRules[200];
+	szRules[0] = 0;
+	if ( gEngfuncs.Cmd_Argc() > 8 )
+		_snprintf( szRules, sizeof( szRules ) - 1, "rc_coop_exit_wait %d\nrc_coop_respawn_time %d\nrc_coop_autosave %d\nrc_coop_monster_health %d\n"
+			"rc_coop_skip_vote %d\nrc_coop_simon %d\n", atoi( gEngfuncs.Cmd_Argv( 3 ) ), atoi( gEngfuncs.Cmd_Argv( 4 ) ), atoi( gEngfuncs.Cmd_Argv( 5 ) ),
+			atoi( gEngfuncs.Cmd_Argv( 6 ) ), atoi( gEngfuncs.Cmd_Argv( 7 ) ), atoi( gEngfuncs.Cmd_Argv( 8 ) ) ? 1 : 0 );
+	else if ( pszMap[0] )
+		_snprintf( szRules, sizeof( szRules ) - 1, "rc_coop_simon %d\n", strcmp( pszMap, "c_intro" ) ? 0 : 1 );	// B411
+	szRules[sizeof( szRules ) - 1] = 0;
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\n%s%src_coop_host\nmap %s\n", szPreset, szRules, pszMap );
 	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }
@@ -539,7 +549,23 @@ static void RcCoopContinue_f( void )
 		RcCoopPrint( "usage: rc_coop_continue <save, for example coop_auto>\n" );
 		return;
 	}
-	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nload %s\n", gEngfuncs.Cmd_Argv( 1 ) );
+	// B412: the lobby's rules after the load (the save's own come back during it): <exit wait> <back after dying>
+	// <autosave> <monster health> <skip vote> [<simon>, -1 or none for the save's]
+	char szRules[200];
+	szRules[0] = 0;
+	if ( gEngfuncs.Cmd_Argc() > 6 )
+	{
+		_snprintf( szRules, sizeof( szRules ) - 1, "rc_coop_exit_wait %d\nrc_coop_respawn_time %d\nrc_coop_autosave %d\nrc_coop_monster_health %d\n"
+			"rc_coop_skip_vote %d\n", atoi( gEngfuncs.Cmd_Argv( 2 ) ), atoi( gEngfuncs.Cmd_Argv( 3 ) ), atoi( gEngfuncs.Cmd_Argv( 4 ) ),
+			atoi( gEngfuncs.Cmd_Argv( 5 ) ), atoi( gEngfuncs.Cmd_Argv( 6 ) ) );
+		if ( gEngfuncs.Cmd_Argc() > 7 && atoi( gEngfuncs.Cmd_Argv( 7 ) ) >= 0 )
+		{
+			int len = strlen( szRules );
+			_snprintf( szRules + len, sizeof( szRules ) - 1 - len, "rc_coop_simon %d\n", atoi( gEngfuncs.Cmd_Argv( 7 ) ) ? 1 : 0 );
+		}
+	}
+	szRules[sizeof( szRules ) - 1] = 0;
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nrc_coop 1\nrc_coop_host\nload %s\n%s", gEngfuncs.Cmd_Argv( 1 ), szRules );
 	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }

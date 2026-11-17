@@ -330,10 +330,71 @@ enum
 	RC_LOBBY_NEW,
 	RC_LOBBY_CONTINUE,
 	RC_LOBBY_LAUNCH,
-	RC_LOBBY_SKILL,		// + 0 to 3
+	RC_LOBBY_TAB_GAME,
+	RC_LOBBY_TAB_SET,
+	RC_LOBBY_CAMP_PREV,
+	RC_LOBBY_CAMP_NEXT,
+	RC_LOBBY_SKILL = 30,	// + 0 to 3
+	RC_LOBBY_SET = 40,		// + 2 * the setting, + 1 for the next value
 };
 
-// B406: the lobby, a frame in the middle of the screen over a dark veil
+// B412: the co-op settings: the host's rules (hl.dll rc_coop.cpp; the lobby passes them to rc_coop_start after the
+// difficulty's preset) and this player's own voice (client.dll's cvars, set at once)
+struct RcLobbySetting_t
+{
+	const char	*label;
+	const char	*cvar;
+	bool		host;
+	int			n;
+	int			values[8];
+	const char	*names[8];
+};
+
+#define RC_SET_HOST	6
+#define RC_SET_ALL	9
+#define RC_SET_SIMON	5
+
+static const RcLobbySetting_t s_RcSet[RC_SET_ALL] =
+{
+	{ "Exit waits for the group", "rc_coop_exit_wait", true, 5, { 0, 15, 30, 60, 120 }, { "Off", "15 s", "30 s", "60 s", "2 min" } },
+	{ "Back after dying", "rc_coop_respawn_time", true, 6, { 0, 5, 10, 20, 30, 60 }, { "Original", "5 s", "10 s", "20 s", "30 s", "60 s" } },
+	{ "Monster health per extra player", "rc_coop_monster_health", true, 7, { 0, 10, 25, 40, 50, 75, 100 }, { "+0%", "+10%", "+25%", "+40%", "+50%", "+75%", "+100%" } },
+	{ "Autosave on each level", "rc_coop_autosave", true, 2, { 0, 1 }, { "Off", "On" } },
+	{ "Vote to skip scenes", "rc_coop_skip_vote", true, 2, { 0, 1 }, { "Off", "On" } },
+	{ "Players are", "rc_coop_simon", true, 2, { 1, 0 }, { "Simon", "Police officers" } },
+	{ "Voices from where friends stand", "rc_voice_3d", false, 2, { 0, 1 }, { "Off", "On" } },
+	{ "Voice range", "rc_voice_range", false, 4, { 800, 1400, 2000, 3000 }, { "Short", "Normal", "Long", "Very long" } },
+	{ "Voices behind walls", "rc_voice_wall", false, 5, { 0, 10, 25, 50, 100 }, { "Silent", "10%", "25%", "50%", "Full" } },
+};
+
+// the difficulties' rules (hl.dll rc_coop.cpp s_flRcPreset, B396): exit wait, back after dying, monster health,
+// autosave, skip vote, in this panel's order
+static const int s_iRcPresetRules[5][5] =
+{
+	{ 60, 10, 25, 1, 1 }, { 60, 5, 0, 1, 1 }, { 60, 10, 25, 1, 1 }, { 60, 20, 40, 1, 1 }, { 60, 0, 50, 0, 1 },
+};
+
+// the index of the setting's value nearest to v
+static int RcSetIndex( int s, int v )
+{
+	int best = 0;
+	for ( int i = 1; i < s_RcSet[s].n; i++ )
+	{
+		if ( abs( s_RcSet[s].values[i] - v ) < abs( s_RcSet[s].values[best] - v ) )
+			best = i;
+	}
+	return best;
+}
+
+// the campaigns: the main campaign, then the custom campaigns of maps/*.custom (the main menu's Custom Campaign list)
+struct RcLobbyCampaign_t
+{
+	char name[64];
+	char firstmap[64];
+};
+#define RC_MAX_CAMPAIGNS	64
+
+// B406, B412: the lobby, a frame in the middle of the screen over a dark veil, with a Game tab and a Co-op settings tab
 class CRcCoopPanel : public Panel
 {
 public:
@@ -342,39 +403,71 @@ public:
 		setBgColor( 0, 0, 0, 255 );
 		m_pFrame = new CRcUiFrame( "Story Co-op", 0, 0, 10, 10 );
 		m_pFrame->setParent( this );
-		m_pClose = AddButton( "X", CRcUiButton::STYLE_ROW, RCF_TITLE, RC_LOBBY_CLOSE );
+		m_pClose = AddButton( m_pFrame, "X", CRcUiButton::STYLE_ROW, RCF_TITLE, RC_LOBBY_CLOSE );
 		m_pClose->setRcCentred( true );
-		m_pPlayersCap = AddText( "PLAYERS", RCF_LABEL, RCC_DIM );
+		m_pTabGame = AddButton( m_pFrame, "Game", CRcUiButton::STYLE_ROW, RCF_BUTTON, RC_LOBBY_TAB_GAME );
+		m_pTabGame->setRcCentred( true );
+		m_pTabSet = AddButton( m_pFrame, "Co-op settings", CRcUiButton::STYLE_ROW, RCF_BUTTON, RC_LOBBY_TAB_SET );
+		m_pTabSet->setRcCentred( true );
+
+		// the Game tab
+		m_pGame = AddPage();
+		m_pPlayersCap = AddText( m_pGame, "PLAYERS", RCF_LABEL, RCC_DIM );
 		for ( int i = 0; i < 4; i++ )
 		{
-			m_pName[i] = AddText( "", RCF_BODY, RCC_TEXT );
-			m_pTag[i] = AddText( "", RCF_LABEL, RCC_DIM );
+			m_pName[i] = AddText( m_pGame, "", RCF_BODY, RCC_TEXT );
+			m_pTag[i] = AddText( m_pGame, "", RCF_LABEL, RCC_DIM );
 			m_pTag[i]->setRcAlign( 2 );
 		}
-		m_pSkillCap = AddText( "DIFFICULTY", RCF_LABEL, RCC_DIM );
+		m_pCampCap = AddText( m_pGame, "CAMPAIGN", RCF_LABEL, RCC_DIM );
+		m_pCampPrev = AddButton( m_pGame, "<", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_CAMP_PREV );
+		m_pCampNext = AddButton( m_pGame, ">", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_CAMP_NEXT );
+		m_pCampName = AddText( m_pGame, "", RCF_BODY, RCC_TEXT );
+		m_pCampName->setRcAlign( 1 );
+		m_pSkillCap = AddText( m_pGame, "DIFFICULTY", RCF_LABEL, RCC_DIM );
 		for ( int i = 0; i < 4; i++ )
 		{
-			m_pSkill[i] = AddButton( s_pszRcSkillName[i + 1], CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_SKILL + i );
+			m_pSkill[i] = AddButton( m_pGame, s_pszRcSkillName[i + 1], CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_SKILL + i );
 			m_pSkill[i]->setRcCentred( true );
 		}
-		m_pGameCap = AddText( "GAME", RCF_LABEL, RCC_DIM );
-		m_pNew = AddButton( "New game", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_NEW );
+		m_pGameCap = AddText( m_pGame, "START FROM", RCF_LABEL, RCC_DIM );
+		m_pNew = AddButton( m_pGame, "New game", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_NEW );
 		m_pNew->setRcCentred( true );
-		m_pContinue = AddButton( "Continue", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_CONTINUE );
+		m_pContinue = AddButton( m_pGame, "Continue", CRcUiButton::STYLE_ROW, RCF_BODY, RC_LOBBY_CONTINUE );
 		m_pContinue->setRcCentred( true );
-		m_pStatus = AddText( "", RCF_LABEL, RCC_DIM );
+
+		// the Co-op settings tab
+		m_pSet = AddPage();
+		m_pHostCap = AddText( m_pSet, "HOST'S RULES", RCF_LABEL, RCC_DIM );
+		m_pOwnCap = AddText( m_pSet, "YOUR GAME", RCF_LABEL, RCC_DIM );
+		for ( int s = 0; s < RC_SET_ALL; s++ )
+		{
+			m_pSetLabel[s] = AddText( m_pSet, s_RcSet[s].label, RCF_BODY, RCC_TEXT );
+			m_pSetPrev[s] = AddButton( m_pSet, "<", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_SET + 2 * s );
+			m_pSetNext[s] = AddButton( m_pSet, ">", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_SET + 2 * s + 1 );
+			m_pSetValue[s] = AddText( m_pSet, "", RCF_BODY, RCC_TEXT );
+			m_pSetValue[s]->setRcAlign( 1 );
+		}
+
+		m_pStatus = AddText( m_pFrame, "", RCF_LABEL, RCC_DIM );
 		m_pStatus->setRcAlign( 1 );
-		m_pInvite = AddButton( "Invite friends", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_INVITE );
-		m_pLeave = AddButton( "Leave", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_LEAVE );
-		m_pStart = AddButton( "Start", CRcUiButton::STYLE_PRIMARY, RCF_BUTTON, RC_LOBBY_START );
+		m_pInvite = AddButton( m_pFrame, "Invite friends", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_INVITE );
+		m_pLeave = AddButton( m_pFrame, "Leave", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_LEAVE );
+		m_pStart = AddButton( m_pFrame, "Start", CRcUiButton::STYLE_PRIMARY, RCF_BUTTON, RC_LOBBY_START );
 		// under the frame: the launch options a friend's Steam needs to start ReCoF from an invite (B395)
 		m_pLaunch = new CRcUiButton( "Copy Steam launch options", 0, 0, 10, 10, CRcUiButton::STYLE_ITEM, RCF_LABEL );
 		m_pLaunch->setRcCentred( true );
 		m_pLaunch->setParent( this );
 		m_pLaunch->addActionSignal( new CRcCoopHandler( RC_LOBBY_LAUNCH ) );
+
 		m_iGame = 0;
 		m_bSave = false;
 		m_flScale = 0;
+		m_iTab = 0;
+		m_iCampaign = 0;
+		m_nCampaigns = 0;
+		m_bLookSet = false;
+		RulesFromSkill( RcSkill() );
 		setVisible( false );
 	}
 
@@ -386,6 +479,9 @@ public:
 			m_iGame = 0;
 		if ( bHost && RcLobby_State() == RCLOBBY_NONE )
 			RcLobby_Create();
+		ReadCampaigns();
+		for ( int s = RC_SET_HOST; s < RC_SET_ALL; s++ )
+			m_iSet[s] = RcSetIndex( s, (int)gEngfuncs.pfnGetCvarFloat( (char *)s_RcSet[s].cvar ) );
 		m_pLaunch->setRcText( "Copy Steam launch options" );
 		Layout();
 		Refresh();
@@ -411,6 +507,41 @@ public:
 		return iSkill;
 	}
 
+	// a difficulty brings its rules (B396); the host changes them after
+	void RulesFromSkill( int iSkill )
+	{
+		for ( int s = 0; s < 5; s++ )
+			m_iSet[s] = RcSetIndex( s, s_iRcPresetRules[iSkill][s] );
+		if ( !m_bLookSet )
+			m_iSet[RC_SET_SIMON] = m_iCampaign == 0 ? 0 : 1;
+	}
+
+	void ReadCampaigns( void )
+	{
+		m_nCampaigns = 1;
+		strcpy( m_Campaign[0].name, "Main campaign" );
+		strcpy( m_Campaign[0].firstmap, "c_intro" );
+		if ( s_pRcMenu )
+		{
+			s_pRcMenu->ReadCampaigns_guess();
+			for ( int i = 0; i < MAX_CAMPAIGNS_guess && m_nCampaigns < RC_MAX_CAMPAIGNS; i++ )
+			{
+				campaign_t_guess &c = s_pRcMenu->m_Campaigns_guess[i];
+				if ( !c.bValid || !c.szFirstMap[0] )
+					continue;
+				RcLobbyCampaign_t &d = m_Campaign[m_nCampaigns++];
+				strncpy( d.firstmap, c.szFirstMap, 63 );
+				d.firstmap[63] = 0;
+				strncpy( d.name, c.szDescription[0] ? c.szDescription : c.szFirstMap, 63 );
+				d.name[63] = 0;
+				for ( int k = (int)strlen( d.name ) - 1; k >= 0 && d.name[k] == ' '; k-- )
+					d.name[k] = 0;	// the files pad the names with spaces
+			}
+		}
+		if ( m_iCampaign >= m_nCampaigns )
+			m_iCampaign = 0;
+	}
+
 	// this player decides: the lobby's owner, or a player alone (no lobby: Steam is not there)
 	bool Hosting( void )
 	{
@@ -419,7 +550,7 @@ public:
 
 	void Command( int cmd )
 	{
-		char szCmd[128];
+		char szCmd[256];
 		bool bHost = Hosting();
 		if ( cmd >= RC_LOBBY_SKILL && cmd < RC_LOBBY_SKILL + 4 )
 		{
@@ -430,12 +561,47 @@ public:
 			szCmd[sizeof( szCmd ) - 1] = 0;
 			gEngfuncs.pfnClientCmd( szCmd );
 			gEngfuncs.Cvar_SetValue( "difficulty", iSkill );	// shown at once, before the command runs
+			RulesFromSkill( iSkill );
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			return;
+		}
+		if ( cmd >= RC_LOBBY_SET && cmd < RC_LOBBY_SET + 2 * RC_SET_ALL )
+		{
+			int s = ( cmd - RC_LOBBY_SET ) / 2, dir = ( cmd - RC_LOBBY_SET ) % 2 ? 1 : -1;
+			if ( s_RcSet[s].host && !bHost )
+				return;
+			m_iSet[s] = ( m_iSet[s] + dir + s_RcSet[s].n ) % s_RcSet[s].n;
+			if ( s == RC_SET_SIMON )
+				m_bLookSet = true;
+			if ( !s_RcSet[s].host )
+			{
+				_snprintf( szCmd, sizeof( szCmd ) - 1, "%s %d\n", s_RcSet[s].cvar, s_RcSet[s].values[m_iSet[s]] );
+				szCmd[sizeof( szCmd ) - 1] = 0;
+				gEngfuncs.pfnClientCmd( szCmd );
+			}
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			Refresh();
 			return;
 		}
 		switch ( cmd )
 		{
+		case RC_LOBBY_TAB_GAME:
+		case RC_LOBBY_TAB_SET:
+			m_iTab = cmd == RC_LOBBY_TAB_SET ? 1 : 0;
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			break;
+		case RC_LOBBY_CAMP_PREV:
+		case RC_LOBBY_CAMP_NEXT:
+			if ( !bHost || m_iGame == 1 || m_nCampaigns < 2 )
+				return;
+			m_iCampaign = ( m_iCampaign + ( cmd == RC_LOBBY_CAMP_NEXT ? 1 : -1 ) + m_nCampaigns ) % m_nCampaigns;
+			if ( !m_bLookSet )
+				m_iSet[RC_SET_SIMON] = m_iCampaign == 0 ? 0 : 1;	// Simon in the main campaign, police officers in the others
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			break;
 		case RC_LOBBY_CLOSE:
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			Close();
@@ -463,6 +629,7 @@ public:
 			m_pLaunch->setRcText( RcCoopCopyLaunchOptions() ? "Copied: paste it in Cry of Fear's launch options on Steam" : "Could not copy them" );
 			break;
 		case RC_LOBBY_START:
+		{
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			if ( !bHost )
 			{
@@ -471,19 +638,26 @@ public:
 			}
 			if ( m_iGame == 1 && !m_bSave )
 				return;
+			int v[RC_SET_HOST];
+			for ( int s = 0; s < RC_SET_HOST; s++ )
+				v[s] = s_RcSet[s].values[m_iSet[s]];
 			Close();
 			if ( s_pRcMenu )
 				s_pRcMenu->setVisible( false );
 			gViewPort->UpdateCursorState();
 			if ( strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
 				IrrKlangStop_guess( 1 );
+			// rc_coop_start <map> <difficulty> <exit wait> <back after dying> <autosave> <monster health> <skip vote> <simon>
 			if ( m_iGame == 0 )
-				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start c_intro %s\n", s_pszRcPreset[RcSkill()] );
-			else
-				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_continue %s\n", m_szSave );
+				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start %s %s %d %d %d %d %d %d\n", m_Campaign[m_iCampaign].firstmap,
+					s_pszRcPreset[RcSkill()], v[0], v[1], v[3], v[2], v[4], v[5] );
+			else	// a save keeps its campaign's look unless the host chose one
+				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_continue %s %d %d %d %d %d %d\n", m_szSave, v[0], v[1], v[3], v[2], v[4],
+					m_bLookSet ? v[5] : -1 );
 			szCmd[sizeof( szCmd ) - 1] = 0;
 			gEngfuncs.pfnClientCmd( szCmd );
 			break;
+		}
 		}
 	}
 
@@ -492,7 +666,7 @@ public:
 	{
 		int iState = RcLobby_State();
 		bool bHost = Hosting();
-		char szNames[4][48];
+		char szNames[4][48], sz[96];
 		bool bIsHost[4], bIsSelf[4];
 		int n = iState == RCLOBBY_IN ? RcLobby_Members( szNames, bIsHost, bIsSelf, 4 ) : 0;
 		if ( n == 0 )
@@ -519,19 +693,45 @@ public:
 			}
 		}
 
-		// the host's choices: his own, or the lobby's for a guest
+		// the host's choices: his own (and into the lobby for the guests), or the lobby's for a guest
+		int iSkill;
+		bool bContinue;
+		const char *pszCampaign;
+		int iRule[RC_SET_HOST];
 		if ( bHost )
 		{
-			char sz[8];
-			_snprintf( sz, sizeof( sz ) - 1, "%d", RcSkill() );
+			iSkill = RcSkill();
+			bContinue = m_iGame == 1;
+			pszCampaign = m_Campaign[m_iCampaign].name;
+			for ( int s = 0; s < RC_SET_HOST; s++ )
+				iRule[s] = m_iSet[s];
+			_snprintf( sz, sizeof( sz ) - 1, "%d", iSkill );
 			sz[sizeof( sz ) - 1] = 0;
-			if ( strcmp( RcLobby_Data( "difficulty" ), sz ) )
-				RcLobby_SetData( "difficulty", sz );
-			if ( strcmp( RcLobby_Data( "game" ), m_iGame ? "continue" : "new" ) )
-				RcLobby_SetData( "game", m_iGame ? "continue" : "new" );
+			SetData( "difficulty", sz );
+			SetData( "game", bContinue ? "continue" : "new" );
+			SetData( "campaign", pszCampaign );
+			_snprintf( sz, sizeof( sz ) - 1, "%d %d %d %d %d %d", iRule[0], iRule[1], iRule[2], iRule[3], iRule[4], iRule[5] );
+			sz[sizeof( sz ) - 1] = 0;
+			SetData( "rules", sz );
 		}
-		int iSkill = bHost ? RcSkill() : atoi( RcLobby_Data( "difficulty" ) );
-		bool bContinue = bHost ? m_iGame == 1 : !strcmp( RcLobby_Data( "game" ), "continue" );
+		else
+		{
+			iSkill = atoi( RcLobby_Data( "difficulty" ) );
+			bContinue = !strcmp( RcLobby_Data( "game" ), "continue" );
+			pszCampaign = RcLobby_Data( "campaign" );
+			memset( iRule, 0, sizeof( iRule ) );
+			sscanf( RcLobby_Data( "rules" ), "%d %d %d %d %d %d", &iRule[0], &iRule[1], &iRule[2], &iRule[3], &iRule[4], &iRule[5] );
+		}
+
+		m_pTabGame->setRcSelected( m_iTab == 0 );
+		m_pTabSet->setRcSelected( m_iTab == 1 );
+		m_pGame->setVisible( m_iTab == 0 );
+		m_pSet->setVisible( m_iTab == 1 );
+
+		m_pCampName->setRcText( bContinue ? "From the save" : pszCampaign[0] ? pszCampaign : "Main campaign" );
+		m_pCampName->setRcColor( bContinue ? RCC_DISABLED : RCC_TEXT );
+		m_pCampPrev->setVisible( bHost && !bContinue && m_nCampaigns > 1 );
+		m_pCampNext->setVisible( bHost && !bContinue && m_nCampaigns > 1 );
 		for ( int i = 0; i < 4; i++ )
 		{
 			m_pSkill[i]->setRcSelected( i + 1 == iSkill );
@@ -541,13 +741,23 @@ public:
 		m_pNew->setRcDisabled( !bHost );
 		m_pContinue->setRcSelected( bContinue );
 		m_pContinue->setRcDisabled( !bHost || !m_bSave );
-		char szCont[48];
 		if ( bHost && m_bSave )
-			_snprintf( szCont, sizeof( szCont ) - 1, "Continue (%s)", m_szSave );
+			_snprintf( sz, sizeof( sz ) - 1, "Continue (%s)", m_szSave );
 		else
-			strcpy( szCont, "Continue" );
-		szCont[sizeof( szCont ) - 1] = 0;
-		m_pContinue->setRcText( szCont );
+			strcpy( sz, "Continue" );
+		sz[sizeof( sz ) - 1] = 0;
+		m_pContinue->setRcText( sz );
+
+		for ( int s = 0; s < RC_SET_ALL; s++ )
+		{
+			int i = s < RC_SET_HOST ? iRule[s] : m_iSet[s];
+			if ( i < 0 || i >= s_RcSet[s].n )
+				i = 0;
+			m_pSetValue[s]->setRcText( s_RcSet[s].names[i] );
+			bool bCan = !s_RcSet[s].host || bHost;
+			m_pSetPrev[s]->setVisible( bCan );
+			m_pSetNext[s]->setVisible( bCan );
+		}
 
 		// a host back on the menu after a game: the lobby's guests no longer have a game to join
 		const char *pszConnect = RcLobby_Data( "connect" );
@@ -575,37 +785,74 @@ public:
 	void Layout( void )
 	{
 		m_flScale = RcUiScale();
-		int W = RcUiS( 620 ), H = RcUiS( 470 );
+		int W = RcUiS( 660 ), H = RcUiS( 570 );
 		if ( W > ScreenWidth - 32 )
 			W = ScreenWidth - 32;
 		int x0 = ( ScreenWidth - W ) / 2, y0 = ( ScreenHeight - H ) / 2 - RcUiS( 16 );
 		if ( y0 < 0 )
 			y0 = 0;
 		m_pFrame->setBounds( x0, y0, W, H );
-		int band = m_pFrame->bandTall(), pad = RcUiS( 24 ), gap = RcUiS( 8 );
+		int band = m_pFrame->bandTall(), pad = RcUiS( 24 ), gap = RcUiS( 8 ), cw = W - 2 * pad;
 		m_pClose->setBounds( W - band, 0, band, band );
-		int y = band + RcUiS( 18 );
-		m_pPlayersCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
-		y += RcUiS( 24 );
+		int tabY = band + RcUiS( 10 );
+		m_pTabGame->setBounds( pad, tabY, RcUiS( 130 ), RcUiS( 30 ) );
+		m_pTabSet->setBounds( pad + RcUiS( 130 ) + gap, tabY, RcUiS( 170 ), RcUiS( 30 ) );
+		int top = tabY + RcUiS( 30 ) + RcUiS( 14 );
+		int by = H - RcUiS( 20 ) - RcUiS( 34 );
+		m_pGame->setBounds( 0, top, W, by - RcUiS( 34 ) - top );
+		m_pSet->setBounds( 0, top, W, by - RcUiS( 34 ) - top );
+
+		// the Game tab
+		int y = 0;
+		m_pPlayersCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
 		for ( int i = 0; i < 4; i++ )
 		{
-			m_pName[i]->setBounds( pad, y + i * RcUiS( 30 ), W - 2 * pad, RcUiS( 28 ) );
-			m_pTag[i]->setBounds( pad, y + i * RcUiS( 30 ), W - 2 * pad, RcUiS( 28 ) );
+			m_pName[i]->setBounds( pad, y + i * RcUiS( 28 ), cw, RcUiS( 26 ) );
+			m_pTag[i]->setBounds( pad, y + i * RcUiS( 28 ), cw, RcUiS( 26 ) );
 		}
-		y += 4 * RcUiS( 30 ) + RcUiS( 14 );
-		m_pSkillCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
-		y += RcUiS( 24 );
-		int bw = ( W - 2 * pad - 3 * gap ) / 4;
+		y += 4 * RcUiS( 28 ) + RcUiS( 12 );
+		m_pCampCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
+		m_pCampPrev->setBounds( pad, y, RcUiS( 34 ), RcUiS( 32 ) );
+		m_pCampNext->setBounds( W - pad - RcUiS( 34 ), y, RcUiS( 34 ), RcUiS( 32 ) );
+		m_pCampName->setBounds( pad + RcUiS( 40 ), y, cw - RcUiS( 80 ), RcUiS( 32 ) );
+		y += RcUiS( 32 ) + RcUiS( 14 );
+		m_pSkillCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
+		int bw = ( cw - 3 * gap ) / 4;
 		for ( int i = 0; i < 4; i++ )
 			m_pSkill[i]->setBounds( pad + i * ( bw + gap ), y, bw, RcUiS( 32 ) );
-		y += RcUiS( 32 ) + RcUiS( 16 );
-		m_pGameCap->setBounds( pad, y, W - 2 * pad, RcUiS( 20 ) );
-		y += RcUiS( 24 );
-		int gw = ( W - 2 * pad - gap ) / 2;
+		y += RcUiS( 32 ) + RcUiS( 14 );
+		m_pGameCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
+		int gw = ( cw - gap ) / 2;
 		m_pNew->setBounds( pad, y, gw, RcUiS( 32 ) );
 		m_pContinue->setBounds( pad + gw + gap, y, gw, RcUiS( 32 ) );
-		int by = H - RcUiS( 20 ) - RcUiS( 34 );
-		m_pStatus->setBounds( pad, by - RcUiS( 32 ), W - 2 * pad, RcUiS( 22 ) );
+
+		// the Co-op settings tab: a label, then < value > on the right
+		y = 0;
+		int pitch = RcUiS( 32 ), vw = RcUiS( 170 ), aw = RcUiS( 30 );
+		for ( int s = 0; s < RC_SET_ALL; s++ )
+		{
+			if ( s == 0 || s == RC_SET_HOST )
+			{
+				( s == 0 ? m_pHostCap : m_pOwnCap )->setBounds( pad, y, cw, RcUiS( 20 ) );
+				y += RcUiS( 22 );
+			}
+			int x = W - pad - aw;
+			m_pSetNext[s]->setBounds( x, y, aw, RcUiS( 28 ) );
+			x -= vw;
+			m_pSetValue[s]->setBounds( x, y, vw, RcUiS( 28 ) );
+			x -= aw;
+			m_pSetPrev[s]->setBounds( x, y, aw, RcUiS( 28 ) );
+			m_pSetLabel[s]->setBounds( pad, y, x - pad - gap, RcUiS( 28 ) );
+			y += pitch;
+			if ( s == RC_SET_HOST - 1 )
+				y += RcUiS( 10 );
+		}
+
+		m_pStatus->setBounds( pad, by - RcUiS( 30 ), cw, RcUiS( 22 ) );
 		m_pInvite->setBounds( pad, by, RcUiS( 170 ), RcUiS( 34 ) );
 		m_pStart->setBounds( W - pad - RcUiS( 150 ), by, RcUiS( 150 ), RcUiS( 34 ) );
 		m_pLeave->setBounds( W - pad - RcUiS( 150 ) - RcUiS( 12 ) - RcUiS( 120 ), by, RcUiS( 120 ), RcUiS( 34 ) );
@@ -638,28 +885,51 @@ public:
 	}
 
 private:
-	CRcUiText *AddText( const char *pszText, int font, const RcUiColor &color )
+	// the lobby's data changes only when the value does
+	void SetData( const char *pszKey, const char *pszValue )
 	{
-		CRcUiText *p = new CRcUiText( pszText, 0, 0, 10, 10, font, color );
+		if ( strcmp( RcLobby_Data( pszKey ), pszValue ) )
+			RcLobby_SetData( pszKey, pszValue );
+	}
+
+	Panel *AddPage( void )
+	{
+		Panel *p = new Panel( 0, 0, 10, 10 );
 		p->setParent( m_pFrame );
+		p->setBgColor( 0, 0, 0, 255 );
 		return p;
 	}
 
-	CRcUiButton *AddButton( const char *pszText, int style, int font, int cmd )
+	CRcUiText *AddText( Panel *pParent, const char *pszText, int font, const RcUiColor &color )
+	{
+		CRcUiText *p = new CRcUiText( pszText, 0, 0, 10, 10, font, color );
+		p->setParent( pParent );
+		return p;
+	}
+
+	CRcUiButton *AddButton( Panel *pParent, const char *pszText, int style, int font, int cmd )
 	{
 		CRcUiButton *p = new CRcUiButton( pszText, 0, 0, 10, 10, style, font );
-		p->setParent( m_pFrame );
+		p->setParent( pParent );
 		p->addActionSignal( new CRcCoopHandler( cmd ) );
 		return p;
 	}
 
 	CRcUiFrame *m_pFrame;
-	CRcUiButton *m_pClose, *m_pSkill[4], *m_pNew, *m_pContinue, *m_pInvite, *m_pLeave, *m_pStart, *m_pLaunch;
-	CRcUiText *m_pPlayersCap, *m_pName[4], *m_pTag[4], *m_pSkillCap, *m_pGameCap, *m_pStatus;
+	Panel *m_pGame, *m_pSet;
+	CRcUiButton *m_pClose, *m_pTabGame, *m_pTabSet, *m_pSkill[4], *m_pNew, *m_pContinue, *m_pInvite, *m_pLeave, *m_pStart,
+		*m_pLaunch, *m_pCampPrev, *m_pCampNext, *m_pSetPrev[RC_SET_ALL], *m_pSetNext[RC_SET_ALL];
+	CRcUiText *m_pPlayersCap, *m_pName[4], *m_pTag[4], *m_pCampCap, *m_pCampName, *m_pSkillCap, *m_pGameCap, *m_pStatus,
+		*m_pHostCap, *m_pOwnCap, *m_pSetLabel[RC_SET_ALL], *m_pSetValue[RC_SET_ALL];
 	int m_iGame;	// 0 a new game, 1 the last co-op save
 	bool m_bSave;
 	char m_szSave[32];
 	float m_flScale;
+	int m_iTab;		// 0 Game, 1 Co-op settings
+	int m_iSet[RC_SET_ALL];	// each setting's value, as an index into its list
+	bool m_bLookSet;	// the host chose Simon or the police officers himself
+	RcLobbyCampaign_t m_Campaign[RC_MAX_CAMPAIGNS];
+	int m_nCampaigns, m_iCampaign;
 };
 
 void CRcCoopHandler::actionPerformed( Panel *panel )
