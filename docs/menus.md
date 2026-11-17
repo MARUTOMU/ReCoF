@@ -14,7 +14,11 @@ Everything grows with the screen's height from 720 lines up: a window, its text 
 
 ## Options
 
-The Options window holds the settings that were spread over other screens: subtitle language and developer commentary (Game, General), the story co-op host's rules and the voice (Multiplayer, Co-op), and ReCoF's own key actions on the Keyboard page (duck-tap, skip a scene, the run timer, Options). `rc_options` opens it from the console or a key.
+Each option says what it does in one line at the bottom of the window while the mouse is over it; nothing else is written on the pages. The Options window holds the settings that were spread over other screens: subtitle language and developer commentary (Game, General), the story co-op host's rules and the voice (Multiplayer, Co-op), and ReCoF's own key actions on the Keyboard page (duck-tap, skip a scene, the run timer, Options). `rc_options` opens it from the console or a key.
+
+## Game menu
+
+The menu Esc opens in a game (and the list after leaving one) keeps Cry of Fear's entries with short names: Resume game, New game, Load game, Main menu (the main menu's map), Leave game, Unlockables, Find servers, Host server, Story co-op (the lobby on the main menu), Options and Quit. They are renamed in code by their command, so the game's GameMenu.res stays as it is.
 
 ## Not done yet
 

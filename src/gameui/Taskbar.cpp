@@ -401,9 +401,9 @@ static void RcAddCoopMenuItems( KeyValues *datafile )
 {
 	static const char *s_pszItems[3][4] =
 	{
-		{ "RcCoopHost", "Host story co-op", "engine rc_coop_start", "notmulti" },
-		{ "RcCoopInvite", "Invite Steam friends", "engine rc_coop_invite", "notsingle" },
-		{ "RcCoopLeave", "Leave the co-op game", "engine rc_coop_leave", "notsingle" },
+		{ "RcCoopHost", "Story co-op", "engine rc_coop_start", "notmulti" },
+		{ "RcCoopInvite", "Invite friends", "engine rc_coop_invite", "notsingle" },
+		{ "RcCoopLeave", "Leave co-op", "engine rc_coop_leave", "notsingle" },
 	};
 
 	KeyValues *pPrev = NULL;
@@ -431,6 +431,33 @@ static void RcAddCoopMenuItems( KeyValues *datafile )
 }
 
 //-----------------------------------------------------------------------------
+// ReCoF (B407): Cry of Fear's game menu labels, shorter, found by their command so a translated or modded
+// GameMenu.res keeps its own: "Load game (discard progress)", "3D menu/Custom Campaign" (the main menu's map,
+// c_game_menu1), "2D menu" (leaves the game for this list), "Unlockables (discard progress)", "&Join coop game" and
+// "&Host new coop game"
+//-----------------------------------------------------------------------------
+static void RcShortMenuLabels( KeyValues *datafile )
+{
+	static const char *s_pszLabels[6][3] =
+	{
+		{ "engine map c_loadgame", "Load game (discard progress)", "Load game" },
+		{ "engine to3dmenu", "3D menu/Custom Campaign", "Main menu" },
+		{ "engine returnmenu", "2D menu", "Leave game" },
+		{ "engine unlockablescmd", "Unlockables (discard progress)", "Unlockables" },
+		{ "OpenServerBrowser", "&Join coop game", "Find servers" },
+		{ "OpenCreateMultiplayerGameDialog", "&Host new coop game", "Host server" },
+	};
+	for ( KeyValues *dat = datafile->GetFirstSubKey(); dat != NULL; dat = dat->GetNextKey() )
+	{
+		for ( int i = 0; i < 6; i++ )
+		{
+			if ( !stricmp( dat->GetString( "command" ), s_pszLabels[i][0] ) && !strcmp( dat->GetString( "label" ), s_pszLabels[i][1] ) )
+				dat->SetString( "label", s_pszLabels[i][2] );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: loads the game menu from Resource/GameMenu.res
 //-----------------------------------------------------------------------------
 void CTaskbar::CreateGameMenu()
@@ -439,6 +466,7 @@ void CTaskbar::CreateGameMenu()
 	KeyValues *datafile = new KeyValues( "GameMenu" );
 	if ( datafile->LoadFromFile( filesystem(), "Resource/GameMenu.res" ) )
 	{
+		RcShortMenuLabels( datafile );	// ReCoF (B407)
 		RcAddCoopMenuItems( datafile );	// ReCoF (B393)
 		m_pGameMenu = RecursiveLoadGameMenu( datafile );
 		datafile->deleteThis();

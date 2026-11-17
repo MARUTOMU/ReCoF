@@ -41,9 +41,9 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 
 	sheet = new CRcOptionsSheet( this, "GameSheet" );
 	sheet->SetProportional( true );	// ReCoF (B399)
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_general", "Point at an option to see what it does." ), "General" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_gameplay", "Point at an option to see what it does." ), "Gameplay" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_movement", "Point at an option to see what it does." ), "Movement" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_general", "" ), "General" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_gameplay", "" ), "Gameplay" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_movement", "" ), "Movement" );
 	AddPage( sheet, "Game" );
 
 	sheet = new CRcOptionsSheet( this, "ControlsSheet" );
@@ -55,17 +55,17 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 	sheet = new CRcOptionsSheet( this, "GraphicsSheet" );
 	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new COptionsSubVideo( sheet ), "Display" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_effects", "Point at an option to see what it does." ), "Effects" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_quality", "Point at an option to see what it does." ), "Quality" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_performance", "Point at an option to see what it does." ), "Performance" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_weapon", "Point at an option to see what it does." ), "Weapon view" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_effects", "" ), "Effects" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_quality", "" ), "Quality" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_performance", "" ), "Performance" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_weapon", "" ), "Weapon view" );
 	AddPage( sheet, "Graphics" );
 
 	sheet = new CRcOptionsSheet( this, "HudSheet" );
 	sheet->SetProportional( true );	// ReCoF (B399)
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_crosshair", "Point at an option to see what it does." ), "Crosshair" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_info", "Point at an option to see what it does." ), "Info panel" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_speedrun", "Point at an option to see what it does." ), "Speedrun" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_crosshair", "" ), "Crosshair" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_info", "" ), "Info panel" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_speedrun", "" ), "Speedrun" );
 	AddPage( sheet, "HUD" );
 
 	sheet = new CRcOptionsSheet( this, "AudioSheet" );
@@ -76,9 +76,9 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 
 	sheet = new CRcOptionsSheet( this, "MultiplayerSheet" );
 	sheet->SetProportional( true );	// ReCoF (B399)
-	sheet->AddPage( new CRcOptionsPage( sheet, "mp_player", "Point at an option to see what it does." ), "Player" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "mp_player", "" ), "Player" );
 	sheet->AddPage( new COptionsSubSpray( sheet ), "Spray" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "mp_coop", "Point at an option to see what it does. The rules are the host's." ), "Co-op" );	// ReCoF (B400)
+	sheet->AddPage( new CRcOptionsPage( sheet, "mp_coop", "" ), "Co-op" );	// ReCoF (B400)
 	AddPage( sheet, "Multiplayer" );
 
 	AddPage( new CRcAboutPage( this ), "ReCoF" );

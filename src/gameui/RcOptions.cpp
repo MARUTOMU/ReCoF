@@ -57,29 +57,29 @@ static const RcOption s_RcOptions[] =
 {
 	// Game, General
 	{ "game_general", "ironsights_toggle", RC_LIST, "Iron sights", "1", 0, 0, "Hold the key=0|Press to aim, again to stop=1",
-		"How the iron sights key works: aim while you hold it, or press it once to aim and again to stop." },
+		"Hold to aim, or press once to aim and again to stop." },
 	{ "game_general", "cl_subtitles", RC_BOOL, "Subtitles", "1", 0, 0, NULL,
-		"Shows what is said at the bottom of the screen. The language is picked in Language, in the main menu." },
+		"Shows what is said at the bottom of the screen." },
 	{ "game_general", "sv_disablehints", RC_BOOLINV, "Hints", "0", 0, 0, NULL,
 		"The hints the game shows the first time you meet something new." },
 	{ "game_general", "cl_nodoubletapdodge", RC_BOOLINV, "Dodge by double-tapping", "0", 0, 0, NULL,
 		"Double-tapping a direction key dodges. The Dodge key works either way." },
 	{ "game_general", "rc_endstats", RC_BOOL, "Readable end statistics", "1", 0, 0, NULL,
-		"The statistics and grade at the end of the game get a dark backdrop, and a click before they are fully shown is ignored. Off is the original." },
+		"A dark backdrop behind the end statistics. Off: the original." },
 
 	// Game, Gameplay
 	{ "game_gameplay", "rc_retail_gameplay", RC_BOOL, "Original balance", "0", 0, 0, NULL,
-		"Brings back the original game's behavior of every balance fix at once: monster damage and health, AI, ladder climbs and collision." },
+		"Brings back the original monster damage, health, AI and collision." },
 	{ "game_gameplay", "rc_infinite_stamina", RC_BOOL, "Infinite stamina", "0", 0, 0, NULL,
 		"Stamina never runs out. The stamina bar still shows." },
 	{ "game_gameplay", "rc_door_skip", RC_BOOL, "Skip the door fades", "0", 0, 0, NULL,
-		"The doors that take you to the other side move you at once, without the fade to black and back. For fun: runs with it do not compare with the original game." },
+		"Doors take you through at once, without the fade. Not for comparable runs." },
 
 	// Game, Movement
 	{ "game_movement", "rc_hlmovement", RC_BOOL, "Half-Life movement", "0", 0, 0, NULL,
-		"Half-Life 1 physics as in its first version: run speed 320, no sprint, dodge or stamina cost for jumps, no movement camera punches, with bunny hop, ducktap and autojump." },
+		"Half-Life 1 physics: run 320, no sprint or stamina, bunny hop and ducktap." },
 	{ "game_movement", "rc_bhopcap", RC_BOOL, "Bunny hop speed cap", "1", 0, 0, NULL,
-		"On as in the original game. Off removes the cap, which a separate speedrun category uses." },
+		"On as in the original game. Off is a separate speedrun category." },
 	{ "game_movement", "rc_ducktap", RC_BOOL, "Ducktap", "0", 0, 0, NULL,
 		"Brings back the Half-Life ducktap that Cry of Fear removed." },
 	{ "game_movement", "rc_autojump", RC_BOOL, "Autojump", "0", 0, 0, NULL,
@@ -99,7 +99,7 @@ static const RcOption s_RcOptions[] =
 	{ "gfx_effects", "gl_screenblur", RC_BOOL, "Screen blur", "1", 0, 0, NULL,
 		"Blurs the screen when you are hurt or on morphine." },
 	{ "gfx_effects", "rc_vignette", RC_BOOL, "Vignette", "0", 0, 0, NULL,
-		"Darkens the corners of the screen, as Cry of Fear 1.55 did. The original game's own option did nothing." },
+		"Darkens the screen's corners, as Cry of Fear 1.55 did." },
 	{ "gfx_effects", "cl_noiseeffect", RC_BOOL, "Film grain", "0", 0, 0, NULL,
 		"A grain over the picture, as on old film." },
 	{ "gfx_effects", "cl_noiseamount", RC_FLOAT, "Film grain amount", "0.5", 0, 1, NULL,
@@ -122,14 +122,13 @@ static const RcOption s_RcOptions[] =
 	// B400: from the Language and Difficulty screens
 	{ "game_general", "cof_subtitlelanguage", RC_LIST, "Subtitle language", "1", 0, 0,
 		"English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
-		"The language of the subtitles and the texts on screen (the main menu's Language)." },
+		"The language of subtitles and on-screen texts." },
 	{ "game_general", "dev_commentary", RC_BOOL, "Developer commentary", "0", 0, 0, NULL,
-		"Commentary nodes from the developers in the levels (also on the difficulty screen of a new game)." },
+		"Commentary nodes from the developers in the levels." },
 
 	// B399: the menus' size
 	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
-		"How large the menus and this window are, in percent of their size for your screen (they grow with its "
-		"height already). Takes effect when a window opens again." },
+		"Larger menus and windows. Applies when a window opens again." },
 	// B405: the main menu's look (client.dll rc_mainmenu.cpp)
 	{ "game_general", "rc_menu_classic", RC_BOOL, "Classic main menu", "0", 0, 0, NULL,
 		"Cry of Fear's picture menu instead of the text list." },
@@ -148,25 +147,25 @@ static const RcOption s_RcOptions[] =
 
 	// Graphics, Performance
 	{ "gfx_performance", "rc_worldbatch", RC_BOOL, "Faster world drawing", "1", 0, 0, NULL,
-		"Sends the world to the graphics card in fewer calls. The picture is the same; off is the original way, for comparison." },
+		"Sends the world to the graphics card in fewer calls. Same picture." },
 	{ "gfx_performance", "rc_lightshader", RC_BOOL, "Faster dynamic lights", "1", 0, 0, NULL,
-		"Draws the flashlight and the other lights with a shader, in far fewer calls. The picture is the same." },
+		"Draws the flashlight and other lights with a shader. Same picture." },
 	{ "gfx_performance", "rc_gpumodels", RC_BOOL, "Models on the graphics card", "1", 0, 0, NULL,
-		"Moves and lights the models on the graphics card instead of the processor. The picture is the same." },
+		"Models are moved and lit on the graphics card. Same picture." },
 	{ "gfx_performance", "rc_modelarrays", RC_BOOL, "Faster model drawing", "1", 0, 0, NULL,
-		"Sends each model mesh to the graphics card in one call. The picture is the same." },
+		"Each model mesh in one call to the graphics card. Same picture." },
 	{ "gfx_performance", "rc_dlightcull", RC_BOOL, "Skip lights off screen", "1", 0, 0, NULL,
-		"A light that cannot reach anything on screen is not drawn. The picture is the same." },
+		"Lights that reach nothing on screen are not drawn. Same picture." },
 	{ "gfx_performance", "rc_bmodelcull", RC_BOOL, "Skip hidden entity faces", "1", 0, 0, NULL,
-		"Faces of doors, walls and other brush entities outside the view are not drawn. The picture is the same." },
+		"Faces of doors and other entities out of view are not drawn." },
 	{ "gfx_performance", "rc_worldsort", RC_BOOL, "World grouped by texture", "1", 0, 0, NULL,
-		"Draws the world's faces grouped by texture, in far fewer calls to the graphics card. The picture is the same." },
+		"Draws the world grouped by texture, in far fewer calls. Same picture." },
 	{ "gfx_performance", "rc_fxbatch", RC_BOOL, "Faster rain and grass", "1", 0, 0, NULL,
-		"Sends rain, snow and grass to the graphics card in one block each. The picture is the same." },
+		"Rain, snow and grass in one block each. Same picture." },
 	{ "gfx_performance", "rc_smoothframes", RC_BOOL, "Smooth frames (experimental)", "0", 0, 0, NULL,
-		"On monitors faster than 100 Hz, draws extra pictures between the game's 100 frames a second, turned with the mouse." },
+		"Extra frames between the game's 100 a second, on fast monitors." },
 	{ "gfx_performance", "rc_smoothframes_fps", RC_INT, "Smooth frames rate", "0", 0, 500, NULL,
-		"The pictures a second smooth frames aim for. 0 follows the monitor's refresh rate." },
+		"Frames a second for smooth frames. 0 follows the monitor." },
 	{ "gfx_performance", "rc_prof", RC_LIST, "Frame profiler", "0", 0, 0, "Off=0|Frame times=1|Frame and graphics card times=2",
 		"Shows how long each part of a frame takes." },
 
@@ -184,7 +183,7 @@ static const RcOption s_RcOptions[] =
 	{ "hud_crosshair", "rc_crosshair", RC_BOOL, "Cry of Fear crosshair", "1", 0, 0, NULL,
 		"The game's red crosshair. Off hides it and keeps the ammo display." },
 	{ "hud_crosshair", "rc_cross", RC_BOOL, "Custom crosshair", "0", 0, 0, NULL,
-		"A crosshair set up by the options below. It shows with or without a weapon." },
+		"A crosshair made from the options below." },
 	{ "hud_crosshair", "rc_cross_color", RC_TEXT, "Color (red green blue)", "0 255 0", 0, 0, NULL,
 		"Three numbers from 0 to 255, for example 0 255 0 for green." },
 	{ "hud_crosshair", "rc_cross_alpha", RC_INT, "Opacity", "255", 0, 255, NULL,
@@ -210,7 +209,7 @@ static const RcOption s_RcOptions[] =
 
 	// HUD, Information panel
 	{ "hud_info", "rc_info", RC_BOOL, "Information panel", "0", 0, 0, NULL,
-		"RebuiltSimon's panel at the top right: ReCoF and its version, Simon's health, stamina and speed, and a clock." },
+		"A panel at the top right: version, health, stamina, speed and a clock." },
 	{ "hud_info", "rc_info_health", RC_BOOL, "Health", "1", 0, 0, NULL, "Simon's health in the panel." },
 	{ "hud_info", "rc_info_stamina", RC_BOOL, "Stamina", "1", 0, 0, NULL, "Simon's stamina in the panel." },
 	{ "hud_info", "rc_info_speed", RC_BOOL, "Speed", "1", 0, 0, NULL, "Simon's speed in the panel." },
@@ -225,30 +224,30 @@ static const RcOption s_RcOptions[] =
 
 	// HUD, Speedrun
 	{ "hud_speedrun", "rc_hud_timer", RC_BOOL, "Run timer", "0", 0, 0, NULL,
-		"A run timer on the left that counts as the LiveSplit autosplitter does: it starts with a new game and stops for pauses, loads, menus and cutscenes." },
+		"A run timer that counts as the LiveSplit autosplitter does." },
 	{ "hud_speedrun", "rc_hud_timer_color", RC_TEXT, "Timer color", "255 255 255", 0, 0, NULL, "Three numbers from 0 to 255." },
 	{ "hud_speedrun", "rc_hud_timer_pos", RC_TEXT, "Timer position (x y)", "0 .5", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_speedometer", RC_BOOL, "Speedometer", "0", 0, 0, NULL, "Shows your horizontal speed on screen." },
 	{ "hud_speedrun", "rc_speedometer_jump", RC_BOOL, "Takeoff speed", "1", 0, 0, NULL, "Shows the speed at your last jump under the speedometer." },
 	{ "hud_speedrun", "rc_speedometer_3d", RC_BOOL, "3D speed", "0", 0, 0, NULL, "The speedometer counts vertical speed too." },
 	{ "hud_speedrun", "rc_speedometer_color", RC_TEXT, "Speedometer color", "255 255 255", 0, 0, NULL, "Three numbers from 0 to 255." },
 	{ "hud_speedrun", "rc_speedometer_pos", RC_TEXT, "Speedometer position (x y)", ".5 .9", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_speedometer_jump_pos", RC_TEXT, "Takeoff speed position (x y)", ".5 .95", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_health", RC_BOOL, "Health number", "0", 0, 0, NULL, "Simon's health in HUD digits, as RebuiltSimon shows it." },
 	{ "hud_speedrun", "rc_hud_health_pos", RC_TEXT, "Health number position (x y)", ".02 .73", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_stamina", RC_BOOL, "Stamina number", "0", 0, 0, NULL, "Simon's stamina in HUD digits, as RebuiltSimon shows it." },
 	{ "hud_speedrun", "rc_hud_stamina_pos", RC_TEXT, "Stamina number position (x y)", ".07 .73", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_centered", RC_BOOL, "Numbers centered on their position", "1", 0, 0, NULL,
 		"Off, a number starts at its position instead." },
 
 	// Audio, Sound (a row on the audio page)
 	{ "audio_sound", "rc_omgbruh_sound", RC_BOOL, "Same pitch on every shot", "0", 0, 0, NULL,
-		"Plays your weapon sounds at their recorded pitch. The original game changes it a little at every shot." },
+		"Weapon sounds at their recorded pitch, not changed at every shot." },
 
 	// Multiplayer, Player
 	{ "mp_player", "name", RC_TEXT, "Co-op name", "James", 0, 0, NULL,
@@ -259,17 +258,17 @@ static const RcOption s_RcOptions[] =
 
 	// B400: Multiplayer, Co-op: the story co-op host's rules (they are the host's: a guest's do nothing) and the voice
 	{ "mp_coop", "rc_coop_exit_wait", RC_INT, "Exit waits for the group (s)", "60", 0, 180, NULL,
-		"Host: how long a level exit waits for the whole group before it brings the others to it. 0 changes level at once." },
+		"Host: how long a level exit waits for everyone. 0: no wait." },
 	{ "mp_coop", "rc_coop_respawn_time", RC_INT, "Back after dying (s)", "10", 0, 60, NULL,
-		"Host: seconds before a dead player comes back next to the group, with his things. 0 keeps Cry of Fear's own rule. The difficulty sets it too." },
+		"Host: seconds before a dead player comes back. 0: the original rule." },
 	{ "mp_coop", "rc_coop_monster_health", RC_INT, "Monster health per friend (%)", "25", 0, 100, NULL,
-		"Host: how much more health monsters have for each player beyond the first, at most double. The difficulty sets it too." },
+		"Host: extra monster health for each player beyond the first." },
 	{ "mp_coop", "rc_coop_autosave", RC_BOOL, "Autosave on each level", "1", 0, 0, NULL,
 		"Host: saves the group's game as coop_auto once everyone is in on a new level." },
 	{ "mp_coop", "rc_coop_skip_vote", RC_BOOL, "Friends vote to skip scenes", "1", 0, 0, NULL,
-		"Host: a friend's Enter in a scene is a vote, and the scene is skipped once everyone watching has pressed it. Off: only the host skips." },
+		"Host: a scene is skipped once everyone watching presses Enter." },
 	{ "mp_coop", "rc_voice_3d", RC_BOOL, "Voices from where friends stand", "1", 0, 0, NULL,
-		"A friend's voice comes from where he is, fades with distance and sounds muffled behind walls. Off: the flat radio voice of the original game." },
+		"Friends' voices come from where they stand. Off: the original radio voice." },
 	{ "mp_coop", "rc_voice_range", RC_INT, "Voice range", "1400", 400, 4000, NULL,
 		"How far a friend's voice carries, in game units." },
 	{ "mp_coop", "rc_voice_wall", RC_INT, "Voice behind a wall (%)", "10", 0, 100, NULL,
@@ -277,7 +276,7 @@ static const RcOption s_RcOptions[] =
 
 	// ReCoF
 	{ "about", "rc_discord", RC_BOOL, "Discord status", "1", 0, 0, NULL,
-		"While Discord is open, your profile shows that you are playing ReCoF: the map, the version and whether you are playing or in the menu." },
+		"Shows on your Discord profile that you are playing ReCoF." },
 };
 
 #define RC_NUM_OPTIONS ( sizeof( s_RcOptions ) / sizeof( s_RcOptions[0] ) )
@@ -920,7 +919,7 @@ static const char s_szRcAbout[] =
 	"The ReCoF Launcher installs and updates it: github.com/caixax/ReCoF-Launcher\n\n"
 	"Cry of Fear is by Team Psykskallar. Thanks to cd_n0 (RebuiltSimon), YaLTeR (BunnymodXT) and Valve.";
 
-CRcAboutPage::CRcAboutPage( vgui::Panel *parent ) : BaseClass( parent, "about", "Point at an option to see what it does." )
+CRcAboutPage::CRcAboutPage( vgui::Panel *parent ) : BaseClass( parent, "about", "" )
 {
 	m_pText = new Label( this, "About", s_szRcAbout );
 	m_pText->SetWrap( true );
