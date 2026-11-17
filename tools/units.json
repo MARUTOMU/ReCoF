@@ -672,6 +672,10 @@
           "source": "src/dlls/rc_cheats.cpp"
         },
         {
+          "name": "dlls/rc_coop",
+          "source": "src/dlls/rc_coop.cpp"
+        },
+        {
           "name": "dlls/rc_svprof",
           "source": "src/dlls/rc_svprof.cpp"
         }
@@ -880,6 +884,7 @@
           "dlls/weapons",
           "dlls/world",
           "dlls/rc_cheats",
+          "dlls/rc_coop",
           "dlls/rc_svprof"
         ]
       }

@@ -341,6 +341,14 @@ CGameRules *InstallGameRules( void )
 	SERVER_COMMAND( "exec game.cfg\n" );
 	SERVER_EXECUTE( );
 
+	// ReCoF: story co-op, Simon's story for several players (rc_coop.cpp); single player never gets here
+	// read by name: on a listen server client.dll registers rc_coop first, so it can be set before hl.dll loads
+	if ( gpGlobals->maxClients > 1 && CVAR_GET_FLOAT( "rc_coop" ) )
+	{
+		g_teamplay = 0;
+		return new CHalfLifeStoryCoop;
+	}
+
 	if ( !gpGlobals->deathmatch )
 	{
 		// generic half-life

@@ -26,6 +26,8 @@ extern cvar_t	teamplay;
 extern cvar_t	fraglimit;
 extern cvar_t	timelimit;
 extern cvar_t	friendlyfire;
+extern cvar_t	rc_coop;	// ReCoF story co-op (rc_coop.cpp)
+void RcCoop_Init( void );
 extern cvar_t	falldamage;
 extern cvar_t	weaponstay;
 extern cvar_t	forcerespawn;

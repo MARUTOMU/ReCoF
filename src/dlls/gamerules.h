@@ -388,4 +388,15 @@ protected:
 	void SendMOTDToClient( edict_t *client );
 };
 
+// ReCoF story co-op (rc_coop.cpp): the multiplayer rules without deathmatch, for Simon's story with 2 to 4 players
+class CHalfLifeStoryCoop : public CHalfLifeMultiplay
+{
+public:
+	virtual BOOL IsDeathmatch( void );
+	virtual BOOL IsCoOp( void );
+	virtual int PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget );
+	virtual BOOL FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity *pAttacker );
+	virtual edict_t *GetPlayerSpawnSpot( CBasePlayer *pPlayer );
+};
+
 extern DLL_GLOBAL CGameRules*	g_pGameRules;
