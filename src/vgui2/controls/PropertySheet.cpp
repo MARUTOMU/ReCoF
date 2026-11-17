@@ -23,6 +23,8 @@
 
 using namespace vgui2;
 
+int RcUiScaled( int value );	// ReCoF (B399), GameUI's RcTheme.cpp: lengths grow with the screen
+
 template <class T>
 inline T max_guess(T a, T b)
 {
@@ -425,7 +427,7 @@ void PropertySheet::PerformLayout()
 	{
 		if (_showTabs)
 		{
-			_activePage->SetBounds(0, 28, wide, tall - 28);
+			_activePage->SetBounds(0, RcUiScaled(28), wide, tall - RcUiScaled(28));	// ReCoF (B399)
 		}
 		else
 		{
@@ -447,11 +449,11 @@ void PropertySheet::PerformLayout()
 			if (_pageTabs[i] == _activeTab)
 			{
 				// active tab is taller
-				_activeTab->SetBounds(xtab, 2, width, 27);
+				_activeTab->SetBounds(xtab, RcUiScaled(2), width, RcUiScaled(27));
 			}
 			else
 			{
-				_pageTabs[i]->SetBounds(xtab, 4, width, 25);
+				_pageTabs[i]->SetBounds(xtab, RcUiScaled(4), width, RcUiScaled(25));
 			}
 			_pageTabs[i]->SetVisible(true);
 			xtab += (width + 1);

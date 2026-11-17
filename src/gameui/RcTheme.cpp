@@ -182,6 +182,44 @@ static bool RcThemeLookup( const char *name, Color &out )
 // at the pixel heights of the retail scheme for now. Made on first use, once the surface is up; a face that fails
 // (no font registered) falls back to the real scheme's font
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// B399: the scale of the GameUI: the screen's height over 720, at least 1 (the dialogs were laid out for 720 lines
+// and look as before up to there), at most 4. RcUiScaled gives a 720p length at this screen; the theme's fonts,
+// proportional layouts (GetProportionalScaledValue) and the dialogs' own sizes use it
+//-----------------------------------------------------------------------------
+float RcMenuScaleSetting( void );	// rc_menu_scale, RcOptions.cpp
+
+float RcUiScale( void )
+{
+	int wide = 0, tall = 0;
+	if ( surface() )
+		surface()->GetScreenSize( wide, tall );
+	float scale = tall / 720.0f;
+	if ( scale < 1.0f )
+		scale = 1.0f;
+
+	// the player's menu size (rc_menu_scale, 100 to 200 percent) on top, as far as the Options window (500 lines at
+	// 720p) still fits on the screen
+	float user = RcMenuScaleSetting() / 100.0f;
+	if ( user < 1.0f )
+		user = 1.0f;
+	if ( user > 2.0f )
+		user = 2.0f;
+	scale *= user;
+	float fit = tall * 0.92f / 500.0f;
+	if ( fit >= 1.0f && scale > fit )
+		scale = fit;
+
+	if ( scale > 4.0f )
+		scale = 4.0f;
+	return scale;
+}
+
+int RcUiScaled( int value )
+{
+	return (int)( value * RcUiScale() + ( value >= 0 ? 0.5f : -0.5f ) );
+}
+
 struct RcThemeFont_t
 {
 	const char	*name;
@@ -190,19 +228,22 @@ struct RcThemeFont_t
 	int			weight;
 	int			flags;
 	HFont		font;
-	bool		tried;
+	float		scale;	// the scale it was made at; another screen height makes it again
 };
 
 static RcThemeFont_t s_RcFonts[] =
 {
-	{ "Default",			"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
-	{ "DefaultBold",		"Inter SemiBold",	15, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
-	{ "DefaultUnderline",	"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS | ISurface::FONTFLAG_UNDERLINE, 0, false },
-	{ "DefaultSmall",		"Inter",			13, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
-	{ "DefaultSmallBold",	"Inter SemiBold",	13, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
-	{ "DefaultVerySmall",	"Inter",			12, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
-	{ "MenuLarge",			"Inter SemiBold",	22, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },	// the in-game text menu
-	{ "UiHeadline",			"Inter SemiBold",	20, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "Default",			"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	{ "DefaultBold",		"Inter SemiBold",	15, 600, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	{ "DefaultUnderline",	"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS | ISurface::FONTFLAG_UNDERLINE, 0, 0 },
+	{ "DefaultSmall",		"Inter",			13, 400, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	{ "DefaultSmallBold",	"Inter SemiBold",	13, 600, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	{ "DefaultVerySmall",	"Inter",			12, 400, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	{ "MenuLarge",			"Inter SemiBold",	22, 600, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },	// the in-game text menu
+	{ "UiHeadline",			"Inter SemiBold",	20, 600, ISurface::FONTFLAG_ANTIALIAS, 0, 0 },
+	// the glyphs of checks, arrows and the close box: the retail size, grown with the rest (a proportional scheme
+	// font would be sized from 480 lines)
+	{ "Marlett",			"Marlett",			14, 0, ISurface::FONTFLAG_SYMBOL, 0, 0 },
 };
 
 static bool s_bRcFontsRegistered;
@@ -216,11 +257,13 @@ static HFont RcThemeFont( const char *name )
 		RcThemeFont_t *f = &s_RcFonts[i];
 		if ( stricmp( name, f->name ) )
 			continue;
-		if ( !f->tried )
+		float scale = RcUiScale();
+		if ( f->scale != scale )
 		{
-			f->tried = true;
+			f->scale = scale;
+			f->font = 0;
 			HFont h = surface()->CreateFont();
-			if ( h && surface()->AddGlyphSetToFont( h, f->face, f->tall, f->weight, 0, 0, f->flags, 0, 0 ) )
+			if ( h && surface()->AddGlyphSetToFont( h, f->face, RcUiScaled( f->tall ), f->weight, 0, 0, f->flags, 0, 0 ) )
 				f->font = h;
 		}
 		return f->font;
@@ -308,8 +351,9 @@ public:
 		return &m_Schemes[m_nSchemes++];
 	}
 	virtual void Shutdown( bool full ) { m_pReal->Shutdown( full ); }
-	virtual int GetProportionalScaledValue( int normalizedValue ) { return m_pReal->GetProportionalScaledValue( normalizedValue ); }
-	virtual int GetProportionalNormalizedValue( int scaledValue ) { return m_pReal->GetProportionalNormalizedValue( scaledValue ); }
+	// B399: a proportional layout (the retail Options pages) is in 720p pixels and grows with the GameUI's scale
+	virtual int GetProportionalScaledValue( int normalizedValue ) { return RcUiScaled( normalizedValue ); }
+	virtual int GetProportionalNormalizedValue( int scaledValue ) { return (int)( scaledValue / RcUiScale() + 0.5f ); }
 };
 
 static CRcSchemeManager s_RcSchemeManager;

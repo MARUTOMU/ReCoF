@@ -119,6 +119,11 @@ static const RcOption s_RcOptions[] =
 	{ "gfx_effects", "cl_smokeparticlelimit", RC_INT, "Gun smoke particles", "5", 0, 20, NULL,
 		"The most gun smoke particles at a time." },
 
+	// B399: the menus' size
+	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
+		"How large the menus and this window are, in percent of their size for your screen (they grow with its "
+		"height already). Takes effect when a window opens again." },
+
 	// Graphics, Quality
 	{ "gfx_quality", "gl_contrast", RC_FLOAT, "Contrast", "1", 0, 20, NULL,
 		"1 is normal." },
@@ -294,7 +299,14 @@ static bool RcSameNumber( const char *a, const char *b )
 //-----------------------------------------------------------------------------
 // The row of one option
 //-----------------------------------------------------------------------------
-#define RC_ROW_TALL		28
+int RcUiScaled( int value );	// B399, RcTheme.cpp: a 720p length at this screen
+
+// B399: the player's menu size in percent (client.dll registers rc_menu_scale), for RcTheme.cpp's RcUiScale
+float RcMenuScaleSetting( void )
+{
+	return engine ? engine->pfnGetCvarFloat( "rc_menu_scale" ) : 100.0f;
+}
+#define RC_ROW_TALL		RcUiScaled( 28 )
 #define RC_FLOAT_SCALE	100.0f
 
 CRcOptionRow::CRcOptionRow( vgui::Panel *parent, const RcOption *option, vgui::Panel *target ) : BaseClass( parent, option->cvar )
@@ -367,22 +379,24 @@ void CRcOptionRow::PerformLayout()
 
 	int labelWide = wide / 2;
 	int x = labelWide;
-	int controlWide = wide - labelWide - 8;
-	if ( controlWide > 240 )
-		controlWide = 240;
+	int controlWide = wide - labelWide - RcUiScaled( 8 );
+	if ( controlWide > RcUiScaled( 240 ) )
+		controlWide = RcUiScaled( 240 );
 
-	m_pLabel->SetBounds( 0, 2, labelWide - 8, 24 );
+	// B399: the 720p sizes, grown with the screen
+	int s2 = RcUiScaled( 2 ), s24 = RcUiScaled( 24 );
+	m_pLabel->SetBounds( 0, s2, labelWide - RcUiScaled( 8 ), s24 );
 
 	if ( m_pCheck )
-		m_pCheck->SetBounds( x, 2, 24, 24 );
+		m_pCheck->SetBounds( x, s2, s24, s24 );
 	if ( m_pCombo )
-		m_pCombo->SetBounds( x, 2, controlWide, 24 );
+		m_pCombo->SetBounds( x, s2, controlWide, s24 );
 	if ( m_pText )
-		m_pText->SetBounds( x, 2, controlWide, 24 );
+		m_pText->SetBounds( x, s2, controlWide, s24 );
 	if ( m_pSlider )
 	{
-		m_pSlider->SetBounds( x, 0, controlWide - 56, 26 );
-		m_pValue->SetBounds( x + controlWide - 52, 2, 52, 24 );
+		m_pSlider->SetBounds( x, 0, controlWide - RcUiScaled( 56 ), RcUiScaled( 26 ) );
+		m_pValue->SetBounds( x + controlWide - RcUiScaled( 52 ), s2, RcUiScaled( 52 ), s24 );
 	}
 }
 
@@ -717,16 +731,18 @@ void CRcOptionsPage::PerformLayout()
 	int wide, tall;
 	GetSize( wide, tall );
 
-	int listWide = wide - 16;
+	// B399: the 720p sizes, grown with the screen
+	int s8 = RcUiScaled( 8 );
+	int listWide = wide - RcUiScaled( 16 );
 	if ( m_pPreview )
 	{
-		listWide -= 168;
-		m_pPreview->SetBounds( wide - 168, 8, 160, 160 );
+		listWide -= RcUiScaled( 168 );
+		m_pPreview->SetBounds( wide - RcUiScaled( 168 ), s8, RcUiScaled( 160 ), RcUiScaled( 160 ) );
 	}
 
-	m_pList->SetBounds( 8, 8, listWide, tall - 64 );
-	m_pHelp->SetBounds( 10, tall - 52, wide - 120, 46 );
-	m_pDefaults->SetBounds( wide - 100, tall - 34, 90, 24 );
+	m_pList->SetBounds( s8, s8, listWide, tall - RcUiScaled( 64 ) );
+	m_pHelp->SetBounds( RcUiScaled( 10 ), tall - RcUiScaled( 52 ), wide - RcUiScaled( 120 ), RcUiScaled( 46 ) );
+	m_pDefaults->SetBounds( wide - RcUiScaled( 100 ), tall - RcUiScaled( 34 ), RcUiScaled( 90 ), RcUiScaled( 24 ) );
 
 	// wrapped again at this width: a label keeps the wrap of the size it had when its text was set, and a page
 	// is first laid out tiny, before its tab is shown
