@@ -105,6 +105,7 @@ void RcCoop_PlayerCmd( CBasePlayer *pPlayer )
 }
 
 static void RcCoopSyncKeys( void );
+static void RcCoopSyncCodes( void );
 static float s_flRcNextKeySync;
 
 void CHalfLifeStoryCoop::Think( void )
@@ -115,6 +116,7 @@ void CHalfLifeStoryCoop::Think( void )
 	{
 		s_flRcNextKeySync = gpGlobals->time + 1;
 		RcCoopSyncKeys();
+		RcCoopSyncCodes();
 	}
 
 	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
@@ -325,6 +327,52 @@ static void RcCoopSyncKeys( void )
 	}
 }
 
+// G10: Cry of Fear rolls a padlock combination for each player when he spawns and gives a keypad code to the player
+// who reads it (a note, a screen, a board); a code one player reads would not open the lock for another. The group
+// shares one: the padlock combination of the first player in the game, and the keypad code a player learned last.
+static int s_iRcTeamPad[5];
+static int s_iRcTeamKeypad = -1;
+static int s_iRcKeypadSet[33];	// what this player's keypad code was set to by the group (to tell his own news)
+
+static void RcCoopSyncCodes( void )
+{
+	int i;
+	for ( i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 )
+			continue;
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		if ( !s_iRcTeamPad[1] && pPlayer->m_iPadlockNumber[1] && pPlayer->m_iPadlockNumber[2] && pPlayer->m_iPadlockNumber[3] && pPlayer->m_iPadlockNumber[4] )
+		{
+			for ( int d = 1; d <= 4; d++ )
+				s_iRcTeamPad[d] = pPlayer->m_iPadlockNumber[d];
+		}
+		// a code this player learned himself (different from what the group gave him) is the group's now
+		int code = pPlayer->m_iKeypadNumber;
+		if ( code != s_iRcTeamKeypad && code != s_iRcKeypadSet[i] && code != 9999 && code != 0 )
+		{
+			s_iRcTeamKeypad = code;
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: keypad code %d is the group's now\n", code ) );
+		}
+	}
+	for ( i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 )
+			continue;
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		if ( s_iRcTeamPad[1] )
+		{
+			for ( int d = 1; d <= 4; d++ )
+				pPlayer->m_iPadlockNumber[d] = s_iRcTeamPad[d];
+		}
+		if ( s_iRcTeamKeypad >= 0 && pPlayer->m_iKeypadNumber != s_iRcTeamKeypad )
+			pPlayer->m_iKeypadNumber = s_iRcTeamKeypad;
+		s_iRcKeypadSet[i] = pPlayer->m_iKeypadNumber;
+	}
+}
+
 static EHANDLE s_hRcWaitExit;
 static float s_flRcWaitStart, s_flRcWaitTouch, s_flRcWaitMsg;
 static bool s_bRcGoNow;
@@ -522,7 +570,8 @@ static void RcCoopDump( void )
 				strcat( szSlots, pszShort[0] ? pszShort : "-" );
 			}
 		}
-		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s\n", i, szSlots ) );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d slots:%s, padlock %d%d%d%d, keypad %d\n", i, szSlots,
+			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
 			pPlayer->pev->fuser4 != 0, nItems, szItems ));
