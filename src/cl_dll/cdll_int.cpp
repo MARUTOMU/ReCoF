@@ -152,6 +152,13 @@ void DLLEXPORT HUD_PlayerMove( struct playermove_s *ppmove, int server )
 	// PostThink), so they pass through each other; the engine still gave the prediction the other players as
 	// solid boxes (cl_ents.c CL_SetSolidPlayers), and walking into a player stopped the predicted move until the
 	// server's answer came back, then the view jumped ahead. The prediction leaves the other players out
+	// ReCoF (B440): the server's movement holds (fuser3: a phone call, a fall, a reload, a yes/no, the van) were never
+	// predicted: the clientdata has no room for them (fuser3 is 10 bits at 1/128 in delta.lst), so a hold snapped a
+	// guest back. PostThink copies fuser3 into vuser4.x every frame and the clientdata carries it as a whole number
+	// (10 bits at 1), which every hold is
+	if ( !server )
+		ppmove->fuser3 = ppmove->vuser4[0];
+
 	if ( !server && gEngfuncs.GetMaxClients() > 1 )
 	{
 		int iKept = 0;
