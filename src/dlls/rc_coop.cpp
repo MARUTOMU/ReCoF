@@ -75,6 +75,47 @@ static bool RcCoopSpotFree( const Vector &vecFrom, const Vector &vecSpot, edict_
 	return true;
 }
 
+// B403: move pEnt where his box is clear of pOver's: beside him, 36 to 104 units away, or, in a place too small for
+// that (c_nightmare starts in a booth about 90 units wide), the two of them half a step apart from the spot they share.
+// The engine links each box 1 unit larger on every side and CBaseEntity::Intersects counts touching boxes, so two
+// players overlap until their origins are more than 34 units apart on an axis
+static bool RcCoopStepAside( CBaseEntity *pEnt, CBaseEntity *pOver )
+{
+	static const float s_flStep[4] = { 36, 48, 72, 104 };
+	Vector vecBase = pOver->pev->origin;
+	for ( int r = 0; r < 4; r++ )
+	{
+		for ( int a = 0; a < 8; a++ )
+		{
+			float yaw = a * 45 * ( M_PI / 180.0 );
+			Vector vecOfs( cos( yaw ) * s_flStep[r], sin( yaw ) * s_flStep[r], 0 );
+			if ( fabs( vecOfs.x ) < 35 && fabs( vecOfs.y ) < 35 )
+				continue;	// still inside his box
+			if ( RcCoopSpotFree( vecBase, vecBase + vecOfs, pEnt->edict() ) )
+			{
+				UTIL_SetOrigin( pEnt, vecBase + vecOfs );
+				pEnt->pev->velocity = g_vecZero;
+				return true;
+			}
+		}
+	}
+	for ( int a = 0; a < 8; a++ )
+	{
+		float yaw = a * 45 * ( M_PI / 180.0 );
+		float flHalf = ( a & 1 ) ? 26 : 18;	// 36 units apart on an axis, 36 on both on a diagonal
+		Vector vecOfs( cos( yaw ) * flHalf, sin( yaw ) * flHalf, 0 );
+		if ( RcCoopSpotFree( vecBase, vecBase + vecOfs, pEnt->edict() ) && RcCoopSpotFree( vecBase, vecBase - vecOfs, pOver->edict() ) )
+		{
+			UTIL_SetOrigin( pEnt, vecBase + vecOfs );
+			UTIL_SetOrigin( pOver, vecBase - vecOfs );
+			pEnt->pev->velocity = g_vecZero;
+			pOver->pev->velocity = g_vecZero;
+			return true;
+		}
+	}
+	return false;
+}
+
 CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 {
 	CVAR_SET_FLOAT( "rc_coop_skip", 0 );	// G6: a new map or a loaded game does not go on fast forwarding
@@ -86,6 +127,7 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 		m_bProtected[i] = false;
 		m_flOldTakeDamage[i] = DAMAGE_AIM;
 		m_bArmed[i] = false;
+		m_flOverlap[i] = 0;
 		m_bWasAlive[i] = false;
 		m_bRestore[i] = false;
 		m_iSnapItems[i] = 0;
@@ -428,6 +470,34 @@ void CHalfLifeStoryCoop::Think( void )
 					break;
 				}
 			}
+		}
+
+		// B403: the same rule leaves players a level change brings in on top of each other (a scene's end puts every
+		// player on one spot) SOLID_NOT for good, and the new map's triggers where they arrive never go off (c_nightmare's
+		// opening scene and camera): once they have stood together 1.5 s outside any scene, the later one steps aside
+		CBaseEntity *pOver = NULL;
+		if ( !bLoading && pEnt->pev->solid == SOLID_NOT && pEnt->pev->movetype == MOVETYPE_WALK && RcCoopPresent( pEnt ) &&
+			!pPl->IsInCutscene() )
+		{
+			for ( int j = 1; j < i && !pOver; j++ )
+			{
+				CBaseEntity *pOther = UTIL_PlayerByIndex( j );
+				if ( RcCoopPresent( pOther ) && pOther->Intersects( pEnt ) )
+					pOver = pOther;
+			}
+		}
+		if ( !pOver )
+			m_flOverlap[i] = 0;
+		else if ( m_flOverlap[i] == 0 )
+			m_flOverlap[i] = gpGlobals->time;
+		else if ( gpGlobals->time - m_flOverlap[i] > 1.5 )
+		{
+			m_flOverlap[i] = 0;
+			if ( RcCoopStepAside( pEnt, pOver ) )
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d stood inside player %d and stepped aside\n", i,
+					ENTINDEX( pOver->edict() ) ) );
+			else
+				m_flOverlap[i] = gpGlobals->time + 5;	// no room here: try again in a while
 		}
 	}
 }
@@ -1012,9 +1082,9 @@ static void RcCoopDump( void )
 		}
 		CHalfLifeStoryCoop *pRules = RcCoopRules();
 		if ( pRules && i <= 32 )
-			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d, movetype %d, solid %d, flags %x, scene %d\n", i,
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d last command at %.1f (time %.1f), protected %d, armed %d, movetype %d, solid %d, flags %x, scene %d, at %.0f %.0f %.0f\n", i,
 				pRules->m_flSeen[i], gpGlobals->time, pRules->m_bProtected[i], pRules->m_bArmed[i], pPlayer->pev->movetype, pPlayer->pev->solid,
-				pPlayer->pev->flags, pPlayer->IsInCutscene() ) );
+				pPlayer->pev->flags, pPlayer->IsInCutscene(), pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z ) );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d use: phone or computer %d, call %d, ladder %d, reviving %d, padlock open %d, next use in %.1f\n", i,
 			pPlayer->m_iUsingComputerOrPhone, pPlayer->m_bInPhoneCall ? 1 : 0, pPlayer->IsOnLadder() ? 1 : 0, pPlayer->pPlayerToRevive ? 1 : 0,
 			pPlayer->m_pPadlock != NULL ? 1 : 0, pPlayer->m_fUseTime - gpGlobals->time ) );

@@ -407,6 +407,7 @@ public:
 	bool m_bProtected[33];	// G3: made untouchable while loading
 	float m_flOldTakeDamage[33];
 	bool m_bArmed[33];	// G2: has been outside every level exit since the level began
+	float m_flOverlap[33];	// B403: since when this player has stood inside a teammate, 0 when he does not
 	// G12: what a player had when he died, given back when he respawns
 	bool m_bAutosaved;	// G13: this level's autosave is done
 	float m_flLevelStart;	// G13: the first Think of this level

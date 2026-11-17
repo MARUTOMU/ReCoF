@@ -26,7 +26,7 @@ Every player needs the same ReCoF build and Steam running.
 - **Keys belong to the group.** A key, fuse or other story item one player picks up is in everyone's inventory; when it is used on its door or lock it is gone for everyone.
 - **One code for the group.** The padlock combination and the keypad code (and the keypad it is for) are the same for every player; once one player opens the keypad, the code is used up for everyone.
 - **Padlocks and puzzles are the user's.** A padlock is the player's who opened it: cancelling or solving it frees him, not the host, and a teammate cannot take it over. The bar puzzle's end gives the view back to the player looking at it; the statue puzzle's end closes everyone's statue screen.
-- **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate.
+- **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate, and players a level change brings in on one spot step apart, so the triggers where they arrive go off.
 - **Cameras** already show every scene to every player (Cry of Fear's own code).
 - **Skipping scenes.** The host's Enter (or `rc_cutscene_skip`) skips a scene he is watching for everyone: the game hurries through it, and the players watching it see the skip screen. A guest's Enter is his vote: everyone sees "<name> wants to skip the scene (1 of 2): Enter to agree", and once every player in the scene has pressed Enter the group skips it (`rc_coop_skip_vote 0` leaves it to the host).
 - **Teammates.** No friendly fire; a player who joins comes in next to a teammate.
