@@ -512,12 +512,17 @@ static void RcCoopSyncCodes( void )
 			for ( int d = 1; d <= 4; d++ )
 				s_iRcTeamPad[d] = pPlayer->m_iPadlockNumber[d];
 		}
-		// a code this player learned himself (different from what the group gave him) is the group's now
+		// a code this player learned himself (different from what the group gave him) is the group's now; the group's
+		// code he opened its keypad with (KeypadNumberCheck makes it 9999) is used up for everyone
 		int code = pPlayer->m_iKeypadNumber;
-		if ( code != s_iRcTeamKeypad && code != s_iRcKeypadSet[i] && code != 9999 && code != 0 )
+		bool bUsed = code == 9999 && s_iRcTeamKeypad > 0 && s_iRcTeamKeypad != 9999 && s_iRcKeypadSet[i] == s_iRcTeamKeypad;
+		if ( code != s_iRcTeamKeypad && code != s_iRcKeypadSet[i] && ( ( code != 9999 && code != 0 ) || bUsed ) )
 		{
+			if ( bUsed )
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: keypad code %d used, for the group\n", s_iRcTeamKeypad ) );
+			else
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: keypad code %d is the group's now\n", code ) );
 			s_iRcTeamKeypad = code;
-			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: keypad code %d is the group's now\n", code ) );
 		}
 	}
 	for ( i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
