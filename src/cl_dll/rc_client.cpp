@@ -521,6 +521,12 @@ static void RcCoopStart_f( void )
 }
 
 void RcCoopMenu_Open( void );	// B393, rc_coopmenu.cpp
+
+// B397: rc_options opens the Options window from anywhere, as the main menu's Options does
+static void RcOptions_f( void )
+{
+	gEngfuncs.pfnServerCmd( "optionshack 2" );
+}
 void RcCoopMenu_LaunchOptions( void );	// B395
 
 // B393: rc_coop_continue <save>: the host's story co-op game from a co-op save (the main menu's Continue), as
@@ -733,6 +739,7 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_start", RcCoopStart_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_continue", RcCoopContinue_f );	// B393
 	gEngfuncs.pfnAddCommand( "rc_coop_menu", RcCoopMenu_Open );	// B393: the main menu's Story Co-op panel
+	gEngfuncs.pfnAddCommand( "rc_options", RcOptions_f );	// B397
 	gEngfuncs.pfnAddCommand( "rc_coop_launchoptions", RcCoopMenu_LaunchOptions );	// B395
 	gEngfuncs.pfnAddCommand( "rc_coop_invite", RcCoopInvite_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_leave", RcCoopLeave_f );

@@ -130,8 +130,11 @@ void COptionsDialog::Run()
 //-----------------------------------------------------------------------------
 // Purpose: Called when the GameUI is hidden
 //-----------------------------------------------------------------------------
+void RcGameUI_DialogClosed( void );	// ReCoF (B397), GameUI_Interface.cpp
+
 void COptionsDialog::OnClose()
 {
 	BaseClass::OnClose();
 	MarkForDeletion();
+	RcGameUI_DialogClosed();	// ReCoF (B397): back to the picture menu it was opened from
 }

@@ -88,6 +88,29 @@ vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len)
 	return new vgui::BitmapTGA(&stream, true);
 }
 
+// ReCoF (B397): the picture menus' hover pictures, each loaded once (retail loaded one at every hover and never freed
+// the one it replaced)
+vgui::BitmapTGA* vgui_LoadTGACached(char const *pFilename)
+{
+	static char s_szName[64][64];
+	static vgui::BitmapTGA *s_pImage[64];
+	static int s_nImages;
+	int i;
+
+	for ( i = 0; i < s_nImages; i++ )
+	{
+		if ( !stricmp( s_szName[i], pFilename ) )
+			return s_pImage[i];
+	}
+	vgui::BitmapTGA *pImage = vgui_LoadTGA( pFilename );
+	if ( pImage && s_nImages < 64 && strlen( pFilename ) < 64 )
+	{
+		strcpy( s_szName[s_nImages], pFilename );
+		s_pImage[s_nImages++] = pImage;
+	}
+	return pImage;
+}
+
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename)
 {
 	MemoryInputStream stream;

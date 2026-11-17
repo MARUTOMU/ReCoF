@@ -19,6 +19,8 @@ vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename);
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename);
 // ReCoF (B393): a TGA file already in memory (as vgui_LoadTGA, alpha inverted for VGUI)
 vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len);
+// ReCoF (B397): a picture the menus swap in and out under the cursor, loaded once and kept (do not delete it)
+vgui::BitmapTGA* vgui_LoadTGACached(char const *pFilename);
 
 
 #endif // VGUI_LOADTGA_H

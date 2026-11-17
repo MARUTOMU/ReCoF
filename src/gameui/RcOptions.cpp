@@ -120,8 +120,6 @@ static const RcOption s_RcOptions[] =
 		"The most gun smoke particles at a time." },
 
 	// Graphics, Quality
-	{ "gfx_quality", "gl_brightness", RC_FLOAT, "Brightness boost", "0", 0, 0.3f, NULL,
-		"Lights up the picture on top of the Brightness of the Display tab." },
 	{ "gfx_quality", "gl_contrast", RC_FLOAT, "Contrast", "1", 0, 20, NULL,
 		"1 is normal." },
 	{ "gfx_quality", "gl_bump", RC_BOOL, "Bump maps", "1", 0, 0, NULL,

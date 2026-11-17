@@ -467,16 +467,16 @@ int MsgGameMenu_guess( const char *pszName, int iSize, void *pbuf )
 		gViewPort->m_pGameMenu_guess->m_bHostServerArmed_guess = false;
 		gViewPort->m_pGameMenu_guess->m_bQuitArmed_guess = false;
 
-		gViewPort->m_pGameMenu_guess->m_pNewGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/newgame.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pLoadGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/loadgame.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pCustom_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/customc.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pJoinServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/jserver.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pOptions_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/options.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pLanguage_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/language.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pUnlockables_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/unlockables.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pExtras_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/extras.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pHostServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/hserver.tga" ) );
-		gViewPort->m_pGameMenu_guess->m_pQuit_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/quit.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pNewGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/newgame.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pLoadGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/loadgame.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pCustom_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/customc.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pJoinServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/jserver.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pOptions_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/options.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pLanguage_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/language.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pUnlockables_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/unlockables.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pExtras_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/extras.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pHostServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/hserver.tga" ) );
+		gViewPort->m_pGameMenu_guess->m_pQuit_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/quit.tga" ) );
 		RcCoopMenu_Reset();	// ReCoF (B393)
 
 		gViewPort->m_pGameMenu_guess->setVisible( true );
@@ -710,7 +710,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bNewGameArmed_guess )
 		{
-			m_pNewGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/newgame_mo.tga" ) );
+			m_pNewGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/newgame_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bNewGameArmed_guess = true;
 			m_pNewGame_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -722,7 +722,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bNewGameArmed_guess )
 	{
-		m_pNewGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/newgame.tga" ) );
+		m_pNewGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/newgame.tga" ) );
 		m_bNewGameArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -731,7 +731,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bLoadGameArmed_guess )
 		{
-			m_pLoadGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/loadgame_mo.tga" ) );
+			m_pLoadGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/loadgame_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bLoadGameArmed_guess = true;
 			m_pLoadGame_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -743,7 +743,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bLoadGameArmed_guess )
 	{
-		m_pLoadGame_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/loadgame.tga" ) );
+		m_pLoadGame_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/loadgame.tga" ) );
 		m_bLoadGameArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -752,7 +752,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bCustomArmed_guess )
 		{
-			m_pCustom_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/customc_mo.tga" ) );
+			m_pCustom_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/customc_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bCustomArmed_guess = true;
 			m_pCustom_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -764,7 +764,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bCustomArmed_guess )
 	{
-		m_pCustom_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/customc.tga" ) );
+		m_pCustom_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/customc.tga" ) );
 		m_bCustomArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -773,7 +773,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bJoinServerArmed_guess )
 		{
-			m_pJoinServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/jserver_mo.tga" ) );
+			m_pJoinServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/jserver_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bJoinServerArmed_guess = true;
 			m_pJoinServer_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -785,7 +785,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bJoinServerArmed_guess )
 	{
-		m_pJoinServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/jserver.tga" ) );
+		m_pJoinServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/jserver.tga" ) );
 		m_bJoinServerArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -794,7 +794,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bOptionsArmed_guess )
 		{
-			m_pOptions_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/options_mo.tga" ) );
+			m_pOptions_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/options_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bOptionsArmed_guess = true;
 			m_pOptions_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -806,7 +806,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bOptionsArmed_guess )
 	{
-		m_pOptions_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/options.tga" ) );
+		m_pOptions_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/options.tga" ) );
 		m_bOptionsArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -815,7 +815,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bLanguageArmed_guess )
 		{
-			m_pLanguage_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/language_mo.tga" ) );
+			m_pLanguage_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/language_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bLanguageArmed_guess = true;
 			m_pLanguage_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -827,7 +827,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bLanguageArmed_guess )
 	{
-		m_pLanguage_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/language.tga" ) );
+		m_pLanguage_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/language.tga" ) );
 		m_bLanguageArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -836,7 +836,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bUnlockablesArmed_guess )
 		{
-			m_pUnlockables_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/unlockables_mo.tga" ) );
+			m_pUnlockables_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/unlockables_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bUnlockablesArmed_guess = true;
 			m_pUnlockables_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -848,7 +848,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bUnlockablesArmed_guess )
 	{
-		m_pUnlockables_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/unlockables.tga" ) );
+		m_pUnlockables_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/unlockables.tga" ) );
 		m_bUnlockablesArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -857,7 +857,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bExtrasArmed_guess )
 		{
-			m_pExtras_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/extras_mo.tga" ) );
+			m_pExtras_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/extras_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bExtrasArmed_guess = true;
 			m_pExtras_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -869,7 +869,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bExtrasArmed_guess )
 	{
-		m_pExtras_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/extras.tga" ) );
+		m_pExtras_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/extras.tga" ) );
 		m_bExtrasArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -878,7 +878,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bHostServerArmed_guess )
 		{
-			m_pHostServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/hserver_mo.tga" ) );
+			m_pHostServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/hserver_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bHostServerArmed_guess = true;
 			m_pHostServer_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -890,7 +890,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bHostServerArmed_guess )
 	{
-		m_pHostServer_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/hserver.tga" ) );
+		m_pHostServer_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/hserver.tga" ) );
 		m_bHostServerArmed_guess = false;
 		ResetButtonPositions_guess();
 	}
@@ -899,7 +899,7 @@ void CGameMenu::solve()
 	{
 		if ( !m_bQuitArmed_guess )
 		{
-			m_pQuit_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/quit_mo.tga" ) );
+			m_pQuit_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/quit_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 0.5 );
 			m_bQuitArmed_guess = true;
 			m_pQuit_guess->getPos( m_iArmedX_guess, m_iArmedY_guess );
@@ -911,7 +911,7 @@ void CGameMenu::solve()
 	}
 	else if ( m_bQuitArmed_guess )
 	{
-		m_pQuit_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/quit.tga" ) );
+		m_pQuit_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/quit.tga" ) );
 		m_bQuitArmed_guess = false;
 		ResetButtonPositions_guess();
 	}

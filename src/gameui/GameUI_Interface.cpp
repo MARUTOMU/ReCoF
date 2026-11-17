@@ -62,6 +62,21 @@ vgui2::DHANDLE<CLoadingDialog> g_hLoadingDialog;
 
 CGameUI *g_pGameUI = NULL;
 
+// ReCoF (B397): Cry of Fear's picture menu (client.dll) opens Options, the server list and Host Server through
+// OpenDialog_guess, right after the engine activated the GameUI for it; when that dialog closes the GameUI goes away
+// again, as it was not up before (it stayed behind the picture menu, the 2D text menu over the 3D one)
+static bool s_bRcActivatedNow;	// ActivateGameUI showed the GameUI in this frame
+static bool s_bRcHideWithDialog;	// the open dialog came from outside the GameUI
+
+void RcGameUI_DialogClosed( void )
+{
+	if ( !s_bRcHideWithDialog )
+		return;
+	s_bRcHideWithDialog = false;
+	if ( g_pGameUI )
+		g_pGameUI->HideGameUI();
+}
+
 // the platform mutexes
 static WHANDLE g_hMutex_guess = NULL;
 static WHANDLE g_hWaitMutex_guess = NULL;
@@ -327,6 +342,8 @@ void CGameUI::ValidateCDKey(bool force, bool inConnect)
 //-----------------------------------------------------------------------------
 void CGameUI::OpenDialog_guess(int dialog)
 {
+	s_bRcHideWithDialog = s_bRcActivatedNow;	// ReCoF (B397)
+
 	switch (dialog)
 	{
 	case 0:
@@ -385,6 +402,7 @@ int CGameUI::ActivateGameUI()
 		return 1;
 
 	m_bActivatedUI = true;
+	s_bRcActivatedNow = true;	// ReCoF (B397)
 
 	// pause the server in case it is pausable
 	staticPanel->SetVisible(true);
@@ -446,6 +464,8 @@ int CGameUI::HasExclusiveInput()
 //-----------------------------------------------------------------------------
 void CGameUI::RunFrame()
 {
+	s_bRcActivatedNow = false;	// ReCoF (B397)
+
 	// resize the background panel to the screen size
 	int wide, tall;
 	vgui2::surface()->GetScreenSize(wide, tall);
