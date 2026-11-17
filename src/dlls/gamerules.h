@@ -415,3 +415,8 @@ public:
 };
 
 extern DLL_GLOBAL CGameRules*	g_pGameRules;
+
+// ReCoF story co-op (rc_coop.cpp): true in Cry of Fear's own multiplayer, false in single player and in story co-op;
+// the multiplayer branches that make Simon a police officer (voices, no hints, no dual wield, monster damage) ask
+// it, so story co-op keeps Simon's single-player behaviour
+bool RcPoliceMP( void );

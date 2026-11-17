@@ -1386,7 +1386,7 @@ void CBasePlayer :: Pain( void )
 {
 	if ( pev->waterlevel < 3 )
 	{
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( RcPoliceMP() )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsPolice[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 		else if ( pev->vuser1.x )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsDoctor[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1414,7 +1414,7 @@ void CBasePlayer :: Pain( void )
 
 void CBasePlayer :: MorphineSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSounds[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1422,7 +1422,7 @@ void CBasePlayer :: MorphineSound( void )
 
 void CBasePlayer :: LowHealthSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsDoctor[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1432,7 +1432,7 @@ void CBasePlayer :: LowHealthSound( void )
 
 void CBasePlayer :: SwingSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsPolice[ RANDOM_LONG( 0, 5 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsDoctor[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1442,7 +1442,7 @@ void CBasePlayer :: SwingSound( void )
 
 void CBasePlayer :: DeathSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 	{
 		if ( pev->waterlevel < 3 )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_AUTO, pDeathSoundsPolice[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1618,7 +1618,7 @@ int CBasePlayer :: TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, 
 		return 0;
 	}
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ( pAttacker->pev->flags & FL_MONSTER ) && !g_iSurvivalMode )
+	if ( RcPoliceMP() && ( pAttacker->pev->flags & FL_MONSTER ) && !g_iSurvivalMode )
 	{
 		flDamage *= 1.2;
 
@@ -4223,7 +4223,7 @@ void CBasePlayer::PreThink(void)
 				{
 					m_bLowHealth = true;
 
-					if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+					if ( g_pGameRules && !RcPoliceMP() )
 						g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "1" );
 				}
 
@@ -4246,7 +4246,7 @@ void CBasePlayer::PreThink(void)
 			{
 				m_bLowHealth = true;
 
-				if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+				if ( g_pGameRules && !RcPoliceMP() )
 					g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "1" );
 			}
 
@@ -4267,7 +4267,7 @@ void CBasePlayer::PreThink(void)
 	{
 		m_bLowHealth = false;
 
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && !RcPoliceMP() )
 			g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "0" );
 	}
 
@@ -6995,7 +6995,7 @@ void CBasePlayer::PostThink()
 
 	if (FBitSet(pev->flags, FL_ONGROUND))
 	{
-		if (m_flFallVelocity > 64 && g_pGameRules && !g_pGameRules->IsMultiplayer())
+		if (m_flFallVelocity > 64 && g_pGameRules && !RcPoliceMP())
 		{
 			CSoundEnt::InsertSound ( bits_SOUND_PLAYER, pev->origin, m_flFallVelocity, 0.2 );
 			// ALERT( at_console, "fall %f\n", m_flFallVelocity );
@@ -7667,7 +7667,7 @@ int CBasePlayer::Restore( CRestore &restore )
 		g_engfuncs.pfnSetPhysicsKeyValue( edict(), "slj", "0" );
 	}
 
-	if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	if ( g_pGameRules && !RcPoliceMP() )
 	{
 		if ( !m_bLowHealth )
 			g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "0" );
@@ -13341,7 +13341,7 @@ void CBasePlayer::StaminaThink( void )
 
 		if ( pev->waterlevel < 3 && m_flOutOfBreathDisableTime < gpGlobals->time )
 		{
-			if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			if ( RcPoliceMP() )
 			{
 				if ( RANDOM_LONG( 0, 1 ) == 1 )
 					EMIT_SOUND( ENT( pev ), CHAN_VOICE, "player/police/player_out_of_breath1.wav", 1, 0.8 );
@@ -13459,7 +13459,7 @@ void CBasePlayer::BreatheThink( void )
 	{
 		if ( m_fStaminaBreatheCyle < gpGlobals->time )
 		{
-			if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			if ( RcPoliceMP() )
 			{
 				switch ( RANDOM_LONG( 0, 8 ) )
 				{
@@ -13779,7 +13779,7 @@ void CBasePlayer::CheckQuickDualWield( char *quicksel, char *lastquicksel )
 	if ( !quicksel || !lastquicksel )
 		return;
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		return;
 
 	if ( !strncmp( quicksel, "weapon_", 7 ) && !strncmp( lastquicksel, "weapon_", 7 ) )
@@ -15068,7 +15068,7 @@ void CBasePlayer::StopWheelchairMode( void )
 
 void CBasePlayer::ShowHint( int hint, bool showanyway )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		return;
 
 	int i;

@@ -141,6 +141,10 @@ void CHalfLifeStoryCoop::Think( void )
 				pEnt->pev->takedamage = m_flOldTakeDamage[i];
 		}
 
+		// client.dll shows the map's sky to story co-op players (gl_sky.cpp)
+		if ( strcmp( g_engfuncs.pfnGetPhysicsKeyValue( pEnt->edict(), "rcc" ), "1" ) )
+			g_engfuncs.pfnSetPhysicsKeyValue( pEnt->edict(), "rcc", "1" );
+
 		// G12: when a player dies, note his weapons and ammo and bring his respawn forward; when he is back (the
 		// respawn takes everything away), give them back
 		CBasePlayer *pPl = (CBasePlayer *)pEnt;
@@ -530,6 +534,11 @@ static void RcCoopGo( void )
 {
 	s_bRcGoNow = true;
 	g_engfuncs.pfnServerPrint( "ReCoF co-op: the next exit touch goes now\n" );
+}
+
+bool RcPoliceMP( void )
+{
+	return g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoopRules();
 }
 
 BOOL CHalfLifeStoryCoop::IsDeathmatch( void )

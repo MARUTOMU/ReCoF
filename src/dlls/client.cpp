@@ -1602,7 +1602,7 @@ void ClientCommand( edict_t *pEntity )
 		if ( pPlayer && !pPlayer->IsAlive() )
 			return;
 
-		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && RcPoliceMP() )
 		{
 			int value = atoi( CMD_ARGV(1) );
 
@@ -1897,7 +1897,7 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "inventorydualwield" ) )
 	{
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && !RcPoliceMP() )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
@@ -2797,7 +2797,7 @@ void ClientPrecache( void )
 	PRECACHE_MODEL( "sprites/scr_set.spr" );
 
 	// sprint breathing
-	if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	if ( g_pGameRules && !RcPoliceMP() )
 	{
 		if ( strstr( STRING( gpGlobals->mapname ), "doc_" ) )
 		{
@@ -2841,7 +2841,7 @@ void ClientPrecache( void )
 	PRECACHE_SOUND( "inventory/inventory_toggle.wav" );
 
 	// player voice
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 	{
 		for ( i = 0; i < ARRAYSIZE( pPoliceAdLibFollow ); i++ )
 			PRECACHE_SOUND( (char *)pPoliceAdLibFollow[i] );
