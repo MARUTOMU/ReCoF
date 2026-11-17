@@ -401,8 +401,8 @@ static void RcAddCoopMenuItems( KeyValues *datafile )
 {
 	static const char *s_pszItems[3][4] =
 	{
-		{ "RcCoopHost", "Host story co-op (Steam friends)", "engine rc_coop_start", "notmulti" },
-		{ "RcCoopInvite", "Invite Steam friends to co-op", "engine rc_coop_invite", "notsingle" },
+		{ "RcCoopHost", "Host story co-op", "engine rc_coop_start", "notmulti" },
+		{ "RcCoopInvite", "Invite Steam friends", "engine rc_coop_invite", "notsingle" },
 		{ "RcCoopLeave", "Leave the co-op game", "engine rc_coop_leave", "notsingle" },
 	};
 

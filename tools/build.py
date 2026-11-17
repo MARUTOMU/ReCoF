@@ -370,6 +370,13 @@ def link(dll):
                             os.path.join(ROOT, lk["resources"]), res]) != 0:
             sys.exit("resources from %s failed" % lk["resources"])
         libs.append(res)
+    # "rcdata": files linked in as RCDATA resources (tools/res_rcdata.py), such as GameUI.dll's menu font (B398)
+    if "rcdata" in lk:
+        res = os.path.join(tmp, os.path.splitext(lk["out"])[0] + "_rcdata.res")
+        args = ["%d=%s" % (r["id"], os.path.join(ROOT, r["file"])) for r in lk["rcdata"]]
+        if subprocess.call([sys.executable, os.path.join(ROOT, "tools", "res_rcdata.py"), res] + args) != 0:
+            sys.exit("rcdata resources failed")
+        libs.append(res)
     out = os.path.join(tmp, lk["out"])
     cmd = [tc.link_path()] + lk["flags"] + ["/out:" + out, "/map:" + out + ".map"]
     cmd += objs + libs

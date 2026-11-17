@@ -1,0 +1,327 @@
+//========= ReCoF (B398): the GameUI's look ====================================
+//
+// Every GameUI dialog (Options, the console, the server list, the in-game menu) takes its colours and fonts from the
+// scheme the engine loads from resource/trackerscheme.res: grey 90 text on translucent grey 40 and Tahoma 16 in
+// Cry of Fear, and whatever a mod writes into that file on the player's computer. RcTheme_Install puts a scheme
+// manager of ReCoF's own between the GameUI's controls (vgui_controls, built into GameUI.dll) and vgui2.dll's: it
+// hands out every scheme wrapped, and the wrapper answers the colours and fonts of ReCoF's theme, so the look is the
+// same on every computer and no game file changes. Anything the theme does not name goes to the real scheme.
+//
+// The theme: dark panels, light grey text in three steps, Cry of Fear's red for selection and the hovered entry,
+// thin grey borders; the font is Inter (SIL Open Font License, src/gameui/fonts), linked into GameUI.dll as RCDATA and
+// registered for this process only with AddFontMemResourceEx, so no font is installed or added to the game folder.
+//
+//=============================================================================
+
+#include <windows.h>
+#include <string.h>
+
+#include <vgui/IScheme.h>
+#include <vgui/ISurface.h>
+#include <vgui_controls/Controls.h>
+#include "Color.h"
+
+#undef CreateFont	// windows.h
+
+namespace vgui2
+{
+extern ISchemeManager *g_pSchemeInterface;	// vgui_controls' scheme manager (controls.cpp)
+}
+using namespace vgui2;
+
+// the RCDATA ids of tools/units.json "rcdata"
+#define RC_FONT_INTER_REGULAR	101
+#define RC_FONT_INTER_SEMIBOLD	102
+
+//-----------------------------------------------------------------------------
+// The palette: the scheme's base colours (its "Colors" section), then the BaseSettings names the controls ask for,
+// each pointing at a base colour as trackerscheme.res does
+//-----------------------------------------------------------------------------
+struct RcThemeColor_t
+{
+	const char	*name;
+	int			r, g, b, a;
+};
+
+static const RcThemeColor_t s_RcColors[] =
+{
+	// text
+	{ "BaseText",			205, 205, 205, 255 },	// text panes, lists
+	{ "BrightBaseText",		245, 245, 245, 255 },	// the brightest text
+	{ "SelectedText",		255, 255, 255, 255 },
+	{ "DimBaseText",		150, 150, 150, 255 },
+	{ "LabelDimText",		150, 150, 150, 255 },	// help and info lines
+	{ "ControlText",		210, 210, 210, 255 },	// every control's text
+	{ "BrightControlText",	235, 70, 60, 255 },		// a selected control, a check, a section title: Cry of Fear's red
+	{ "DisabledText1",		105, 105, 105, 255 },
+	{ "DisabledText2",		20, 20, 20, 255 },		// the inset under disabled text
+	{ "DimListText",		125, 125, 125, 255 },
+
+	// backgrounds
+	{ "ControlBG",			34, 34, 34, 255 },		// buttons, tabs, the dialog body
+	{ "ControlDarkBG",		24, 24, 24, 255 },		// scroll bar and slider troughs
+	{ "WindowBG",			16, 16, 16, 245 },		// text entries, consoles
+	{ "SelectionBG",		150, 24, 20, 255 },		// a selected entry or text: Cry of Fear's deep red
+	{ "SelectionBG2",		70, 22, 20, 255 },		// the same without focus
+	{ "ListBG",				14, 14, 14, 240 },		// lists, the server list, check boxes
+
+	// title bar
+	{ "TitleText",			235, 235, 235, 255 },
+	{ "TitleDimText",		140, 140, 140, 255 },
+	{ "TitleBG",			12, 12, 12, 250 },
+	{ "TitleDimBG",			20, 20, 20, 250 },
+
+	// sliders
+	{ "SliderTickColor",	110, 110, 110, 255 },
+	{ "SliderTrackColor",	60, 60, 60, 255 },
+
+	// borders: one thin grey line, the selected button's in red
+	{ "BorderBright",		95, 95, 95, 255 },
+	{ "BorderDark",			8, 8, 8, 255 },
+	{ "BorderSelection",	235, 70, 60, 255 },
+
+	// the in-game text menu (Taskbar.cpp): grey, red under the cursor as the picture menu's entries
+	{ "InGameDesktop/MenuColor",			200, 200, 200, 255 },
+	{ "InGameDesktop/ArmedMenuColor",		235, 70, 60, 255 },
+	{ "InGameDesktop/DepressedMenuColor",	170, 30, 25, 255 },
+};
+
+struct RcThemeAlias_t
+{
+	const char	*name;
+	const char	*base;
+};
+
+// trackerscheme.res BaseSettings: what each control's colour name means
+static const RcThemeAlias_t s_RcAliases[] =
+{
+	{ "FgColor", "ControlText" },
+	{ "BgColor", "ControlBG" },
+	{ "LabelBgColor", "ControlBG" },
+	{ "SubPanelBgColor", "ControlBG" },
+	{ "DisabledFgColor1", "DisabledText1" },
+	{ "DisabledFgColor2", "DisabledText2" },
+	{ "TitleBarFgColor", "TitleText" },
+	{ "TitleBarDisabledFgColor", "TitleDimText" },
+	{ "TitleBarBgColor", "TitleBG" },
+	{ "TitleBarDisabledBgColor", "TitleDimBG" },
+	{ "TitleButtonFgColor", "BorderBright" },
+	{ "TitleButtonBgColor", "ControlBG" },
+	{ "TitleButtonDisabledFgColor", "TitleDimText" },
+	{ "TitleButtonDisabledBgColor", "TitleDimBG" },
+	{ "TextCursorColor", "BaseText" },
+	{ "URLTextColor", "BrightBaseText" },
+	{ "Menu/FgColor", "DimBaseText" },
+	{ "Menu/BgColor", "ControlBG" },
+	{ "Menu/ArmedFgColor", "BrightBaseText" },
+	{ "Menu/ArmedBgColor", "SelectionBG" },
+	{ "Menu/DividerColor", "BorderDark" },
+	{ "MenuButton/ButtonArrowColor", "DimBaseText" },
+	{ "MenuButton/ButtonBgColor", "WindowBG" },
+	{ "MenuButton/ArmedArrowColor", "BrightBaseText" },
+	{ "MenuButton/ArmedBgColor", "SelectionBG" },
+	{ "Slider/SliderFgColor", "ControlText" },
+	{ "Slider/SliderBgColor", "ControlDarkBG" },
+	{ "ScrollBarSlider/BgColor", "ControlBG" },
+	{ "ScrollBarSlider/ScrollBarSliderFgColor", "BorderBright" },
+	{ "ScrollBarSlider/ScrollBarSliderBgColor", "ControlDarkBG" },
+	{ "ScrollBarSlider/ButtonFgColor", "DimBaseText" },
+	{ "WindowFgColor", "BaseText" },
+	{ "WindowBgColor", "WindowBG" },
+	{ "WindowDisabledFgColor", "DimBaseText" },
+	{ "WindowDisabledBgColor", "ListBG" },
+	{ "SelectionFgColor", "SelectedText" },
+	{ "SelectionBgColor", "SelectionBG" },
+	{ "ListSelectionFgColor", "SelectedText" },
+	{ "ListBgColor", "ListBG" },
+	{ "BuddyListBgColor", "ListBG" },
+	{ "ChatBgColor", "WindowBG" },
+	{ "StatusSelectFgColor", "BrightBaseText" },
+	{ "StatusSelectFgColor2", "BrightControlText" },
+	{ "CheckButtonBorder1", "BorderDark" },
+	{ "CheckButtonBorder2", "BorderBright" },
+	{ "CheckButtonCheck", "BrightControlText" },
+	{ "CheckBgColor", "ListBG" },
+	{ "SectionTextColor", "BrightControlText" },
+	{ "SectionDividerColor", "BorderBright" },
+	{ "ButtonFgColor", "ControlText" },
+	{ "ButtonBgColor", "ControlBG" },
+	{ "ButtonArmedFgColor", "BrightBaseText" },
+	{ "ButtonArmedBgColor", "SelectionBG2" },
+	{ "ButtonDepressedFgColor", "BrightBaseText" },
+	{ "ButtonDepressedBgColor", "SelectionBG" },
+	{ "ButtonFocusBorder", "BorderSelection" },
+};
+
+static bool RcThemeLookup( const char *name, Color &out )
+{
+	if ( !name )
+		return false;
+	int i;
+	for ( i = 0; i < (int)( sizeof( s_RcAliases ) / sizeof( s_RcAliases[0] ) ); i++ )
+	{
+		if ( !stricmp( name, s_RcAliases[i].name ) )
+		{
+			name = s_RcAliases[i].base;
+			break;
+		}
+	}
+	for ( i = 0; i < (int)( sizeof( s_RcColors ) / sizeof( s_RcColors[0] ) ); i++ )
+	{
+		if ( !stricmp( name, s_RcColors[i].name ) )
+		{
+			out.SetColor( s_RcColors[i].r, s_RcColors[i].g, s_RcColors[i].b, s_RcColors[i].a );
+			return true;
+		}
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// The fonts: the scheme's names the controls ask for, in Inter (the registered faces "Inter" and "Inter SemiBold"),
+// at the pixel heights of the retail scheme for now. Made on first use, once the surface is up; a face that fails
+// (no font registered) falls back to the real scheme's font
+//-----------------------------------------------------------------------------
+struct RcThemeFont_t
+{
+	const char	*name;
+	const char	*face;
+	int			tall;
+	int			weight;
+	int			flags;
+	HFont		font;
+	bool		tried;
+};
+
+static RcThemeFont_t s_RcFonts[] =
+{
+	{ "Default",			"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "DefaultBold",		"Inter SemiBold",	15, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "DefaultUnderline",	"Inter",			15, 400, ISurface::FONTFLAG_ANTIALIAS | ISurface::FONTFLAG_UNDERLINE, 0, false },
+	{ "DefaultSmall",		"Inter",			13, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "DefaultSmallBold",	"Inter SemiBold",	13, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "DefaultVerySmall",	"Inter",			12, 400, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+	{ "MenuLarge",			"Inter SemiBold",	22, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },	// the in-game text menu
+	{ "UiHeadline",			"Inter SemiBold",	20, 600, ISurface::FONTFLAG_ANTIALIAS, 0, false },
+};
+
+static bool s_bRcFontsRegistered;
+
+static HFont RcThemeFont( const char *name )
+{
+	if ( !name || !s_bRcFontsRegistered || !surface() )
+		return 0;
+	for ( int i = 0; i < (int)( sizeof( s_RcFonts ) / sizeof( s_RcFonts[0] ) ); i++ )
+	{
+		RcThemeFont_t *f = &s_RcFonts[i];
+		if ( stricmp( name, f->name ) )
+			continue;
+		if ( !f->tried )
+		{
+			f->tried = true;
+			HFont h = surface()->CreateFont();
+			if ( h && surface()->AddGlyphSetToFont( h, f->face, f->tall, f->weight, 0, 0, f->flags, 0, 0 ) )
+				f->font = h;
+		}
+		return f->font;
+	}
+	return 0;
+}
+
+// the module this code is in (GameUI.dll), where the fonts are linked
+static HMODULE RcThisModule( void )
+{
+	MEMORY_BASIC_INFORMATION mbi;
+	if ( !VirtualQuery( (void *)RcThisModule, &mbi, sizeof( mbi ) ) )
+		return NULL;
+	return (HMODULE)mbi.AllocationBase;
+}
+
+// a font linked in as RCDATA, registered for this process only (gdi32's AddFontMemResourceEx, Windows 2000 and Wine)
+static bool RcRegisterFont( int id )
+{
+	typedef HANDLE ( WINAPI *AddFontMem_t )( PVOID, DWORD, PVOID, DWORD * );
+	HMODULE hThis = RcThisModule();
+	HMODULE hGdi = GetModuleHandleA( "gdi32.dll" );
+	AddFontMem_t pAdd = hGdi ? (AddFontMem_t)GetProcAddress( hGdi, "AddFontMemResourceEx" ) : NULL;
+	HRSRC hRes = hThis ? FindResourceA( hThis, MAKEINTRESOURCE( id ), MAKEINTRESOURCE( 10 ) ) : NULL;	// RT_RCDATA
+	if ( !pAdd || !hRes )
+		return false;
+	HGLOBAL hData = LoadResource( hThis, hRes );
+	void *pData = hData ? LockResource( hData ) : NULL;
+	DWORD nFonts = 0;
+	return pData && pAdd( pData, SizeofResource( hThis, hRes ), NULL, &nFonts ) != NULL && nFonts > 0;
+}
+
+//-----------------------------------------------------------------------------
+// The wrappers
+//-----------------------------------------------------------------------------
+class CRcScheme : public IScheme
+{
+public:
+	IScheme *m_pReal;
+
+	virtual const char *GetResourceString( const char *stringName ) { return m_pReal->GetResourceString( stringName ); }
+	virtual IBorder *GetBorder( const char *borderName ) { return m_pReal->GetBorder( borderName ); }
+	virtual HFont GetFont( const char *fontName, bool proportional )
+	{
+		HFont f = RcThemeFont( fontName );
+		return f ? f : m_pReal->GetFont( fontName, proportional );
+	}
+	virtual Color GetColor( const char *colorName, Color defaultColor )
+	{
+		Color c;
+		if ( RcThemeLookup( colorName, c ) )
+			return c;
+		return m_pReal->GetColor( colorName, defaultColor );
+	}
+};
+
+#define RC_MAX_SCHEMES	16
+
+class CRcSchemeManager : public ISchemeManager
+{
+public:
+	ISchemeManager	*m_pReal;
+	CRcScheme		m_Schemes[RC_MAX_SCHEMES];
+	int				m_nSchemes;
+
+	virtual HScheme LoadSchemeFromFile( const char *fileName, const char *tag ) { return m_pReal->LoadSchemeFromFile( fileName, tag ); }
+	virtual void ReloadSchemes() { m_pReal->ReloadSchemes(); }
+	virtual HScheme GetDefaultScheme() { return m_pReal->GetDefaultScheme(); }
+	virtual HScheme GetScheme( const char *tag ) { return m_pReal->GetScheme( tag ); }
+	virtual IImage *GetImage( const char *imageName, bool hardwareFiltered ) { return m_pReal->GetImage( imageName, hardwareFiltered ); }
+	virtual HTexture GetImageID( const char *imageName, bool hardwareFiltered ) { return m_pReal->GetImageID( imageName, hardwareFiltered ); }
+	virtual IScheme *GetIScheme( HScheme scheme )
+	{
+		IScheme *pReal = m_pReal->GetIScheme( scheme );
+		if ( !pReal )
+			return NULL;
+		for ( int i = 0; i < m_nSchemes; i++ )
+		{
+			if ( m_Schemes[i].m_pReal == pReal )
+				return &m_Schemes[i];
+		}
+		if ( m_nSchemes >= RC_MAX_SCHEMES )
+			return pReal;
+		m_Schemes[m_nSchemes].m_pReal = pReal;
+		return &m_Schemes[m_nSchemes++];
+	}
+	virtual void Shutdown( bool full ) { m_pReal->Shutdown( full ); }
+	virtual int GetProportionalScaledValue( int normalizedValue ) { return m_pReal->GetProportionalScaledValue( normalizedValue ); }
+	virtual int GetProportionalNormalizedValue( int scaledValue ) { return m_pReal->GetProportionalNormalizedValue( scaledValue ); }
+};
+
+static CRcSchemeManager s_RcSchemeManager;
+
+//-----------------------------------------------------------------------------
+// CGameUI::Initialize, after VGuiControls_Init: the fonts registered and ReCoF's scheme manager in place
+//-----------------------------------------------------------------------------
+void RcTheme_Install( void )
+{
+	if ( !g_pSchemeInterface || g_pSchemeInterface == &s_RcSchemeManager )
+		return;
+	s_bRcFontsRegistered = RcRegisterFont( RC_FONT_INTER_REGULAR ) && RcRegisterFont( RC_FONT_INTER_SEMIBOLD );
+	s_RcSchemeManager.m_pReal = g_pSchemeInterface;
+	g_pSchemeInterface = &s_RcSchemeManager;
+}

@@ -62,6 +62,8 @@ vgui2::DHANDLE<CLoadingDialog> g_hLoadingDialog;
 
 CGameUI *g_pGameUI = NULL;
 
+void RcTheme_Install( void );	// ReCoF (B398), RcTheme.cpp
+
 // ReCoF (B397): Cry of Fear's picture menu (client.dll) opens Options, the server list and Host Server through
 // OpenDialog_guess, right after the engine activated the GameUI for it; when that dialog closes the GameUI goes away
 // again, as it was not up before (it stayed behind the picture menu, the 2D text menu over the 3D one)
@@ -144,6 +146,7 @@ void CGameUI::Initialize( CreateInterfaceFn *factories, int count )
 
 	// load and initialize vgui
 	vgui2::VGuiControls_Init("GameUI", m_FactoryList, count);
+	RcTheme_Install();	// ReCoF (B398): the theme and its font (RcTheme.cpp)
 
 	// load localization file
 	vgui2::localize()->AddFile(vgui2::filesystem(), "resource/gameui_%language%.txt");

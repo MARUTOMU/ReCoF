@@ -4165,6 +4165,16 @@
       ],
       "link": {
         "out": "GameUI.dll",
+        "rcdata": [
+          {
+            "id": 101,
+            "file": "src/gameui/fonts/Inter-Regular-recof.ttf"
+          },
+          {
+            "id": 102,
+            "file": "src/gameui/fonts/Inter-SemiBold-recof.ttf"
+          }
+        ],
         "retail": "versions/1.6a/cryoffear/cl_dlls/GameUI.dll",
         "flags": [
           "/nologo",
@@ -4273,6 +4283,7 @@
           "GameUI/OptionsSubSpray",
           "GameUI/RcServerBrowser",
           "GameUI/RcOptions",
+          "GameUI/RcTheme",
           "vgui2/controls/controls",
           "vgui2/controls/Button",
           "vgui2/controls/Label",
@@ -4641,6 +4652,10 @@
         {
           "name": "GameUI/RcOptions",
           "source": "src/gameui/RcOptions.cpp"
+        },
+        {
+          "name": "GameUI/RcTheme",
+          "source": "src/gameui/RcTheme.cpp"
         },
         {
           "name": "GameUI/ScriptObject",
