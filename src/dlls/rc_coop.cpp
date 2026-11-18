@@ -782,6 +782,18 @@ void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
 	bool bTrigger = pCaller && pCaller->pev->solid == SOLID_TRIGGER && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 );
 	int nMoved = 0;
 
+	// B464: a teleport into a deadly drop (a working trigger_hurt of 100 or more where he lands: the c_roofs fall, the
+	// c_city flower trap) is the end of that player only; the group stayed with him and died (charliee1w 907d5013)
+	CBaseEntity *pRcHurt = NULL;
+	while ( ( pRcHurt = UTIL_FindEntityByClassname( pRcHurt, "trigger_hurt" ) ) != NULL )
+	{
+		if ( pRcHurt->pev->solid != SOLID_NOT && pRcHurt->pev->dmg >= 100 && RcCoopInside( pRcHurt, pMoved ) )
+		{
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s went into a deadly place, the group stays\n", STRING( pMoved->pev->netname ) ) );
+			return;
+		}
+	}
+
 	// the destination is taken by a teammate who came the same way before: step beside him
 	for ( int j = 1; j <= gpGlobals->maxClients; j++ )
 	{
