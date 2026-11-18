@@ -3278,7 +3278,13 @@ void CFade::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType
 	if ( pev->spawnflags & SF_FADE_PERMANENT )	//LRC
 		fadeFlags |= FFADE_STAYOUT;				//LRC
 
-	if ( pev->spawnflags & SF_FADE_ONLYONE )
+	// ReCoF (B484): c_roofs and c_roofs2's fadefall (stay black, the game's only two) blacked out every story co-op
+	// player for good when one fell (UNIk0z 8c71181); it fades the one who fell, and his respawn lifts it (player.cpp)
+	bool bRcSolo = RcCoop_Story() && ( pev->spawnflags & SF_FADE_PERMANENT ) && pActivator && pActivator->IsPlayer();
+	if ( bRcSolo )
+		( (CBasePlayer *)pActivator )->m_bRcStayFaded = true;
+
+	if ( ( pev->spawnflags & SF_FADE_ONLYONE ) || bRcSolo )
 	{
 		if ( pActivator->IsNetClient() )
 		{

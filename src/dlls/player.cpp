@@ -7522,6 +7522,13 @@ void CBasePlayer::Spawn( void )
 	m_bInPhoneCall = false;
 	m_bShouldFallFreeze = false;
 
+	// ReCoF (B484): the stay-black fall fade (effects.cpp CFade::Use) ends with the respawn
+	if ( m_bRcStayFaded )
+	{
+		m_bRcStayFaded = false;
+		UTIL_ScreenFade( this, g_vecZero, 0.5, 0, 255, FFADE_IN );
+	}
+
 	SetCorrectView();
 	SetCorrectMo();
 

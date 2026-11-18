@@ -319,6 +319,7 @@ public:
 	int m_iUsingComputerOrPhone;
 	bool b_GoingThroughADoor;
 	bool m_bRcDoorHid;	// ReCoF (B430): the door hid this player (EF_NODRAW), so its end shows him again
+	bool m_bRcStayFaded;	// ReCoF (B484): a stay-black env_fade blacked out this player alone; his respawn lifts it
 	int m_iRcLastQuickSlot;	// ReCoF (B460): quick select's last slot, per player (was the global lastquickslotpressed)
 	int m_iFlashlight;
 	int m_iClientFlashlight;
