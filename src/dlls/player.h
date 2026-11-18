@@ -319,6 +319,7 @@ public:
 	int m_iUsingComputerOrPhone;
 	bool b_GoingThroughADoor;
 	bool m_bRcDoorHid;	// ReCoF (B430): the door hid this player (EF_NODRAW), so its end shows him again
+	int m_iRcLastQuickSlot;	// ReCoF (B460): quick select's last slot, per player (was the global lastquickslotpressed)
 	int m_iFlashlight;
 	int m_iClientFlashlight;
 	int m_ClientDrawBars;

@@ -7465,7 +7465,7 @@ void CBasePlayer::Spawn( void )
 
 	m_fUnderwaterBreatheTime = gpGlobals->time;
 
-	lastquickslotpressed = 0;
+	m_iRcLastQuickSlot = 0;
 
 	heartbeat = false;
 
@@ -7487,7 +7487,7 @@ void CBasePlayer::Spawn( void )
 
 	SET_VIEW( edict(), edict() );
 
-	UTIL_ProMessage( this, " ", 2, true );
+	UTIL_ProMessage( this, " ", 2, false );	// ReCoF (B460): this player's strip; true blanked everyone's at each respawn
 
 	m_pPadlock = NULL;
 
@@ -13989,12 +13989,13 @@ void CBasePlayer::QuickSelectItem( int number )
 	if ( pev->fuser3 == 10 )
 		return;
 
-	if ( m_flQuickSlotTimeDecay > gpGlobals->time && lastquickslotpressed != number && g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	// ReCoF (B460): story co-op dual wields from quick select as single player does (the police co-op does not)
+	if ( m_flQuickSlotTimeDecay > gpGlobals->time && m_iRcLastQuickSlot != number && g_pGameRules && !RcPoliceMP() )
 	{
 		switch ( number )
 		{
 		case 1:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel1, m_sQuickSel1 );
@@ -14008,7 +14009,7 @@ void CBasePlayer::QuickSelectItem( int number )
 			}
 			break;
 		case 2:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel2, m_sQuickSel1 );
@@ -14022,7 +14023,7 @@ void CBasePlayer::QuickSelectItem( int number )
 			}
 			break;
 		case 3:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel3, m_sQuickSel1 );
@@ -14038,7 +14039,7 @@ void CBasePlayer::QuickSelectItem( int number )
 		}
 	}
 
-	lastquickslotpressed = number;
+	m_iRcLastQuickSlot = number;
 
 	m_flQuickSlotTimeDecay = gpGlobals->time + 0.25;
 
