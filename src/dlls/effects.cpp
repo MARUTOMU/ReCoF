@@ -10378,6 +10378,16 @@ void CCoFEntityRestore::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 	if ( !pActivator )
 		return;
 
+	// ReCoF (B489): c_college1 and c_college1dark record the items left on the floor into the activator's list and
+	// recreate them from the user's: in story co-op another player's way back found an empty list and the items were
+	// gone (the research's map census). The group's list is kept on the host's player (slot 1, carried with him)
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pRcHost = UTIL_PlayerByIndex( 1 );
+		if ( pRcHost && pRcHost->IsPlayer() )
+			pActivator = pRcHost;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer )
