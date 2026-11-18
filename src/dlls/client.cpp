@@ -1094,6 +1094,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "aitest" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		edict_t *pEdict = INDEXENT( 1 );
 		CBaseEntity *pEntity;
 
@@ -1275,6 +1278,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "hinttoggle" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		if ( CVAR_GET_FLOAT( "sv_disablehints" ) == 0 )
 			CVAR_SET_FLOAT( "sv_disablehints", 1 );
 		else
@@ -1665,6 +1671,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "simonmode" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		if ( !m_iSimonMode )
 		{
 			if ( g_pGameRules )
@@ -1961,6 +1970,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "subtitleset" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		int number = atoi( CMD_ARGV(1) );
 		CVAR_SET_FLOAT( "cof_subtitlelanguage", number );
 
@@ -2167,7 +2179,11 @@ void ClientCommand( edict_t *pEntity )
 			return;
 		}
 
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		// ReCoF (B458): in story co-op a player who has night vision turns it on with F as in single player (Simon has no
+		// torch to switch); the others keep the co-op torch
+		bool bRcNight = RcCoop_Story() && pPlayer && pPlayer->m_bHasNightVision && pPlayer->CheckingEndingOrUnlockables( 0x1000000, false, false );
+
+		if ( g_pGameRules && ( !g_pGameRules->IsMultiplayer() || bRcNight ) )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
@@ -2189,7 +2205,7 @@ void ClientCommand( edict_t *pEntity )
 			}
 		}
 
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !bRcNight )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
