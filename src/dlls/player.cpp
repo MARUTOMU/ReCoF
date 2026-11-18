@@ -9483,8 +9483,13 @@ void CBasePlayer :: UpdateClientData( void )
 						m_hCurrentCamera = plr->m_hCurrentCamera;
 						SET_VIEW( edict(), plr->m_hCurrentCamera->edict() );
 
-						plr->pev->flags |= FL_NOTARGET;
-						plr->pev->takedamage = DAMAGE_NO;
+						// ReCoF (B445): this player joins the scene: retail wrote the hold onto the other player
+						// (plr->pev, already held) and left this one free to walk and be hit; frozen too when the
+						// camera takes control (spawnflag 4), as the camera's end lets every player go (charliee1w 6446bb0f)
+						pev->flags |= FL_NOTARGET;
+						pev->takedamage = DAMAGE_NO;
+						if ( plr->m_hCurrentCamera->pev->spawnflags & 4 )
+							EnableControl( FALSE );
 
 						if ( plr->m_hCurrentCamera->pev->spawnflags & 16 )
 							m_iHideHUD |= HIDEHUD_HEALTH;
