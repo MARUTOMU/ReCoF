@@ -418,6 +418,9 @@ public:
 	int m_iSnapItems[33];
 	string_t m_iszSnapItem[33][24];
 	int m_rgSnapAmmo[33][MAX_AMMO_SLOTS];
+	// B474: the exit that went on this level (its entity index) and when, so a second one in the same moment waits
+	int m_iExitGone;
+	float m_flExitGone;
 	// B472: the arrival hold (rc_coop.cpp RcCoopHold)
 	bool m_bHoldDone;
 	float m_flHoldStart;

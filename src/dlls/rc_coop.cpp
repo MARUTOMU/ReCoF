@@ -155,6 +155,8 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 	g_bRcHolding = false;
 	m_bHoldDone = false;
 	m_flHoldStart = -1;
+	m_iExitGone = 0;
+	m_flExitGone = -1;
 	for ( int i = 0; i < 33; i++ )
 	{
 		m_bHeld[i] = false;
@@ -996,6 +998,13 @@ bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTou
 			return false;
 	}
 
+	// B474: an exit went a moment ago (its change runs at the end of the frame): another one does not go as well,
+	// or its gather and change replace the first's (UNIk0z f227563)
+	int iMe = ENTINDEX( pTrigger->edict() );
+	if ( pRules->m_flExitGone >= 0 && gpGlobals->time >= pRules->m_flExitGone && gpGlobals->time - pRules->m_flExitGone < 2.0 &&
+		pRules->m_iExitGone != iMe )
+		return false;
+
 	int nPresent = 0, nInside = 0;
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
@@ -1011,8 +1020,14 @@ bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTou
 	bool bGo = !bTouch || flWait <= 0 || nInside >= nPresent || s_bRcGoNow;
 	if ( !bGo )
 	{
+		// B474: first come, first served: while someone stands in the exit that is waiting, another exit does not
+		// start its own wait (two players in two exits restarted each other's every frame; charliee1w 125f7728)
+		CBaseEntity *pWaiting = s_hRcWaitExit;
+		if ( pWaiting && pWaiting != pTrigger && gpGlobals->time >= s_flRcWaitTouch && gpGlobals->time - s_flRcWaitTouch <= 2.0 )
+			return false;
+
 		// a new wait: another exit, or nobody stood in this one for 2 s
-		if ( (CBaseEntity *)s_hRcWaitExit != pTrigger || gpGlobals->time - s_flRcWaitTouch > 2.0 )
+		if ( pWaiting != pTrigger || gpGlobals->time - s_flRcWaitTouch > 2.0 )
 		{
 			s_hRcWaitExit = pTrigger;
 			s_flRcWaitStart = gpGlobals->time;
@@ -1045,6 +1060,8 @@ bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTou
 	RcCoopGather( pTrigger, pActivator );
 	s_hRcWaitExit = NULL;
 	s_bRcGoNow = false;
+	pRules->m_iExitGone = iMe;	// B474
+	pRules->m_flExitGone = gpGlobals->time;
 	return true;
 }
 
