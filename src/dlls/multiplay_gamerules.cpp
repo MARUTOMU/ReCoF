@@ -1466,6 +1466,12 @@ float CHalfLifeMultiplay :: FlPlayerFallDamage( CBasePlayer *pPlayer )
 //=========================================================
 BOOL CHalfLifeMultiplay::FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity *pAttacker )
 {
+	// ReCoF (B443): a hit from an entity that is gone comes with no attacker (the roof boss's head landing after the
+	// Carcass was removed: CoF_RoofBoss.cpp DieTouch passes its freed owner), and this crashed the host (cof-coop
+	// 90c2109)
+	if ( !pAttacker )
+		return TRUE;
+
 	if ( pAttacker->IsPlayer() && !( pPlayer->pev->flags & FL_FAKECLIENT ) )
 		return FALSE;
 
