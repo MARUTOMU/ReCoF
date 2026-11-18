@@ -1039,11 +1039,20 @@ bool CBasePlayerWeapon::CanCurrentlySuicide( void )
 	return false;
 }
 
-bool wasmoving;
-bool wasjumping;
-bool wasducking;
-bool wassprinting;
-int minimum;
+// ReCoF (B468): CalculateWeaponAccuracy's state, per player slot: these were globals, so in multiplayer every player's
+// movement changed the others' spread (charliee1w e7967146)
+static bool s_bRcWasMoving[33], s_bRcWasJumping[33], s_bRcWasDucking[33], s_bRcWasSprinting[33];
+static int s_iRcMinimum[33];
+static int RcAccSlot( CBasePlayer *pPlayer )
+{
+	int i = pPlayer ? ENTINDEX( pPlayer->edict() ) : 0;
+	return ( i < 0 || i > 32 ) ? 0 : i;
+}
+#define wasmoving s_bRcWasMoving[RcAccSlot( m_pPlayer )]
+#define wasjumping s_bRcWasJumping[RcAccSlot( m_pPlayer )]
+#define wasducking s_bRcWasDucking[RcAccSlot( m_pPlayer )]
+#define wassprinting s_bRcWasSprinting[RcAccSlot( m_pPlayer )]
+#define minimum s_iRcMinimum[RcAccSlot( m_pPlayer )]
 
 void CBasePlayerWeapon::CalculateWeaponAccuracy( void )
 {
@@ -1178,6 +1187,12 @@ void CBasePlayerWeapon::CalculateWeaponAccuracy( void )
 	if ( m_flCurrentKick > 10 )
 		m_flCurrentKick = 10;
 }
+
+#undef wasmoving	// ReCoF (B468)
+#undef wasjumping
+#undef wasducking
+#undef wassprinting
+#undef minimum
 
 void CBasePlayerWeapon::ItemPostFrame( void )
 {
