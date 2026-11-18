@@ -2373,6 +2373,9 @@ void CBasePlayer::MultiplayerPlayerDeathThink( void )
 {
 	if ( pev->fuser3 == 3 && m_flGetupTime < gpGlobals->time )
 	{
+		extern void RcCoop_ReviveSpot( CBasePlayer *pPlayer );
+		RcCoop_ReviveSpot( this );	// ReCoF (B479): not stuck where he lay (rc_coop.cpp)
+
 		pev->deadflag = DEAD_NO;
 		pev->movetype = MOVETYPE_WALK;
 		ClearBits( pev->flags, FL_ONGROUND );

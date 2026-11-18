@@ -1324,6 +1324,23 @@ static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 	return vecBase;
 }
 
+// B479: a revived player stood up where he lay: in a corner, a vent or against a wall his standing box was stuck in
+// the world (Lambda 9347dc7). When his box does not fit there he stands on the nearest free spot (multiplayer)
+void RcCoop_ReviveSpot( CBasePlayer *pPlayer )
+{
+	TraceResult tr;
+	bool bDuck = ( pPlayer->pev->flags & FL_DUCKING ) != 0;
+	UTIL_TraceHull( pPlayer->pev->origin, pPlayer->pev->origin, ignore_monsters, bDuck ? head_hull : human_hull, pPlayer->edict(), &tr );
+	if ( !tr.fStartSolid && !tr.fAllSolid )
+		return;
+	Vector vecSpot = RcCoopAnyFreeSpot( pPlayer->pev->origin, pPlayer->edict() );
+	if ( vecSpot == pPlayer->pev->origin )
+		return;
+	UTIL_SetOrigin( pPlayer, vecSpot );
+	pPlayer->m_vPreviousOrigin = vecSpot;
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s stood up stuck, moved to a free spot\n", STRING( pPlayer->pev->netname ) ) );
+}
+
 BOOL CHalfLifeStoryCoop::IsDeathmatch( void )
 {
 	return FALSE;
