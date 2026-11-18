@@ -900,6 +900,48 @@ bool RcCoop_TapeSave( CBasePlayer *pPlayer )
 	return true;
 }
 
+// B465: rc_unstuck (a client command): the player is put on a free spot next to a living teammate, for a stuck spot or
+// a place a one-shot door or teleport cut him off from the group (charliee1w d184fb51, 300a0d0a, 5c60c624). Not while
+// he is down, in a scene, on a ladder, going through a door or held, and once every 10 s
+void RcCoop_Unstuck( CBasePlayer *pPlayer )
+{
+	static float s_flRcUnstuck[33];
+	int me = ENTINDEX( pPlayer->edict() );
+	if ( !RcCoopRules() || me < 1 || me > 32 )
+		return;
+	if ( !pPlayer->IsAlive() || pPlayer->IsInCutscene() || pPlayer->pDeathScene || pPlayer->IsOnLadder() ||
+		pPlayer->b_GoingThroughADoor || pPlayer->pev->fuser3 != 0 || ( pPlayer->pev->flags & FL_FROZEN ) )
+	{
+		UTIL_ProMessage( pPlayer, "Not now.", 2, false );
+		return;
+	}
+	if ( gpGlobals->time < s_flRcUnstuck[me] && gpGlobals->time > s_flRcUnstuck[me] - 11 )
+	{
+		UTIL_ProMessage( pPlayer, "Wait a moment.", 2, false );
+		return;
+	}
+	CBasePlayer *pAnchor = RcCoopAnchor( pPlayer );
+	if ( !pAnchor )
+	{
+		UTIL_ProMessage( pPlayer, "No teammate to go to.", 2, false );
+		return;
+	}
+	s_flRcUnstuck[me] = gpGlobals->time + 10;
+	Vector vecSpot = RcCoopAnyFreeSpot( pAnchor->pev->origin, pPlayer->edict() );
+	UTIL_SetOrigin( pPlayer, vecSpot + Vector( 0, 0, 1 ) );
+	pPlayer->m_vPreviousOrigin = pPlayer->pev->origin;
+	pPlayer->pev->velocity = pPlayer->pev->basevelocity = g_vecZero;
+	pPlayer->pev->angles = pAnchor->pev->angles;
+	pPlayer->pev->angles.x = pPlayer->pev->angles.z = 0;
+	pPlayer->pev->fixangle = TRUE;
+	pPlayer->pev->flags &= ~FL_ONGROUND;
+	int iRc = ENTINDEX( pPlayer->edict() );
+	CHalfLifeStoryCoop *pRules = RcCoopRules();
+	if ( pRules && iRc >= 1 && iRc <= 32 )
+		pRules->m_bArmed[iRc] = false;	// B463: not straight into an exit
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s used rc_unstuck, now next to %s\n", STRING( pPlayer->pev->netname ), STRING( pAnchor->pev->netname ) ) );
+}
+
 static EHANDLE s_hRcWaitExit;
 static float s_flRcWaitStart, s_flRcWaitTouch, s_flRcWaitMsg;
 static bool s_bRcGoNow;

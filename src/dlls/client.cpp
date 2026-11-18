@@ -1231,6 +1231,12 @@ void ClientCommand( edict_t *pEntity )
 			GetClassPtr((CBasePlayer *)pev)->m_iUsingComputerOrPhone = 0;
 		}
 	}
+	else if ( FStrEq( pcmd, "rc_unstuck" ) )
+	{
+		// ReCoF (B465): story co-op's way out of a stuck spot (rc_coop.cpp)
+		extern void RcCoop_Unstuck( CBasePlayer *pPlayer );
+		RcCoop_Unstuck( GetClassPtr( (CBasePlayer *)pev ) );
+	}
 	else if ( FStrEq( pcmd, "closegame" ) )
 	{
 		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
