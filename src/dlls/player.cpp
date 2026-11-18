@@ -6424,13 +6424,19 @@ void CBasePlayer::PostThink()
 		foot_splash = 0;
 	}
 
-	if ( m_iFlashlightFlags != m_iClientFlashlightFlags )
+	// ReCoF (B481): 0x100 tells the other players' clients that this one holds the lantern, whose light is his view
+	// model's alone (gl_studiomodel.cpp DrawPlayerFlashlights_guess draws it at his hand; charliee1w 75c9b2e1)
+	int iRcLightFlags = m_iFlashlightFlags;
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && IsAlive() && m_pActiveItem && FClassnameIs( m_pActiveItem->pev, "weapon_lantern" ) )
+		iRcLightFlags |= 0x100;
+
+	if ( iRcLightFlags != m_iClientFlashlightFlags )
 	{
-		m_iClientFlashlightFlags = m_iFlashlightFlags;
+		m_iClientFlashlightFlags = iRcLightFlags;
 
 		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
 		{
-			pev->frags = m_iFlashlightFlags;
+			pev->frags = iRcLightFlags;
 
 			MESSAGE_BEGIN( MSG_ALL, gmsgScoreInfo );
 				WRITE_BYTE( ENTINDEX( edict() ) );

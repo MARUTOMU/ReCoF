@@ -749,6 +749,33 @@ void DrawPlayerFlashlights_guess( void )
 		}
 		else
 			ent->curstate.body = 0;
+
+		// ReCoF (B481): another player's lantern (0x100, player.cpp) or lit flare and book laser (16) lit only for
+		// him: their light is his view model's (view.cpp). A light at his hand for everyone else (charliee1w 75c9b2e1)
+		if (ent != localplayer && (flags & 0x110) && ent->curstate.messagenum == localplayer->curstate.messagenum)
+		{
+			vec3_t forward;
+			vec3_t angles;
+			VectorCopy(ent->angles, angles);
+			angles[0] = 0;
+			gEngfuncs.pfnAngleVectors(angles, forward, NULL, NULL);
+			DynamicLight *dl = MY_AllocDlight(-1100 - i);
+			dl->origin = ent->origin + forward * 16 + Vector(0, 0, 8);
+			dl->angles = ent->angles;
+			if (flags & 0x100)
+			{
+				dl->radius = gEngfuncs.pfnRandomLong(-5, 5) + 220;
+				dl->color = Vector(0.4, 0.4, 0.4);
+			}
+			else
+			{
+				dl->radius = gEngfuncs.pfnRandomLong(-15, 15) + 220;
+				float flRed = gEngfuncs.pfnRandomFloat(0.65f, 1.65f);
+				float flGreen = gEngfuncs.pfnRandomFloat(0.1f, 0.25f);
+				dl->color = Vector(flRed, flGreen, 0.1f);
+			}
+			dl->die = gEngfuncs.GetClientTime() + 0.1;
+		}
 	}
 }
 
