@@ -160,6 +160,7 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 	for ( int i = 0; i < 33; i++ )
 	{
 		m_bHeld[i] = false;
+		m_flHidden[i] = 0;
 		m_flSeen[i] = 0;
 		m_bProtected[i] = false;
 		m_flOldTakeDamage[i] = DAMAGE_AIM;
@@ -552,6 +553,25 @@ void CHalfLifeStoryCoop::Think( void )
 				bInside = RcCoopInside( pExit, pEnt );
 			if ( !bInside )
 				m_bArmed[i] = true;
+		}
+
+		// B477: a living present player hidden (EF_NODRAW) for 3 s outside a scene, a door, a ladder, a third-person
+		// scene or a hold is shown again: the others could not see him and his proximity voice went silent with him
+		// (AddToFullPack sends no entity whose effects are exactly EF_NODRAW; CrawlerD 67d7b6e). B430 ends the door's
+		// own hide
+		bool bRcHidden = ( pEnt->pev->effects & EF_NODRAW ) && !bLoading && RcCoopPresent( pEnt ) && !pPl->IsInCutscene() &&
+			!pPl->pDeathScene && !pPl->IsOnLadder() && !pPl->b_GoingThroughADoor && pEnt->pev->movetype == MOVETYPE_WALK &&
+			!( pEnt->pev->flags & FL_FROZEN ) && !pPl->m_pAttachedCamera && !pPl->m_hCurrentCamera;
+		if ( !bRcHidden )
+			m_flHidden[i] = 0;
+		else if ( m_flHidden[i] == 0 || m_flHidden[i] > gpGlobals->time )
+			m_flHidden[i] = gpGlobals->time;
+		else if ( gpGlobals->time - m_flHidden[i] > 3.0 )
+		{
+			m_flHidden[i] = 0;
+			pEnt->pev->effects &= ~EF_NODRAW;
+			pPl->m_bRcDoorHid = false;
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s was left hidden, shown again\n", STRING( pEnt->pev->netname ) ) );
 		}
 
 		// B466: the engine relinks a player after his move only while he is solid (sv_user.c SV_RunCmd), so a
