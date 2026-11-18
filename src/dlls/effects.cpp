@@ -10030,6 +10030,10 @@ void CCoFMDLCutscene::StartNextAnimation( void )
 
 					if ( plr )
 					{
+						// ReCoF (B447): removed before the pointer is cleared; retail cleared it first and removed NULL,
+						// so every scene left one camera_model per player (charliee1w bd88a646)
+						if ( plr->pDeathScene )
+							UTIL_Remove( plr->pDeathScene );
 						plr->pDeathScene = NULL;
 						plr->m_pAttachedCamera = NULL;
 						plr->m_bCoopWaitingForCutsceneToEnd = false;
@@ -10069,6 +10073,8 @@ void CCoFMDLCutscene::StartNextAnimation( void )
 			}
 			else
 			{
+				if ( pPlayer->pDeathScene )
+					UTIL_Remove( pPlayer->pDeathScene );	// ReCoF (B447)
 				pPlayer->pDeathScene = NULL;
 				pPlayer->m_pAttachedCamera = NULL;
 				pPlayer->m_bCoopWaitingForCutsceneToEnd = false;
