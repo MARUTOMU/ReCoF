@@ -3303,6 +3303,41 @@ BOOL CBasePlayer::IsOnLadder( void )
 
 void CBasePlayer::WheelchairPlayerDeathThink( void )
 {
+	// ReCoF (B485): a dead chair keeps its rider at 1 hp, frozen and unarmed, and only single player opens the game
+	// over screen below: in story co-op he stayed so for good (charliee1w a74a4f26). Every player is let out of his
+	// chair and killed, so the team wipe starts the level again, as single player's game over does
+	if ( m_flDeadTime < gpGlobals->time && !m_bIssuedGameOver && RcCoop_Story() )
+	{
+		m_bIssuedGameOver = true;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s's wheelchair was destroyed, the group starts again\n", STRING( pev->netname ) ) );
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || !pEnt->IsPlayer() )
+				continue;
+			CBasePlayer *pPlr = (CBasePlayer *)pEnt;
+			pPlr->StopWheelchairMode();
+			if ( pPlr->m_pWheelchair )
+			{
+				// a dead chair lets nobody out (CWheelchair::Disembark): its rider's ride ends here
+				MESSAGE_BEGIN( MSG_ONE, gmsgWheelchair, NULL, pPlr->pev );
+					WRITE_SHORT( -1 );
+					WRITE_BYTE( 0 );
+				MESSAGE_END();
+				pPlr->m_pWheelchair = NULL;
+				pPlr->m_iHideHUD &= ~HIDEHUD_HEALTH;
+				g_engfuncs.pfnSetPhysicsKeyValue( pPlr->edict(), "chr", "1" );
+			}
+			pPlr->EnableControl( TRUE );
+			if ( pPlr->IsAlive() && pPlr->pev->fuser4 == 0 )
+			{
+				pPlr->pev->health = 0;
+				pPlr->Killed( VARS( INDEXENT( 0 ) ), GIB_NEVER );
+			}
+		}
+		return;
+	}
+
 	if ( m_flDeadTime < gpGlobals->time && !m_bIssuedGameOver )
 	{
 		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
