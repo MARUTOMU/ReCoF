@@ -418,6 +418,11 @@ public:
 	int m_iSnapItems[33];
 	string_t m_iszSnapItem[33][24];
 	int m_rgSnapAmmo[33][MAX_AMMO_SLOTS];
+	// B472: the arrival hold (rc_coop.cpp RcCoopHold)
+	bool m_bHoldDone;
+	float m_flHoldStart;
+	bool m_bHeld[33];
+	void RcCoopHold( void );
 };
 
 extern DLL_GLOBAL CGameRules*	g_pGameRules;

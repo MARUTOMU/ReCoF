@@ -749,6 +749,8 @@ void CWorld :: Precache( void )
 	CVAR_SET_STRING("room_type", "0");// clear DSP
 
 	// Set up game rules
+	extern bool g_bRcHolding;
+	g_bRcHolding = false;	// ReCoF (B472): no hold carried into other rules
 	if (g_pGameRules)
 		delete g_pGameRules;
 

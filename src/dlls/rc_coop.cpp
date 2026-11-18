@@ -144,13 +144,20 @@ static bool RcCoopStepAside( CBaseEntity *pEnt, CBaseEntity *pOver )
 	return false;
 }
 
+// B472: story co-op's arrival hold is on (cbase.cpp DispatchThink and DispatchTouch; world.cpp clears it with the rules)
+bool g_bRcHolding = false;
+
 CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 {
 	CVAR_SET_FLOAT( "rc_coop_skip", 0 );	// G6: a new map or a loaded game does not go on fast forwarding
 	m_bAutosaved = false;
 	m_flLevelStart = -1;
+	g_bRcHolding = false;
+	m_bHoldDone = false;
+	m_flHoldStart = -1;
 	for ( int i = 0; i < 33; i++ )
 	{
+		m_bHeld[i] = false;
 		m_flSeen[i] = 0;
 		m_bProtected[i] = false;
 		m_flOldTakeDamage[i] = DAMAGE_AIM;
@@ -364,6 +371,8 @@ void CHalfLifeStoryCoop::Think( void )
 
 	CHalfLifeMultiplay::Think();
 
+	RcCoopHold();	// B472
+
 	// G6 (B390): a vote lasts while its player is in a scene (the cameras of one scene follow each other)
 	for ( int v = 1; v <= gpGlobals->maxClients && v <= 32; v++ )
 	{
@@ -531,7 +540,7 @@ void CHalfLifeStoryCoop::Think( void )
 		// Cry of Fear makes players who overlap SOLID_NOT until they part (CBasePlayer::PreThink), and triggers do not
 		// touch a non-solid player: one standing in a level exit touches it here instead (the exit's own rules apply;
 		// an exit fired by the map has no touch), once out of any scene, as a scene may carry a player through an exit
-		if ( m_bArmed[i] && !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype != MOVETYPE_NOCLIP &&
+		if ( m_bArmed[i] && !bLoading && !g_bRcHolding && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype != MOVETYPE_NOCLIP &&
 			!( (CBasePlayer *)pEnt )->IsInCutscene() )
 		{
 			CBaseEntity *pExit = NULL;
@@ -550,7 +559,7 @@ void CHalfLifeStoryCoop::Think( void )
 		// starts the opening scene and opens it; neither touched it, the scene never started and B403 below found no
 		// room in the box. A player non-solid only because he overlaps a teammate touches the triggers he stands in,
 		// as the engine does for a solid one (exits keep their own rules above)
-		if ( !bLoading && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype == MOVETYPE_WALK &&
+		if ( !bLoading && !g_bRcHolding && pEnt->pev->solid == SOLID_NOT && RcCoopPresent( pEnt ) && pEnt->pev->movetype == MOVETYPE_WALK &&
 			!pPl->IsInCutscene() )
 		{
 			bool bOverlap = false;
@@ -1241,6 +1250,76 @@ edict_t *CHalfLifeStoryCoop::GetPlayerSpawnSpot( CBasePlayer *pPlayer )
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s comes in next to %s%s\n", STRING( pPlayer->pev->netname ), STRING( pAnchor->pev->netname ), bFound ? "" : " (no free spot, on him)" ));
 
 	return pAnchor->edict();
+}
+
+// B472: the level and its scenes ran while carried guests still loaded: arrival triggers, scene starts and messages
+// were missed, and the host could walk off before anyone else was in (cof-coop 3f05917 and 08f1d69, charliee1w
+// 2a44d5a6). Once per level, until every player carried in (or saved, after a load) has sent a command, at most 20 s:
+// entity thinks wait (players and moving brushes go on), players touch no trigger and those already in are frozen
+void CHalfLifeStoryCoop::RcCoopHold( void )
+{
+	if ( m_bHoldDone )
+		return;
+	if ( m_flHoldStart < 0 || m_flHoldStart > gpGlobals->time )
+		m_flHoldStart = gpGlobals->time;
+
+	int nWait = 0, nIn = 0;
+	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 )
+			continue;
+		if ( m_flSeen[i] == 0 )
+			nWait++;
+		else
+			nIn++;
+	}
+
+	bool bHold = nWait > 0 && gpGlobals->time - m_flHoldStart <= 20;
+	if ( bHold && !g_bRcHolding && nIn + nWait > 1 )
+	{
+		g_bRcHolding = true;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: the level waits for %d player(s) still loading (20 s at most)\n", nWait ) );
+	}
+	if ( !g_bRcHolding )
+	{
+		if ( !bHold )
+			m_bHoldDone = true;	// nobody to wait for (or a lone player): no hold on this level
+		return;
+	}
+
+	if ( bHold )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || !pEnt->IsPlayer() || m_bHeld[i] || m_flSeen[i] == 0 || !RcCoopPresent( pEnt ) )
+				continue;
+			if ( pEnt->pev->flags & FL_FROZEN )
+				continue;	// held by something else: not ours to let go
+			m_bHeld[i] = true;
+			pEnt->pev->flags |= FL_FROZEN;
+			pEnt->pev->velocity = g_vecZero;
+			UTIL_ProMessage( pEnt, "Waiting for the others to load...", 20, false );
+		}
+		return;
+	}
+
+	// everyone is in, or 20 s are over: the level goes on
+	g_bRcHolding = false;
+	m_bHoldDone = true;
+	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		if ( !m_bHeld[i] )
+			continue;
+		m_bHeld[i] = false;
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !pEnt || !pEnt->IsPlayer() )
+			continue;
+		pEnt->pev->flags &= ~FL_FROZEN;
+		UTIL_ProMessage( pEnt, " ", 2, false );
+	}
+	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: the level goes on (%s)\n", nWait ? "20 s are over" : "everyone is in" ) );
 }
 
 // rc_coop_dump (server command): every player's slot, health, place and weapons, for tests

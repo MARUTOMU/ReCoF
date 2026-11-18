@@ -244,6 +244,12 @@ void DispatchTouch( edict_t *pentTouched, edict_t *pentOther )
 	CBaseEntity *pEntity = (CBaseEntity *)GET_PRIVATE(pentTouched);
 	CBaseEntity *pOther = (CBaseEntity *)GET_PRIVATE( pentOther );
 
+	// ReCoF (B472): story co-op's arrival hold: players touch no trigger until everyone is in (the engine touches
+	// again at their next move)
+	extern bool g_bRcHolding;
+	if ( g_bRcHolding && pEntity && pOther && pEntity->pev->solid == SOLID_TRIGGER && pOther->IsPlayer() )
+		return;
+
 	if ( pEntity && pOther && ! ((pEntity->pev->flags | pOther->pev->flags) & FL_KILLME) )
 		pEntity->Touch( pOther );
 }
@@ -269,6 +275,16 @@ void DispatchThink( edict_t *pent )
 			ALERT( at_error, "Dormant entity %s is thinking!!\n", STRING(pEntity->pev->classname) );
 				
 		//if (pEntity->pev->classname) ALERT(at_console, "DispatchThink %s\n", STRING(pEntity->pev->targetname));
+
+		// ReCoF (B472): story co-op's arrival hold: thinks wait (scenes, triggers' timers, monsters) while a carried
+		// player still loads; players and moving brushes (a train past its corner) go on
+		extern bool g_bRcHolding;
+		if ( g_bRcHolding && pEntity->pev->movetype != MOVETYPE_PUSH && !pEntity->IsPlayer() )
+		{
+			pEntity->pev->nextthink = gpGlobals->time + 0.1;
+			return;
+		}
+
 		pEntity->Think();
 	}
 }
