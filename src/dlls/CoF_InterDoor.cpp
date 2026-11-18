@@ -471,6 +471,34 @@ void CInterDoor::EndSequence( void )
 
 			strcpy( m_szMapName, STRING( pev->target ) );
 
+			// ReCoF (B488): story co-op takes the group's ending: cof_ending writes its flag on the players there at the
+			// time, so one who joined later (or missed it) took another exit than the group (cof-coop; the research's
+			// map census). Every player gets every flag a teammate has, the door's user first
+			if ( pPlayer && RcCoop_Story() )
+			{
+				bool bRoof = false, bP345 = false, bPackage = false;
+				for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+				{
+					CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+					if ( !pEnt || !pEnt->IsPlayer() )
+						continue;
+					CBasePlayer *pPlr = (CBasePlayer *)pEnt;
+					bRoof = bRoof || pPlr->m_b_Ending_RoofBossKilled;
+					bP345 = bP345 || pPlr->m_b_Ending_GivenP345;
+					bPackage = bPackage || pPlr->m_b_Ending_DeliveredPackage;
+				}
+				for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+				{
+					CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+					if ( !pEnt || !pEnt->IsPlayer() )
+						continue;
+					CBasePlayer *pPlr = (CBasePlayer *)pEnt;
+					pPlr->m_b_Ending_RoofBossKilled = bRoof;
+					pPlr->m_b_Ending_GivenP345 = bP345;
+					pPlr->m_b_Ending_DeliveredPackage = bPackage;
+				}
+			}
+
 			if ( pPlayer )
 			{
 				if ( !pPlayer->m_b_Ending_RoofBossKilled && !pPlayer->m_b_Ending_GivenP345 )
