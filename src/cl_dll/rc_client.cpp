@@ -478,14 +478,6 @@ static void RcCoopJoin_f( void )
 	if ( RcSteamNet_Join( addr, RcCoopHasArg( "relay" ) != 0, RcCoopPrint ) )
 	{
 		RcCoopDefaultName();
-		// B442: a guest at the engine's 1998 rates (20 updates and 30 commands a second, 25000 bytes) saw his
-		// teammates move in steps; raised for co-op, never lowered (they are the player's own, kept in config.cfg)
-		static const struct { const char *cvar; float value; } s_Rates[] = { { "cl_updaterate", 60 }, { "cl_cmdrate", 60 }, { "rate", 100000 } };
-		for ( int r = 0; r < 3; r++ )
-		{
-			if ( gEngfuncs.pfnGetCvarFloat( (char *)s_Rates[r].cvar ) < s_Rates[r].value )
-				gEngfuncs.Cvar_SetValue( (char *)s_Rates[r].cvar, s_Rates[r].value );
-		}
 		// connect from HUD_Frame in 3 s: on the command line this runs before the menu map that InitInput queues,
 		// which would cancel the connect
 		_snprintf( s_szCoopConnect, sizeof( s_szCoopConnect ) - 1, "connect %s\n", addr );
@@ -757,6 +749,15 @@ void RcCoop_Frame( void )
 	if ( s_dwCoopConnectAt && (long)( GetTickCount() - s_dwCoopConnectAt ) >= 0 )
 	{
 		s_dwCoopConnectAt = 0;
+		// B442: a guest at the engine's 1998 rates (20 updates and 30 commands a second, 25000 bytes) saw his
+		// teammates move in steps; raised for co-op, never lowered (they are the player's own, kept in config.cfg).
+		// Here, not in rc_coop_join: on a command line that runs before config.cfg puts the saved values back
+		static const struct { const char *cvar; float value; } s_Rates[] = { { "cl_updaterate", 60 }, { "cl_cmdrate", 60 }, { "rate", 100000 } };
+		for ( int r = 0; r < 3; r++ )
+		{
+			if ( gEngfuncs.pfnGetCvarFloat( (char *)s_Rates[r].cvar ) < s_Rates[r].value )
+				gEngfuncs.Cvar_SetValue( (char *)s_Rates[r].cvar, s_Rates[r].value );
+		}
 		gEngfuncs.pfnClientCmd( s_szCoopConnect );
 	}
 	if ( s_dwCoopShot && (long)( GetTickCount() - s_dwCoopShot ) >= 0 )
