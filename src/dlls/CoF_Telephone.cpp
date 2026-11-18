@@ -111,6 +111,9 @@ void CCofTelephone::WrongNumber( void )
 
 void CCofTelephone::TelephoneRight( void )
 {
+	if ( !m_pPlayer )
+		return;	// ReCoF (B450): the opener is gone
+
 	// the right number was dialed, the telephone cannot be used anymore
 	pev->health = 1;
 
@@ -128,6 +131,9 @@ void CCofTelephone::TelephoneRight( void )
 
 void CCofTelephone::TelephoneWrong( void )
 {
+	if ( !m_pPlayer )
+		return;	// ReCoF (B450)
+
 	SetThink( &CCofTelephone::WrongNumber );
 	SetNextThink( 7 );
 
@@ -152,6 +158,13 @@ void CCofTelephone::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 		return;
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
+
+	// ReCoF (B450): one player at a time: a second opener took m_pPlayer, so the first one's dial was answered to him
+	// (charliee1w d690a5d2)
+	CBaseEntity *pRcUser = m_pPlayer;
+	if ( pPlayer && pRcUser && pRcUser != pPlayer && pRcUser->IsPlayer() && pRcUser->IsAlive() && pRcUser->pev->fuser4 == 0 &&
+		( (CBasePlayer *)pRcUser )->m_pTelephone == this )
+		return;
 
 	if ( pPlayer )
 	{
