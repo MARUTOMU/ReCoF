@@ -502,6 +502,12 @@ void CHalfLifeStoryCoop::Think( void )
 				m_bArmed[i] = true;
 		}
 
+		// B466: the engine relinks a player after his move only while he is solid (sv_user.c SV_RunCmd), so a
+		// non-solid one kept the box he had when he became non-solid, and the exit touch below, B419 and B403 read
+		// that old box (charliee1w 2a44d5a6): linked again here, without touches
+		if ( pEnt->pev->solid == SOLID_NOT && pEnt->pev->movetype == MOVETYPE_WALK && RcCoopPresent( pEnt ) )
+			UTIL_SetOrigin( pEnt, pEnt->pev->origin );
+
 		// Cry of Fear makes players who overlap SOLID_NOT until they part (CBasePlayer::PreThink), and triggers do not
 		// touch a non-solid player: one standing in a level exit touches it here instead (the exit's own rules apply;
 		// an exit fired by the map has no touch), once out of any scene, as a scene may carry a player through an exit
