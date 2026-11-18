@@ -2599,8 +2599,10 @@ int LoadGamestate( char *level, int createPlayers )
 			}
 			else if ( pSaveData->pTable[i].id < svs.maxclients + 1 )
 			{
+				// ReCoF (B493): a save made with fewer player slots than this server has (a single-player save on a
+				// server left with 4 slots by co-op) ends the load, not the game
 				if ( !( pSaveData->pTable[i].flags & FENTTABLE_PLAYER ) )
-					Sys_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
+					Host_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
 
 				pent = svs.clients[ pSaveData->pTable[i].id - 1 ].edict;
 				if ( createPlayers && pent )
@@ -2750,7 +2752,7 @@ int CreateEntityList( SAVERESTOREDATA *pSaveData, int levelMask )
 				if ( active )
 				{
 					if ( !( pSaveData->pTable[i].flags & FENTTABLE_PLAYER ) )
-						Sys_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
+						Host_Error( "ENTITY IS NOT A PLAYER: %d\n", i );	// ReCoF (B493)
 
 					if ( svs.clients[ pSaveData->pTable[i].id - 1 ].active && pent )
 						EntityInit( pent, pSaveData->pTable[i].classname );
