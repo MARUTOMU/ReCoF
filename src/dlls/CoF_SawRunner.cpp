@@ -155,6 +155,7 @@ void CSawrunner :: AlertSound( void )
 {
 	int pitch = 95 + RANDOM_LONG(0,9);
 
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// ReCoF (B462): one copy at a time
 	EMIT_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav", 1.0, ATTN_NORM );
 
 	EMIT_SOUND_DYN ( ENT(pev), CHAN_VOICE, pAlertSounds[ RANDOM_LONG(0,ARRAYSIZE(pAlertSounds)-1) ], 1.0, ATTN_NORM, 0, pitch );

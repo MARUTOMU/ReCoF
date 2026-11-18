@@ -204,6 +204,7 @@ void CChainsawBoss :: AlertSound( void )
 {
 	int pitch = 95 + RANDOM_LONG(0,9);
 
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// ReCoF (B462): one copy at a time
 	EMIT_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav", 1.0, ATTN_NORM );
 }
 
@@ -432,12 +433,14 @@ void CChainsawBoss :: RcSawGrab( CBaseEntity *pScene, CBaseEntity *pVictim )
 {
 	if ( !RcCoop_Story() )
 	{
+		STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// B462
 		UTIL_Remove( this );
 		return;
 	}
 	m_hRcScene = pScene;
 	m_hRcVictim = pVictim;
 	m_flRcBack = gpGlobals->time + 20;
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// B462: hidden, silent
 	pev->effects |= EF_NODRAW;
 	pev->solid = SOLID_NOT;
 	pev->takedamage = DAMAGE_NO;
@@ -474,6 +477,7 @@ void CChainsawBoss :: RcSawWait( void )
 
 void CChainsawBoss :: KillMonster( void )
 {
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// ReCoF (B462)
 	UTIL_Remove( this );
 }
 
