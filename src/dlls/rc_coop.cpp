@@ -340,6 +340,27 @@ static void RcCoopResendState( CBasePlayer *pPlayer )
 		UTIL_ScreenFade( pPlayer, Vector( 0, 0, 0 ), 0.5, 0, 255, FFADE_IN );
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s came in mid-door, the door is over\n", STRING( pPlayer->pev->netname ) ) );
 	}
+	// B476: nor can a phone call (cof_phonecall stays on its level): one carried mid-call kept fuser3 5 (no walking
+	// or jumping), the bars, the hidden health and the call lock (charliee1w 3f4ff32c). Not when a call of this level
+	// goes on (a save loaded mid-call)
+	if ( pPlayer->m_bInPhoneCall || pPlayer->pev->fuser3 == 5 || pPlayer->m_iUsingComputerOrPhone == 3 )
+	{
+		bool bCall = false;
+		CBaseEntity *pCall = NULL;
+		while ( !bCall && ( pCall = UTIL_FindEntityByClassname( pCall, "cof_phonecall" ) ) != NULL )
+			bCall = pCall->pev->nextthink > 0;
+		if ( !bCall )
+		{
+			pPlayer->m_bInPhoneCall = false;
+			if ( pPlayer->pev->fuser3 == 5 )
+				pPlayer->pev->fuser3 = 0;
+			if ( pPlayer->m_iUsingComputerOrPhone == 3 )
+				pPlayer->m_iUsingComputerOrPhone = 0;
+			pPlayer->m_DrawBars = 0;
+			pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
+			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s came in mid-call, the call is over\n", STRING( pPlayer->pev->netname ) ) );
+		}
+	}
 }
 
 // CmdStart: this player's client sends commands, so it has loaded the level (PreThink returns early in some scenes)
