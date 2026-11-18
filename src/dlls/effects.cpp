@@ -6024,6 +6024,9 @@ void CCofClearItems::Spawn( void )
 	pev->movetype = MOVETYPE_NONE;
 }
 
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF (B475): rc_coop.cpp
+void RcCoop_KeysForget( void );
+
 void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if ( !pActivator->IsPlayer() )
@@ -6169,6 +6172,9 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 			else
 			{
 				pPlayer->ClearOutSlotNamed( pev->message, 0 );
+				// ReCoF (B475): a group key the map takes is gone for the group, or the key sync gave it back
+				if ( RcCoop_Story() )
+					RcCoop_KeyUsed( STRING( pev->message ) );
 			}
 		}
 	}
@@ -6177,6 +6183,7 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 	{
 		pPlayer->ClearOutSlot( 1, 1 );
 		pPlayer->RemoveAllItems( FALSE );
+		RcCoop_KeysForget();	// ReCoF (B475)
 
 
 		pPlayer->SetDualWieldWeapon( 0 );
@@ -6210,6 +6217,7 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 			{
 				plr->ClearOutSlot( 1, 1 );
 				plr->RemoveAllItems( FALSE );
+				RcCoop_KeysForget();	// ReCoF (B475)
 
 
 				plr->SetDualWieldWeapon( 0 );

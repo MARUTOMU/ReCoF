@@ -688,6 +688,13 @@ void RcCoop_KeyTaken( CBaseEntity *pKey )
 	if ( !RcCoopRules() || FStringNull( pKey->pev->message ) )
 		return;
 	int k = RcCoopKeySlot( STRING( pKey->pev->message ) );
+	// B475: a key a player dropped (CBasePlayer::DropKeyItem marks it 666) is one the group already has: picked up
+	// again it is the same key, not a second one for everyone (UNIk0z f589896)
+	if ( k >= 0 && s_iKeyCount[k] > 0 && pKey->pev->armorvalue == 666 )
+	{
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is back from the floor (%d)\n", STRING( s_iszKeyName[k] ), s_iKeyCount[k] ) );
+		return;
+	}
 	if ( k < 0 )
 	{
 		for ( k = 0; k < RC_TEAM_KEYS && s_iszKeyName[k]; k++ )
@@ -725,6 +732,20 @@ void RcCoop_KeyUsed( const char *pszItem )
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s used, the group has %d\n", pszItem, s_iKeyCount[k] ) );
 	if ( s_iKeyCount[k] == 0 )
 		s_iszKeyName[k] = 0;
+}
+
+// B475: the map took every inventory item (cof_clearitems flag 1, Chapter 6's bag loss): the group forgets its keys,
+// or RcCoopSyncKeys gave them back within a second (charliee1w 3280f597, a3d8634f)
+void RcCoop_KeysForget( void )
+{
+	if ( !RcCoopRules() )
+		return;
+	for ( int k = 0; k < RC_TEAM_KEYS; k++ )
+	{
+		s_iszKeyName[k] = 0;
+		s_iKeyCount[k] = 0;
+	}
+	g_engfuncs.pfnServerPrint( "ReCoF co-op: the inventory was taken, the group's keys are gone\n" );
 }
 
 // every second from Think: each living player gets the group's items he lacks (a newcomer, a respawn, the others
