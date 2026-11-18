@@ -249,9 +249,12 @@ void CHalfLifeStoryCoop::PlayerThink( CBasePlayer *pPlayer )
 // B402: what the client knows of its player, as CBasePlayer::UpdateClientData and PostThink keep it, marked unknown so
 // the next UpdateClientData sends all of it (CBasePlayer::ForceClientDllUpdate's list and the HUD flags, black bars,
 // view entity, FOV, flashlight, blur, objective and ammo it leaves out)
+void RcFogResend( CBasePlayer *pPlayer );	// B456, effects.cpp
+
 static void RcCoopResendState( CBasePlayer *pPlayer )
 {
 	pPlayer->RcRestorePhysinfo();	// B424: the engine emptied the guest's physinfo when his game signed on
+	RcFogResend( pPlayer );	// B456: the map's fog, which a loading or late client missed
 	pPlayer->m_fInitHUD = TRUE;
 	pPlayer->m_iClientHideHUD = -1;
 	pPlayer->m_ClientDrawBars = -1;

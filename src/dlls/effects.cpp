@@ -5012,6 +5012,29 @@ void CEnvFog :: SendData ( Vector col, int iFadeTime, int iStartDist, int iEndDi
 
 LINK_ENTITY_TO_CLASS( env_fog, CEnvFog );
 
+// ReCoF (B456): the active fog to one player (rc_coop.cpp RcCoopResendState, his first command on a level): env_fog
+// sends only when it changes, so a guest still loading when it turned on, or a player joining later, had none
+// (charliee1w a9a6d01c)
+void RcFogResend( CBasePlayer *pPlayer )
+{
+	CBaseEntity *pEnt = NULL;
+	while ( ( pEnt = UTIL_FindEntityByClassname( pEnt, "env_fog" ) ) != NULL )
+	{
+		if ( !( pEnt->pev->spawnflags & SF_FOG_ACTIVE ) )
+			continue;
+		CEnvFog *pFog = (CEnvFog *)pEnt;
+		MESSAGE_BEGIN( MSG_ONE, gmsgSetFog, NULL, pPlayer->pev );
+			WRITE_BYTE( pFog->pev->rendercolor.x );
+			WRITE_BYTE( pFog->pev->rendercolor.y );
+			WRITE_BYTE( pFog->pev->rendercolor.z );
+			WRITE_SHORT( 0 );
+			WRITE_SHORT( pFog->m_iStartDist );
+			WRITE_SHORT( pFog->m_iEndDist );
+		MESSAGE_END();
+		return;
+	}
+}
+
 //=========================================================
 // LRC - env_sky, an unreal tournament-style sky effect
 //=========================================================
