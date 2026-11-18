@@ -471,6 +471,8 @@ class CGlockTacLight : public CItem
 
 LINK_ENTITY_TO_CLASS( item_glocktaclight, CGlockTacLight );
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
 class CPhoneBattery : public CItem
 {
 	void Spawn( void )
@@ -494,6 +496,21 @@ class CPhoneBattery : public CItem
 		{
 			if ( pPlayer->InventoryAddCheck( this ) )
 			{
+				// ReCoF story co-op (B455): the story has one battery for one phone, and every player's phone dies:
+				// each present player without one gets a copy, and uses his own (cof-coop f173816)
+				if ( RcCoop_Story() )
+				{
+					for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+					{
+						CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+						if ( !pEnt || pEnt == pPlayer || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !pEnt->IsAlive() )
+							continue;
+						CBasePlayer *pOther = (CBasePlayer *)pEnt;
+						if ( pOther->HasItemInSlot( "inventoryitems/mobile_battery.txt", false ) )
+							continue;
+						pOther->AddItemToInventory( pev->message, pev->model, pev->classname );
+					}
+				}
 
 				return TRUE;
 			}
