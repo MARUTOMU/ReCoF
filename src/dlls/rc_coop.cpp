@@ -835,6 +835,14 @@ bool RcCoop_TapeSave( CBasePlayer *pPlayer )
 {
 	if ( !RcCoopRules() )
 		return false;
+	// B452: the engine refuses a save while its first client (the host) is dead (host_cmd.c Host_ValidSave), and the
+	// group was told its progress was recorded, and on the hardest difficulty the tape was spent (cofmp 7d6b434)
+	CBaseEntity *pRcHost = UTIL_PlayerByIndex( 1 );
+	if ( pRcHost && pRcHost->IsPlayer() && !pRcHost->IsAlive() )
+	{
+		UTIL_ProMessage( pPlayer, "The host is down: the game cannot be recorded now.", 3, false );
+		return true;
+	}
 	if ( CVAR_GET_FLOAT( "difficulty" ) == 4 )
 	{
 		pPlayer->m_iTapes--;
