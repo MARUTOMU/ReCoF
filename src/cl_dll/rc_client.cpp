@@ -740,6 +740,76 @@ static void RcCoopReconnect( void )
 void RcVoice_Init( void );	// B422, rc_voice.cpp
 void RcVoice_Frame( void );
 
+// B492: a story co-op host's server kept 4 player slots and rc_coop 1 after his game ended (Leave co-op and the
+// menus' own disconnects set no "maxplayers 1"), and a map started after that (the load screen's c_loadgame, the menu
+// map from the save screen or the credits) ran with 4 slots: a single-player save or level change then stopped the game
+// with "ENTITY IS NOT A PLAYER: 2" (hw.dll host_cmd.c LoadGamestate, CreateEntityList) and "single player" ran under
+// the story co-op rules. Once this game hosted story co-op and that game is over, single player's settings come back:
+// after 1.5 s with no map "maxplayers 1" (the engine refuses it while a server runs, as between a load and its
+// sign-on; story co-op needs more than one slot, so rc_coop is left alone there), and a menu map that started with 4
+// slots starts again with 1
+static int s_bRcHostedCoop;
+static DWORD s_dwRcNoMapSince;
+
+static bool RcCoopMenuMap( const char *pszLevel )
+{
+	static const char *s_pszMenuMaps[] = { "/c_game_menu", "/c_loadgame.", "/c_difficulty_settings.", "/c_unlockables." };
+	for ( int i = 0; i < 4; i++ )
+	{
+		if ( strstr( pszLevel, s_pszMenuMaps[i] ) )
+			return true;
+	}
+	return false;
+}
+
+static void RcCoopBackToOne( void )
+{
+	if ( s_dwCoopStartAt || s_dwCoopConnectAt )
+		return;	// a co-op start or join is on its way
+	const char *pszLevel = gEngfuncs.pfnGetLevelName();
+	bool bNoMap = !pszLevel || !pszLevel[0];
+	int nSlots = gEngfuncs.GetMaxClients();
+	bool bMenu = !bNoMap && RcCoopMenuMap( pszLevel );
+	// this game hosts story co-op: rc_coop is the host's own hl.dll cvar (0 on a guest's machine)
+	if ( !bNoMap && !bMenu && nSlots > 1 && gEngfuncs.pfnGetCvarFloat( "rc_coop" ) != 0 )
+	{
+		s_bRcHostedCoop = 1;
+		return;
+	}
+	if ( !bNoMap )
+		s_dwRcNoMapSince = 0;
+	else if ( !s_dwRcNoMapSince )
+		s_dwRcNoMapSince = GetTickCount() | 1;
+	if ( !s_bRcHostedCoop )
+		return;
+	if ( bNoMap )
+	{
+		if ( (long)( GetTickCount() - s_dwRcNoMapSince ) < 1500 )
+			return;
+		s_bRcHostedCoop = 0;
+		gEngfuncs.pfnClientCmd( "maxplayers 1\n" );
+		RcCoopPrint( "ReCoF co-op: the co-op game is over, back to one player\n" );
+	}
+	else if ( bMenu && nSlots > 1 )
+	{
+		s_bRcHostedCoop = 0;
+		char szMap[64];
+		const char *pszBase = strrchr( pszLevel, '/' );
+		_snprintf( szMap, sizeof( szMap ) - 1, "%s", pszBase ? pszBase + 1 : pszLevel );
+		szMap[sizeof( szMap ) - 1] = 0;
+		char *pszDot = strrchr( szMap, '.' );
+		if ( pszDot )
+			*pszDot = 0;
+		char szCmd[160];
+		_snprintf( szCmd, sizeof( szCmd ) - 1, "disconnect\nmaxplayers 1\ndeathmatch 0\nrc_coop 0\nmap %s\n", szMap );
+		szCmd[sizeof( szCmd ) - 1] = 0;
+		gEngfuncs.pfnClientCmd( szCmd );
+		RcCoopPrint( "ReCoF co-op: the co-op game is over, %s starts again for one player\n", szMap );
+	}
+	else if ( nSlots <= 1 )
+		s_bRcHostedCoop = 0;
+}
+
 void RcCoop_Frame( void )
 {
 	RcVoice_Frame();	// B422
@@ -747,6 +817,7 @@ void RcCoop_Frame( void )
 	RcSteamNet_Frame();
 	RcSteamNet_Pump();
 	RcCoopReconnect();
+	RcCoopBackToOne();	// B492
 	if ( s_dwCoopStartAt && (long)( GetTickCount() - s_dwCoopStartAt ) >= 0 )
 	{
 		s_dwCoopStartAt = 0;
