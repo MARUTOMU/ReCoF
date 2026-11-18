@@ -227,6 +227,18 @@ static CBasePlayerItem *RcCoopFindItem( CBasePlayer *pPlayer, const char *pszCla
 	return NULL;
 }
 
+// B487: a player rides a wheelchair (c_ending4b): a save then loads the players frozen (charliee1w 23799f89)
+static bool RcCoopAnyoneInChair( void )
+{
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && ( (CBasePlayer *)pEnt )->m_pWheelchair )
+			return true;
+	}
+	return false;
+}
+
 // the player's box overlaps the entity's box
 static bool RcCoopInside( CBaseEntity *pBox, CBaseEntity *pPlayer )
 {
@@ -500,7 +512,9 @@ void CHalfLifeStoryCoop::Think( void )
 					bAllIn = false;
 				nIn++;
 			}
-			if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - m_flLevelStart > 3 )
+			if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - m_flLevelStart > 3 && RcCoopAnyoneInChair() )
+				m_bAutosaved = true;	// B487: not this level (its ride ends in the ending's scenes)
+			else if ( rc_coop_autosave.value && bAllIn && nIn && gpGlobals->time - m_flLevelStart > 3 )
 			{
 				m_bAutosaved = true;
 				SERVER_COMMAND( "save coop_auto\n" );
@@ -1090,6 +1104,11 @@ bool RcCoop_TapeSave( CBasePlayer *pPlayer )
 	if ( pRcHost && pRcHost->IsPlayer() && !pRcHost->IsAlive() )
 	{
 		UTIL_ProMessage( pPlayer, "The host is down: the game cannot be recorded now.", 3, false );
+		return true;
+	}
+	if ( RcCoopAnyoneInChair() )
+	{
+		UTIL_ProMessage( pPlayer, "Not during the wheelchair ride.", 3, false );	// B487
 		return true;
 	}
 	if ( CVAR_GET_FLOAT( "difficulty" ) == 4 )
