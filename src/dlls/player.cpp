@@ -9595,6 +9595,14 @@ void CBasePlayer :: UpdateClientData( void )
 			}
 		}
 
+		// ReCoF (B473): the client clears its fog at every ResetHUD and InitHUD (hud_msg.cpp) and env_fog sends only
+		// when it changes, so a story co-op respawn had no fog until the next change (charliee1w a9a6d01c)
+		if ( RcCoop_Story() )
+		{
+			extern void RcFogResend( CBasePlayer *pPlayer );
+			RcFogResend( this );
+		}
+
 		if ( m_bBossHealthBar )
 		{
 			MESSAGE_BEGIN( MSG_ONE, gmsgBossBar, NULL, pev );
