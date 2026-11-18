@@ -1478,6 +1478,20 @@ void RcCoop_ReviveSpot( CBasePlayer *pPlayer )
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s stood up stuck, moved to a free spot\n", STRING( pPlayer->pev->netname ) ) );
 }
 
+// B494: a weapon given or picked up goes into the hand as in single player (CHalfLifeRules::FShouldSwitchWeapon):
+// the multiplayer rule switched only to a heavier one, so c_start's scene (the phone at 2 s, the knife at 4 s) left
+// story co-op players with the phone in hand where Simon holds the knife
+BOOL CHalfLifeStoryCoop::FShouldSwitchWeapon( CBasePlayer *pPlayer, CBasePlayerItem *pWeapon )
+{
+	if ( !pPlayer->m_pActiveItem )
+		return TRUE;
+	if ( !pPlayer->m_pActiveItem->CanHolster() )
+		return FALSE;
+	if ( pWeapon->iFlags() & ITEM_FLAG_NOAUTOSWITCHTO_guess )
+		return FALSE;
+	return TRUE;
+}
+
 BOOL CHalfLifeStoryCoop::IsDeathmatch( void )
 {
 	return FALSE;
@@ -1687,9 +1701,9 @@ static void RcCoopDump( void )
 			pPlayer->m_iPadlockNumber[1], pPlayer->m_iPadlockNumber[2], pPlayer->m_iPadlockNumber[3], pPlayer->m_iPadlockNumber[4], pPlayer->m_iKeypadNumber,
 			pPlayer->m_iKeypadType, pPlayer->pev->renderamt, pPlayer->m_iHideHUD, pPlayer->m_DrawBars, pPlayer->m_iViewEntIndex,
 			pPlayer->m_hCurrentCamera != NULL ? 1 : 0 ) );
-		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s\n", i, pPlayer->pev->health,
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d health %.0f %s at %.0f %.0f %.0f, left %d, %d items:%s, in hand %s\n", i, pPlayer->pev->health,
 			pPlayer->IsAlive() ? "alive" : "dead", pPlayer->pev->origin.x, pPlayer->pev->origin.y, pPlayer->pev->origin.z,
-			pPlayer->pev->fuser4 != 0, nItems, szItems ));
+			pPlayer->pev->fuser4 != 0, nItems, szItems, pPlayer->m_pActiveItem ? STRING( pPlayer->m_pActiveItem->pev->classname ) : "nothing" ));
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: player %d move: fuser3 %g, iuser3 %d, maxspeed %.0f, ducking %d, in duck %d, "
 			"view %.0f, on ground %d, phone %d, fall freeze %d, effects %x, door %d hid %d, physinfo %s\n", i, pPlayer->pev->fuser3, pPlayer->pev->iuser3, pPlayer->pev->maxspeed,
 			( pPlayer->pev->flags & FL_DUCKING ) != 0, pPlayer->pev->bInDuck, pPlayer->pev->view_ofs.z, ( pPlayer->pev->flags & FL_ONGROUND ) != 0,

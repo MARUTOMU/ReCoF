@@ -403,6 +403,7 @@ public:
 	virtual void PlayerSpawn( CBasePlayer *pPlayer );
 	virtual void ClientUserInfoChanged( CBasePlayer *pPlayer, char *infobuffer );	// B414: Simon's model
 	virtual void ClientDisconnected( edict_t *pClient );	// B470: the slot's state starts again
+	virtual BOOL FShouldSwitchWeapon( CBasePlayer *pPlayer, CBasePlayerItem *pWeapon );	// B494: single player's
 
 	CHalfLifeStoryCoop();
 	float m_flSeen[33];	// when each player's client last ran a command: 0 while it loads the level
