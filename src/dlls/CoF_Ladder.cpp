@@ -583,8 +583,18 @@ void CCoFLadderManager::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 	if ( m_hRcLadder && RcHLMovementOn( pActivator->edict() ) )
 		return;
 
+	// ReCoF (B449): a climber who left (put away, fuser4) or whose slot has no client any more kept the ladder for
+	// good: his player stays alive with the climb model; the next climber takes it, and the leaver's model goes
 	if ( m_pPlayer && m_pPlayer->pDeathScene && m_pPlayer->IsAlive() )
-		return;
+	{
+		char *pszInfo = g_engfuncs.pfnGetInfoKeyBuffer( m_pPlayer->edict() );
+		if ( m_pPlayer->pev->fuser4 == 0 && pszInfo && pszInfo[0] )
+			return;
+		UTIL_Remove( m_pPlayer->pDeathScene );
+		m_pPlayer->pDeathScene = NULL;
+		m_pPlayer->m_pAttachedCamera = NULL;
+		m_pPlayer = NULL;
+	}
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
