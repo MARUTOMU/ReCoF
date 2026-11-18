@@ -6008,15 +6008,17 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 	// ReCoF story co-op (B420): a weapon the map takes from "the player" (c_start's opening scene takes c_nightmare's
 	// camera) goes from every player, as B404 gives such weapons to every player (cof_giveitems below); clearing the
 	// whole inventory (flag 1) and inventory items stay with the one who set it off
+	// B454: and a clear of everything (flag 1, Chapter 6's bag loss) empties every player's
 	static bool s_bRcAll = false;
-	if ( RcCoop_Story() && !s_bRcAll && !( pev->spawnflags & 1 ) && pev->message && strstr( STRING( pev->message ), "weapon_" ) )
+	bool bRcClearAll = ( pev->spawnflags & 1 ) && !( pev->spawnflags & 2 );
+	if ( RcCoop_Story() && !s_bRcAll && ( bRcClearAll || ( pev->message && strstr( STRING( pev->message ), "weapon_" ) ) ) )
 	{
 		s_bRcAll = true;
 		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 		{
 			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
 			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() &&
-				( (CBasePlayer *)pEnt )->HasNamedPlayerItem( STRING( pev->message ) ) )
+				( bRcClearAll || ( (CBasePlayer *)pEnt )->HasNamedPlayerItem( STRING( pev->message ) ) ) )
 				Use( pEnt, pCaller, useType, value );
 		}
 		s_bRcAll = false;
@@ -7157,6 +7159,20 @@ void CCofLogo::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useT
 	if ( !pActivator->IsPlayer() )
 		return;
 
+	// ReCoF story co-op (B454): the intro logos on every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofLogo::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer )
@@ -7542,6 +7558,20 @@ void CCofShowHint::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 	if ( !pActivator->IsPlayer() )
 		return;
+
+	// ReCoF story co-op (B454): a hint on every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofShowHint::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
@@ -9148,6 +9178,20 @@ void CCofMaxHealthChange::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, US
 
 	if ( !pActivator->IsPlayer() )
 		return;
+
+	// ReCoF story co-op (B454): the Doctor's shot lowers every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofMaxHealthChange::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
