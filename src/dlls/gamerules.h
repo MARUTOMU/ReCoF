@@ -418,6 +418,8 @@ public:
 	int m_iSnapItems[33];
 	string_t m_iszSnapItem[33][24];
 	int m_rgSnapAmmo[33][MAX_AMMO_SLOTS];
+	int m_iSnapClip[33][24];	// B478: each weapon's clip (-1 for none)
+	string_t m_iszSnapQuick[33][4];	// B478: the quick slots 1 to 3 by class name
 	// B474: the exit that went on this level (its entity index) and when, so a second one in the same moment waits
 	int m_iExitGone;
 	float m_flExitGone;

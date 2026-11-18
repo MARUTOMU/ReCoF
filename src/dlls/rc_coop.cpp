@@ -192,6 +192,41 @@ void CHalfLifeStoryCoop::ClientDisconnected( edict_t *pClient )
 	m_iSnapItems[i] = 0;
 }
 
+extern int gmsgQSlotUpdate;	// B478 (player.cpp)
+
+// B478: the inventory place (0 to 6) of a player's weapon, 99 when it has none
+static int RcCoopInvIndex( CBasePlayer *pPlayer, const char *pszClass )
+{
+	for ( int q = 0; q < 7; q++ )
+	{
+		const char *pszScript = STRING( pPlayer->inventorySlot[q] );
+		if ( !pszScript || strlen( pszScript ) <= 1 )
+			continue;
+		const char *pszHere = pPlayer->GetDescriptionFromItem( "classname", (char *)pszScript );
+		if ( pszHere && !strcmp( pszHere, pszClass ) )
+			return q;
+	}
+	return 99;
+}
+
+static char *RcCoopQuickSel( CBasePlayer *pPlayer, int q )
+{
+	return q == 1 ? pPlayer->m_sQuickSel1 : q == 2 ? pPlayer->m_sQuickSel2 : pPlayer->m_sQuickSel3;
+}
+
+static CBasePlayerItem *RcCoopFindItem( CBasePlayer *pPlayer, const char *pszClass )
+{
+	for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
+	{
+		for ( CBasePlayerItem *pItem = pPlayer->m_rgpPlayerItems[s]; pItem; pItem = pItem->m_pNext )
+		{
+			if ( FClassnameIs( pItem->pev, pszClass ) )
+				return pItem;
+		}
+	}
+	return NULL;
+}
+
 // the player's box overlaps the entity's box
 static bool RcCoopInside( CBaseEntity *pBox, CBaseEntity *pPlayer )
 {
@@ -513,10 +548,31 @@ void CHalfLifeStoryCoop::Think( void )
 		if ( m_bWasAlive[i] && !bAlive && pEnt->pev->fuser4 == 0 && rc_coop_respawn_time.value > 0 )
 		{
 			m_iSnapItems[i] = 0;
+			int rgRcOrder[24];
 			for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
 			{
 				for ( CBasePlayerItem *pItem = pPl->m_rgpPlayerItems[s]; pItem && m_iSnapItems[i] < 24; pItem = pItem->m_pNext )
-					m_iszSnapItem[i][m_iSnapItems[i]++] = pItem->pev->classname;
+				{
+					// B478: with its clip and its inventory place, so they come back in that order (CrawlerD 102f355)
+					int n = m_iSnapItems[i]++;
+					m_iszSnapItem[i][n] = pItem->pev->classname;
+					m_iSnapClip[i][n] = pItem->GetWeaponPtr() ? ( (CBasePlayerWeapon *)pItem )->m_iClip : -1;
+					rgRcOrder[n] = RcCoopInvIndex( pPl, STRING( pItem->pev->classname ) );
+				}
+			}
+			for ( int a = 1; a < m_iSnapItems[i]; a++ )
+			{
+				for ( int b = a; b > 0 && rgRcOrder[b - 1] > rgRcOrder[b]; b-- )
+				{
+					int o = rgRcOrder[b]; rgRcOrder[b] = rgRcOrder[b - 1]; rgRcOrder[b - 1] = o;
+					string_t z = m_iszSnapItem[i][b]; m_iszSnapItem[i][b] = m_iszSnapItem[i][b - 1]; m_iszSnapItem[i][b - 1] = z;
+					int c = m_iSnapClip[i][b]; m_iSnapClip[i][b] = m_iSnapClip[i][b - 1]; m_iSnapClip[i][b - 1] = c;
+				}
+			}
+			for ( int q = 1; q <= 3; q++ )
+			{
+				CBasePlayerItem *pQuick = RcCoopQuickSel( pPl, q )[0] ? RcCoopFindItem( pPl, RcCoopQuickSel( pPl, q ) ) : NULL;
+				m_iszSnapQuick[i][q] = pQuick ? pQuick->pev->classname : 0;
 			}
 			memcpy( m_rgSnapAmmo[i], pPl->m_rgAmmo, sizeof( m_rgSnapAmmo[i] ) );
 			m_bRestore[i] = true;
@@ -539,6 +595,28 @@ void CHalfLifeStoryCoop::Think( void )
 			{
 				if ( m_rgSnapAmmo[i][a] > pPl->m_rgAmmo[a] )
 					pPl->m_rgAmmo[a] = m_rgSnapAmmo[i][a];
+			}
+			// B478: each clip as it was, and the quick slots on the weapons' new inventory places
+			for ( int n = 0; n < m_iSnapItems[i]; n++ )
+			{
+				CBasePlayerItem *pItem = m_iSnapClip[i][n] >= 0 ? RcCoopFindItem( pPl, STRING( m_iszSnapItem[i][n] ) ) : NULL;
+				if ( pItem && pItem->GetWeaponPtr() )
+					( (CBasePlayerWeapon *)pItem )->m_iClip = m_iSnapClip[i][n];
+			}
+			for ( int q = 1; q <= 3; q++ )
+			{
+				if ( !m_iszSnapQuick[i][q] )
+					continue;
+				const char *pszQuick = STRING( m_iszSnapQuick[i][q] );
+				int iInv = RcCoopInvIndex( pPl, pszQuick );
+				if ( iInv >= 7 || strlen( pszQuick ) >= 128 )
+					continue;
+				strcpy( RcCoopQuickSel( pPl, q ), pszQuick );
+				pPl->m_iQuickSlotSlot[q] = iInv;
+				MESSAGE_BEGIN( MSG_ONE, gmsgQSlotUpdate, NULL, pPl->pev );
+					WRITE_BYTE( q );
+					WRITE_BYTE( iInv );
+				MESSAGE_END();
 			}
 			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is back with %d weapons\n", STRING( pEnt->pev->netname ), m_iSnapItems[i] ) );
 		}
