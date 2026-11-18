@@ -162,6 +162,26 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 	}
 }
 
+// B470: a player who left gives his slot back clean: a joiner who took it on the same level kept the left player's
+// seen time (so the level's state was not sent to him: fog, physinfo, a door's leftovers), his death snapshot (his
+// weapons instead of the late joiner's gifts, G18), his loading protection and his exits' arming (cof-coop 5399ae7)
+void CHalfLifeStoryCoop::ClientDisconnected( edict_t *pClient )
+{
+	CHalfLifeMultiplay::ClientDisconnected( pClient );
+
+	int i = pClient ? ENTINDEX( pClient ) : 0;
+	if ( i < 1 || i > 32 )
+		return;
+	m_flSeen[i] = 0;
+	m_bProtected[i] = false;
+	m_flOldTakeDamage[i] = DAMAGE_AIM;
+	m_bArmed[i] = false;
+	m_flOverlap[i] = 0;
+	m_bWasAlive[i] = false;
+	m_bRestore[i] = false;
+	m_iSnapItems[i] = 0;
+}
+
 // the player's box overlaps the entity's box
 static bool RcCoopInside( CBaseEntity *pBox, CBaseEntity *pPlayer )
 {
