@@ -1194,6 +1194,13 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "unfreeze" ) )
 	{
+		// ReCoF (B446): client.dll sends these from its panels and at a viewport reset; in multiplayer a guest whose
+		// game signed on during a scene was let go and walked out of it (charliee1w 0ed05e2e). Not while a scene
+		// camera that takes control (spawnflag 4) holds him; the camera's end lets him go
+		CBasePlayer *pRcHeld = GetClassPtr( (CBasePlayer *)pev );
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && pRcHeld->m_hCurrentCamera != NULL && ( pRcHeld->m_hCurrentCamera->pev->spawnflags & 4 ) )
+			return;
+
 		// normal freeze
 		if ( atoi( CMD_ARGV(1) ) == 1024 )
 		{
