@@ -390,8 +390,14 @@ void RcPrefetch_Shutdown( void )
 }
 
 // ReCoF co-op spike: the engine's UDP through Steam's relay network (rc_steamnet.cpp). rc_coop_host asks Steam for an
-// address for this listen server, rc_coop_join <169.254.x.x:port> connects to a friend's; "relay" turns off direct
-// routes, as between two homes. Nothing runs until one of them is typed.
+// address for this listen server, rc_coop_join <169.254.x.x:port> connects to a friend's. Every packet goes through
+// Steam's relays, so the players' IP addresses stay hidden; "direct" lets Steam use direct routes too (B480: direct
+// routes were on unless "relay" was given, and the lobby never gave it). Nothing runs until one of them is typed.
+static int RcCoopHasArg( const char *pszArg );
+static bool RcCoopRelayOnly( void )
+{
+	return !RcCoopHasArg( "direct" );
+}
 static void RcCoopPrint( const char *fmt, ... )
 {
 	char buf[512];
@@ -450,7 +456,7 @@ static void RcCoopHost_f( void )
 		port = (int)gEngfuncs.pfnGetCvarFloat( "port" );
 	if ( port <= 0 )
 		port = 27015;
-	RcSteamNet_Host( port, RcCoopHasArg( "relay" ) != 0, !RcCoopHasArg( "nomap" ), RcCoopPrint );
+	RcSteamNet_Host( port, RcCoopRelayOnly(), !RcCoopHasArg( "nomap" ), RcCoopPrint );
 }
 
 static char s_szCoopConnect[96];
@@ -462,7 +468,7 @@ static void RcCoopJoin_f( void )
 {
 	if ( gEngfuncs.Cmd_Argc() < 2 )
 	{
-		RcCoopPrint( "usage: rc_coop_join <169.254.x.x:port> [relay]\n" );
+		RcCoopPrint( "usage: rc_coop_join <169.254.x.x:port> [direct]\n" );
 		return;
 	}
 	// the engine's tokenizer splits "a.b.c.d:port" at the colon into three arguments: join them back
@@ -471,11 +477,11 @@ static void RcCoopJoin_f( void )
 	for ( int i = 1; i < gEngfuncs.Cmd_Argc(); i++ )
 	{
 		const char *arg = gEngfuncs.Cmd_Argv( i );
-		if ( !stricmp( arg, "relay" ) || !stricmp( arg, "nomap" ) )
+		if ( !stricmp( arg, "relay" ) || !stricmp( arg, "direct" ) || !stricmp( arg, "nomap" ) )
 			continue;
 		strncat( addr, arg, sizeof( addr ) - 1 - strlen( addr ) );
 	}
-	if ( RcSteamNet_Join( addr, RcCoopHasArg( "relay" ) != 0, RcCoopPrint ) )
+	if ( RcSteamNet_Join( addr, RcCoopRelayOnly(), RcCoopPrint ) )
 	{
 		RcCoopDefaultName();
 		// connect from HUD_Frame in 3 s: on the command line this runs before the menu map that InitInput queues,

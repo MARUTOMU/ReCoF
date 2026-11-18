@@ -51,7 +51,7 @@ static int s_iServerPort;
 static SOCKET s_sockGame = INVALID_SOCKET;	// host: the server socket; joiner: the socket that sent to the FakeIP
 static RcSendto_t s_pfnSendto;
 static RcRecvfrom_t s_pfnRecvfrom;
-static long s_nIn, s_nOut, s_nSendFail;
+static long s_nIn, s_nOut, s_nSendFail, s_nSendFull;	// B480: s_nSendFull counts sends refused for a full queue
 static unsigned long s_ulBytesIn, s_ulBytesOut;
 static DWORD s_dwNextStats;
 static CRITICAL_SECTION s_csLog;
@@ -186,8 +186,13 @@ static int PASCAL RcSendto( SOCKET s, const char *buf, int len, int flags, const
 				s_nOut++;
 				s_ulBytesOut += len;
 			}
-			else if ( s_nSendFail++ < 20 )
-				RcLog( "send of %d bytes failed: %d", len, (int)r );
+			else
+			{
+				if ( r == k_EResultLimitExceeded )
+					s_nSendFull++;	// B480: Steam's send queue is full
+				if ( s_nSendFail++ < 20 || ( r == k_EResultLimitExceeded && ( s_nSendFull & 255 ) == 1 ) )
+					RcLog( "send of %d bytes failed: %d (%ld for a full queue)", len, (int)r, s_nSendFull );
+			}
 			return len;
 		}
 	}
@@ -660,6 +665,12 @@ static bool RcStart( bool bRelayOnly )
 		s_pUtils->SetGlobalConfigValueInt32( k_ESteamNetworkingConfig_P2P_Transport_ICE_Enable, k_nSteamNetworkingConfig_P2P_Transport_ICE_Enable_Disable );
 		RcLog( "direct routes off (relay only)" );
 	}
+	// B480: room for a level change's burst: Steam's default queue (512 KB) and rate (256 KB/s) could fill once the
+	// netchan sends up to 100000 bytes a second to each guest (B442), and a full queue drops the datagrams
+	// (Mhdshehri 2cefc69)
+	s_pUtils->SetGlobalConfigValueInt32( k_ESteamNetworkingConfig_SendBufferSize, 4 * 1024 * 1024 );
+	s_pUtils->SetGlobalConfigValueInt32( k_ESteamNetworkingConfig_SendRateMin, 256 * 1024 );
+	s_pUtils->SetGlobalConfigValueInt32( k_ESteamNetworkingConfig_SendRateMax, 2 * 1024 * 1024 );
 	s_pUtils->InitRelayNetworkAccess();
 	return true;
 }
@@ -816,7 +827,7 @@ void RcSteamNet_Frame( void )
 	if ( (long)( now - s_dwNextStats ) >= 0 )
 	{
 		s_dwNextStats = now + 10000;
-		RcLog( "stats: %ld in (%lu bytes), %ld out (%lu bytes), %ld send failures, %d friends", s_nIn, s_ulBytesIn, s_nOut, s_ulBytesOut, s_nSendFail, s_nPeers );
+		RcLog( "stats: %ld in (%lu bytes), %ld out (%lu bytes), %ld send failures (%ld for a full queue), %d friends", s_nIn, s_ulBytesIn, s_nOut, s_ulBytesOut, s_nSendFail, s_nSendFull, s_nPeers );
 	}
 }
 
@@ -828,7 +839,7 @@ int RcSteamNet_Joined( void )
 void RcSteamNet_Status( RcSteamPrint_t pfnPrint )
 {
 	static const char *s_szMode[3] = { "off", "host", "join" };
-	pfnPrint( "ReCoF co-op: %s, %ld datagrams in (%lu bytes), %ld out (%lu bytes), %ld send failures, %d friends\n", s_szMode[s_iMode], s_nIn, s_ulBytesIn, s_nOut, s_ulBytesOut, s_nSendFail, s_nPeers );
+	pfnPrint( "ReCoF co-op: %s, %ld datagrams in (%lu bytes), %ld out (%lu bytes), %ld send failures (%ld for a full queue), %d friends\n", s_szMode[s_iMode], s_nIn, s_ulBytesIn, s_nOut, s_ulBytesOut, s_nSendFail, s_nSendFull, s_nPeers );
 	if ( s_pUtils )
 	{
 		SteamRelayNetworkStatus_t st;

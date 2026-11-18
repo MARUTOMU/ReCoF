@@ -74,6 +74,6 @@ On 2026-11-17 with two PCs and two Steam accounts, every packet through Valve's 
 ## For testers
 
 - `rc_coop_dump` (host console) prints every player's health, place, weapons, inventory, codes and keypad type, whether he is seen, what keeps him from using things (phone, call, ladder, reviving, padlock), the live monsters and the padlocks.
-- `rc_coop_host [relay] [nomap]` and `rc_coop_join <ip:port> [relay]` are the pieces `rc_coop_start` uses; `relay` turns off direct connections, as between two homes.
+- `rc_coop_host [direct] [nomap]` and `rc_coop_join <ip:port> [direct]` are the pieces `rc_coop_start` uses. Every packet goes through Steam's relays by default, so the players' IP addresses stay hidden; `direct` lets Steam use a direct connection too (it can be faster on one network, and it shows each player's IP address to the other).
 - Starting `cof.exe` with `-rccmdfile` runs the console commands written to `rc_cmd.txt` next to `cof.exe` once a second (test scripts only).
 - `rc_coop_steam.log` next to `cof.exe` logs the Steam side (no Steam IDs or addresses).
