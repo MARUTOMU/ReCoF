@@ -1378,7 +1378,7 @@ static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 
 // B483: story co-op's per-map rules (the research's map census, I:/COFPP/research_notes): an entity of one map, matched
 // by its brush model, name or target, and what happens when it goes off (a trigger fires, a wall goes up)
-enum { RC_MATCH_MODEL, RC_MATCH_NAME, RC_MATCH_TARGET };
+enum { RC_MATCH_MODEL, RC_MATCH_NAME, RC_MATCH_TARGET, RC_MATCH_TARGET_PREFIX };
 enum { RC_RULE_GATHER };
 static const struct RcMapRule_s
 {
@@ -1397,6 +1397,9 @@ static const struct RcMapRule_s
 	// walls that go up between the players (cof-coop's invisible walls)
 	{ "c_down", RC_MATCH_NAME, "spawnm2s", RC_RULE_GATHER, "before the wall goes up" },
 	{ "c_fsewer1", RC_MATCH_NAME, "blockstairs", RC_RULE_GATHER, "before the stairs close" },
+	// B490: a correct photo at a camera_spot_trigger (multispot2 to 11, multispott1) moves the dream on; the wrong
+	// ones (multiwrong, killwrong) do not (CoF_Camera.cpp; cof-coop gathered the far partner)
+	{ "c_nightmare", RC_MATCH_TARGET_PREFIX, "multispot", RC_RULE_GATHER, "to the photographer" },
 };
 
 void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
@@ -1410,7 +1413,9 @@ void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
 		if ( stricmp( rule.pszMap, pszMap ) )
 			continue;
 		string_t isz = rule.iMatch == RC_MATCH_MODEL ? pEnt->pev->model : rule.iMatch == RC_MATCH_NAME ? pEnt->pev->targetname : pEnt->pev->target;
-		if ( FStringNull( isz ) || stricmp( STRING( isz ), rule.pszValue ) )
+		if ( FStringNull( isz ) )
+			continue;
+		if ( rule.iMatch == RC_MATCH_TARGET_PREFIX ? strnicmp( STRING( isz ), rule.pszValue, strlen( rule.pszValue ) ) : stricmp( STRING( isz ), rule.pszValue ) )
 			continue;
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: map rule %s %s\n", rule.pszMap, rule.pszValue ) );
 		if ( rule.iRule == RC_RULE_GATHER )
