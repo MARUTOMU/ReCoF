@@ -58,11 +58,35 @@ static CBasePlayer *RcCoopAnchor( CBasePlayer *pSkip )
 	return NULL;
 }
 
+// B463: a standing player's box at vecSpot meets a level exit, a teleport or a trigger_hurt: no place to put anyone
+// (one put into the exit back sent the group back a map; charliee1w 35d8c95d, 4dda7409)
+static bool RcCoopSpotInTrigger( const Vector &vecSpot )
+{
+	static const char *s_pszRcAvoid[3] = { "trigger_changelevel", "trigger_teleport", "trigger_hurt" };
+	Vector vecMin = vecSpot + VEC_HULL_MIN, vecMax = vecSpot + VEC_HULL_MAX;
+	for ( int k = 0; k < 3; k++ )
+	{
+		CBaseEntity *pTrig = NULL;
+		while ( ( pTrig = UTIL_FindEntityByClassname( pTrig, s_pszRcAvoid[k] ) ) != NULL )
+		{
+			if ( pTrig->pev->solid == SOLID_NOT && k != 0 )
+				continue;	// a teleport or hurt switched off
+			if ( vecMin.x <= pTrig->pev->absmax.x && vecMax.x >= pTrig->pev->absmin.x && vecMin.y <= pTrig->pev->absmax.y &&
+				vecMax.y >= pTrig->pev->absmin.y && vecMin.z <= pTrig->pev->absmax.z && vecMax.z >= pTrig->pev->absmin.z )
+				return true;
+		}
+	}
+	return false;
+}
+
 // a spot for a standing player at vecSpot: the hull fits, there is floor under it and nothing blocks the way from
-// vecFrom (so nobody lands behind a wall)
+// vecFrom (so nobody lands behind a wall), and no exit, teleport or hurting trigger is there (B463)
 static bool RcCoopSpotFree( const Vector &vecFrom, const Vector &vecSpot, edict_t *pIgnore )
 {
 	TraceResult tr;
+
+	if ( RcCoopSpotInTrigger( vecSpot ) )
+		return false;
 
 	UTIL_TraceHull( vecSpot, vecSpot, dont_ignore_monsters, human_hull, pIgnore, &tr );
 	if ( tr.fStartSolid || tr.fAllSolid )
@@ -1017,11 +1041,22 @@ bool RcCoopPolice( void )
 	return RcPoliceMP() || ( RcCoopRules() && rc_coop_simon.value == 0 );
 }
 
-// a spot near vecBase where a standing player's hull fits (no floor or line of sight asked), rings of 8 at 36 to 96
-// units, then up a step; vecBase itself when there is none
+// a spot near vecBase where a standing player's hull fits, rings of 8 at 36 to 96 units, then up a step; vecBase
+// itself when there is none (B403 and B419 then part the two). B463: a spot RcCoopSpotFree takes (floor, line of
+// sight, no trigger) first; retail-like hull-only spots put gathered teammates behind a wall or over a drop
 static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 {
 	static const float s_flRing[4] = { 36, 52, 72, 96 };
+	for ( int r = 0; r < 4; r++ )
+	{
+		for ( int a = 0; a < 8; a++ )
+		{
+			float yaw = a * 45 * ( M_PI / 180.0 );
+			Vector vecTry = vecBase + Vector( cos( yaw ) * s_flRing[r], sin( yaw ) * s_flRing[r], 0 );
+			if ( RcCoopSpotFree( vecBase, vecTry, pIgnore ) )
+				return vecTry;
+		}
+	}
 	for ( int up = 0; up < 2; up++ )
 	{
 		for ( int r = 0; r < 4; r++ )
@@ -1032,8 +1067,11 @@ static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 				Vector vecTry = vecBase + Vector( cos( yaw ) * s_flRing[r], sin( yaw ) * s_flRing[r], up * 18 );
 				TraceResult tr;
 				UTIL_TraceHull( vecTry, vecTry, dont_ignore_monsters, human_hull, pIgnore, &tr );
-				if ( !tr.fStartSolid && !tr.fAllSolid )
-					return vecTry;
+				if ( tr.fStartSolid || tr.fAllSolid || RcCoopSpotInTrigger( vecTry ) )
+					continue;
+				UTIL_TraceLine( vecBase, vecTry, ignore_monsters, pIgnore, &tr );
+				if ( tr.flFraction >= 1.0 )
+					return vecTry;	// B463: in sight, even with no floor (a step down)
 			}
 		}
 	}
@@ -1066,6 +1104,11 @@ BOOL CHalfLifeStoryCoop::FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity
 
 edict_t *CHalfLifeStoryCoop::GetPlayerSpawnSpot( CBasePlayer *pPlayer )
 {
+	// B463: a respawned or joining player arms the exits only once he has stood outside them all (G2), as an arrival
+	int iRcSlot = ENTINDEX( pPlayer->edict() );
+	if ( iRcSlot >= 1 && iRcSlot <= 32 )
+		m_bArmed[iRcSlot] = false;
+
 	CBasePlayer *pAnchor = RcCoopAnchor( pPlayer );
 	edict_t *pStart = FIND_ENTITY_BY_CLASSNAME( NULL, "info_player_start" );
 
