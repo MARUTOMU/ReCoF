@@ -2886,12 +2886,23 @@ void CTriggerMultiple :: ActivateMultiTrigger( CBaseEntity *pActivator )
 // pev->takedamage = DAMAGE_NO;
 
 	m_hActivator = pActivator;
+	extern bool g_bRcKeepArmed;	// ReCoF (B453), effects.cpp CCoFKillPlayer
+	g_bRcKeepArmed = false;
 	SUB_UseTargets( m_hActivator, USE_TOGGLE, 0 );
 
 	if ( pev->message && pActivator->IsPlayer() )
 	{
 		UTIL_ShowMessage( STRING(pev->message), pActivator );
 //		CLIENT_PRINTF( ENT( pActivator->pev ), print_center, STRING(pev->message) );
+	}
+
+	// ReCoF (B453): a story co-op death floor kills only the one who fell, so it waits for the next one
+	if ( g_bRcKeepArmed )
+	{
+		g_bRcKeepArmed = false;
+		SetThink( &CTriggerMultiple::MultiWaitOver );
+		SetNextThink( 0.5 );
+		return;
 	}
 
 	if (m_flWait > 0)

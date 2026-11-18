@@ -9379,14 +9379,26 @@ void CCoFKillPlayer::Spawn( void )
 	pev->v_angle = g_vecZero;
 }
 
+bool g_bRcKeepArmed = false;	// ReCoF (B453): read by triggers.cpp CTriggerMultiple::ActivateMultiTrigger
+
 void CCoFKillPlayer::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if ( !pActivator )
 		return;
 
+	// ReCoF story co-op (B453): from a trigger the player touched (a death floor) only he dies, and the trigger stays
+	// armed for the next one; retail killed the whole group for one fall and the trigger_once was gone. From a scene
+	// (the endings) every player dies as in retail
+	bool bRcSolo = RcCoop_Story() && pActivator->IsPlayer() && pCaller && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 );
+	if ( bRcSolo )
+		g_bRcKeepArmed = true;
+
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
 		CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
+
+		if ( plr && bRcSolo && plr != pActivator )
+			continue;
 
 		if ( plr )
 		{
