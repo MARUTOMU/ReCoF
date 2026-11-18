@@ -428,6 +428,7 @@ public:
 	// B472: the arrival hold (rc_coop.cpp RcCoopHold)
 	bool m_bHoldDone;
 	float m_flHoldStart;
+	float m_flHoldMsg;	// B495: the next "Waiting for the others to load" line
 	bool m_bHeld[33];
 	void RcCoopHold( void );
 };

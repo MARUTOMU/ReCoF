@@ -155,6 +155,7 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 	g_bRcHolding = false;
 	m_bHoldDone = false;
 	m_flHoldStart = -1;
+	m_flHoldMsg = 0;
 	m_iExitGone = 0;
 	m_flExitGone = -1;
 	for ( int i = 0; i < 33; i++ )
@@ -273,6 +274,19 @@ static bool RcCoopNoClient( CBaseEntity *pEnt )
 {
 	char *pszInfo = g_engfuncs.pfnGetInfoKeyBuffer( pEnt->edict() );
 	return !pszInfo || !pszInfo[0];
+}
+
+// B495: a centred line to every player with a client. UTIL_HudMessageAll writes to every player slot, and after a
+// load a saved player whose client has not come back has no network buffer: the engine stops on SZ_GetSpace (B451),
+// as a text message is not one of the user messages the engine skips for such a slot
+static void RcCoopHudMessage( const hudtextparms_t &tp, const char *pszText )
+{
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && !RcCoopNoClient( pEnt ) )
+			UTIL_HudMessage( pEnt, tp, pszText );
+	}
 }
 
 // a player in the game: alive, not one who left (B320 fuser4), with a client (B391)
@@ -1274,7 +1288,7 @@ bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTou
 			tp.fadeoutTime = 0.2;
 			tp.holdTime = 1.2;
 			tp.channel = 4;
-			UTIL_HudMessageAll( tp, UTIL_VarArgs( "Waiting at the exit: %d of %d players (%d s)", nInside, nPresent, (int)( flLeft + 0.99 ) ) );
+			RcCoopHudMessage( tp, UTIL_VarArgs( "Waiting at the exit: %d of %d players (%d s)", nInside, nPresent, (int)( flLeft + 0.99 ) ) );
 			if ( (int)( flLeft + 0.99 ) % 5 == 0 )
 				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: waiting at the exit, %d of %d players, %d s\n", nInside, nPresent, (int)( flLeft + 0.99 ) ) );
 		}
@@ -1625,7 +1639,22 @@ void CHalfLifeStoryCoop::RcCoopHold( void )
 			m_bHeld[i] = true;
 			pEnt->pev->flags |= FL_FROZEN;
 			pEnt->pev->velocity = g_vecZero;
-			UTIL_ProMessage( pEnt, "Waiting for the others to load...", 20, false );
+		}
+		// B495: a centred line every second, over a scene's black screen too (the message strip is hidden there)
+		if ( gpGlobals->time >= m_flHoldMsg || gpGlobals->time < m_flHoldMsg - 2 )
+		{
+			m_flHoldMsg = gpGlobals->time + 1.0;
+			hudtextparms_t tp;
+			memset( &tp, 0, sizeof( tp ) );
+			tp.x = -1;
+			tp.y = 0.8;
+			tp.r1 = tp.g1 = tp.b1 = 220;
+			tp.a1 = 255;
+			tp.fadeoutTime = 0.2;
+			tp.holdTime = 1.2;
+			tp.channel = 4;
+			int nLeft = (int)( m_flHoldStart + 20 - gpGlobals->time + 0.99 );
+			RcCoopHudMessage( tp, UTIL_VarArgs( "Waiting for the others to load: %d of %d players in (%d s)", nIn, nIn + nWait, nLeft > 0 ? nLeft : 0 ) );
 		}
 		return;
 	}
@@ -1642,7 +1671,6 @@ void CHalfLifeStoryCoop::RcCoopHold( void )
 		if ( !pEnt || !pEnt->IsPlayer() )
 			continue;
 		pEnt->pev->flags &= ~FL_FROZEN;
-		UTIL_ProMessage( pEnt, " ", 2, false );
 	}
 	g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: the level goes on (%s)\n", nWait ? "20 s are over" : "everyone is in" ) );
 }
