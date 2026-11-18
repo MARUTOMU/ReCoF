@@ -2086,6 +2086,10 @@ void CBasePlayer::PackDeadPlayerItems( void )
 
 void CBasePlayer::RemoveAllItems( BOOL removeSuit )
 {
+	m_pStoredNightVisionWeapon = NULL;	// ReCoF (B444)
+	m_pStoredActionItem = NULL;
+	m_pNextItem = NULL;
+
 	if (m_pActiveItem)
 	{
 		ResetAutoaim( );
@@ -8976,6 +8980,16 @@ int CBasePlayer::AddPlayerItem( CBasePlayerItem *pItem )
 
 int CBasePlayer::RemovePlayerItem( CBasePlayerItem *pItem )
 {
+	// ReCoF (B444): a weapon that leaves the player leaves his stored pointers too (the weapon night vision gives back,
+	// the one an action item put away, the next to switch to): deployed later from there it crashed the game
+	// (cof-coop cd19547, charliee1w 29bfa9e5)
+	if ( m_pStoredNightVisionWeapon == pItem )
+		m_pStoredNightVisionWeapon = NULL;
+	if ( m_pStoredActionItem == pItem )
+		m_pStoredActionItem = NULL;
+	if ( m_pNextItem == pItem )
+		m_pNextItem = NULL;
+
 	if (m_pActiveItem == pItem)
 	{
 		ResetAutoaim( );
