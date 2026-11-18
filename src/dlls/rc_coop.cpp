@@ -1357,6 +1357,48 @@ static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 	return vecBase;
 }
 
+// B483: story co-op's per-map rules (the research's map census, I:/COFPP/research_notes): an entity of one map, matched
+// by its brush model, name or target, and what happens when it goes off (a trigger fires, a wall goes up)
+enum { RC_MATCH_MODEL, RC_MATCH_NAME, RC_MATCH_TARGET };
+enum { RC_RULE_GATHER };
+static const struct RcMapRule_s
+{
+	const char *pszMap;
+	int iMatch;
+	const char *pszValue;
+	int iRule;
+	const char *pszWhy;
+} s_RcMapRules[] =
+{
+	// the carriage falls 0.5 s after *109 (destroyall) and its hurt kills whoever is still inside (UNIk0z 3f05917
+	// and ddb5c2d, charliee1w d690a5d2)
+	{ "c_bridge", RC_MATCH_MODEL, "*109", RC_RULE_GATHER, "out of the falling carriage" },
+	// the trigger past fudoor1 fires multisawyou, which locks fudoor1 behind the first player (lofu1; cof-coop)
+	{ "c_hamn", RC_MATCH_TARGET, "multisawyou", RC_RULE_GATHER, "through the door before it locks" },
+	// walls that go up between the players (cof-coop's invisible walls)
+	{ "c_down", RC_MATCH_NAME, "spawnm2s", RC_RULE_GATHER, "before the wall goes up" },
+	{ "c_fsewer1", RC_MATCH_NAME, "blockstairs", RC_RULE_GATHER, "before the stairs close" },
+};
+
+void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
+{
+	if ( !RcCoopRules() || !pEnt || !pActivator || !pActivator->IsPlayer() )
+		return;
+	const char *pszMap = STRING( gpGlobals->mapname );
+	for ( int r = 0; r < (int)ARRAYSIZE( s_RcMapRules ); r++ )
+	{
+		const RcMapRule_s &rule = s_RcMapRules[r];
+		if ( stricmp( rule.pszMap, pszMap ) )
+			continue;
+		string_t isz = rule.iMatch == RC_MATCH_MODEL ? pEnt->pev->model : rule.iMatch == RC_MATCH_NAME ? pEnt->pev->targetname : pEnt->pev->target;
+		if ( FStringNull( isz ) || stricmp( STRING( isz ), rule.pszValue ) )
+			continue;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: map rule %s %s\n", rule.pszMap, rule.pszValue ) );
+		if ( rule.iRule == RC_RULE_GATHER )
+			RcCoop_GatherTo( pActivator, rule.pszWhy );
+	}
+}
+
 // B479: a revived player stood up where he lay: in a corner, a vent or against a wall his standing box was stuck in
 // the world (Lambda 9347dc7). When his box does not fit there he stands on the nearest free spot (multiplayer)
 void RcCoop_ReviveSpot( CBasePlayer *pPlayer )

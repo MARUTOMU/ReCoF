@@ -167,7 +167,14 @@ void CFuncWallToggle :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 		if ( status )
 			TurnOff();
 		else
+		{
+			if ( RcCoop_Story() )
+			{
+				extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+				RcCoop_MapEvent( this, pActivator );	// ReCoF (B483): a wall that goes up between the players
+			}
 			TurnOn();
+		}
 	}
 }
 

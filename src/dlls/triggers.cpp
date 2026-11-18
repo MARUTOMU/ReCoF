@@ -2888,6 +2888,11 @@ void CTriggerMultiple :: ActivateMultiTrigger( CBaseEntity *pActivator )
 	m_hActivator = pActivator;
 	extern bool g_bRcKeepArmed;	// ReCoF (B453), effects.cpp CCoFKillPlayer
 	g_bRcKeepArmed = false;
+	if ( RcCoop_Story() )
+	{
+		extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+		RcCoop_MapEvent( this, pActivator );	// ReCoF (B483): story co-op's per-map rules (rc_coop.cpp)
+	}
 	SUB_UseTargets( m_hActivator, USE_TOGGLE, 0 );
 
 	if ( pev->message && pActivator->IsPlayer() )
