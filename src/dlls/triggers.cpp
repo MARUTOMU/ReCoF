@@ -6455,6 +6455,12 @@ void CTriggerCofTeleport :: Touch( CBaseEntity *pOther )
 
 		pPlayer->pev->flags &= ~FL_ONGROUND;
 		pPlayer->pev->fixangle = TRUE;
+
+		if ( RcCoop_Story() )
+		{
+			extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+			RcCoop_MapEvent( this, pPlayer );	// ReCoF (B491): c_apartment1's elevator takes the group along
+		}
 	}
 
 	if ( pev->spawnflags & 1 )

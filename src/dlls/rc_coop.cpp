@@ -797,7 +797,15 @@ static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
 // B482: the group brought beside pAnchor where the map carries one player only (the c_lake boat, the c_bridge
 // carriage): players in a scene, on a ladder, in a door or held by a third-person scene stay; the others fade in
 // there and arm the exits only after standing outside them (B463)
+static void RcCoopGatherTo( CBaseEntity *pAnchor, const char *pszWhy, bool bWatchers );
+
 void RcCoop_GatherTo( CBaseEntity *pAnchor, const char *pszWhy )
+{
+	RcCoopGatherTo( pAnchor, pszWhy, false );
+}
+
+// B491: bWatchers also brings players held in a scene (their view stays on its cameras)
+static void RcCoopGatherTo( CBaseEntity *pAnchor, const char *pszWhy, bool bWatchers )
 {
 	CHalfLifeStoryCoop *pRules = RcCoopRules();
 	if ( !pRules || !pAnchor || !pAnchor->IsPlayer() )
@@ -808,7 +816,7 @@ void RcCoop_GatherTo( CBaseEntity *pAnchor, const char *pszWhy )
 		if ( !RcCoopPresent( pEnt ) || pEnt == pAnchor )
 			continue;
 		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
-		if ( pPlayer->IsInCutscene() || pPlayer->IsOnLadder() || pPlayer->b_GoingThroughADoor || pPlayer->pDeathScene )
+		if ( ( pPlayer->IsInCutscene() && !bWatchers ) || pPlayer->IsOnLadder() || pPlayer->b_GoingThroughADoor || pPlayer->pDeathScene )
 			continue;
 		RcCoopBringTo( pPlayer, pAnchor, i, pszWhy );
 		pPlayer->pev->angles = pAnchor->pev->angles;
@@ -816,7 +824,8 @@ void RcCoop_GatherTo( CBaseEntity *pAnchor, const char *pszWhy )
 		pPlayer->pev->fixangle = TRUE;
 		pPlayer->m_vPreviousOrigin = pPlayer->pev->origin;
 		pRules->m_bArmed[i] = false;
-		UTIL_ScreenFade( pPlayer, Vector( 0, 0, 0 ), 1, 0, 255, FFADE_IN );
+		if ( !pPlayer->IsInCutscene() )	// a watcher's view is on the scene's camera
+			UTIL_ScreenFade( pPlayer, Vector( 0, 0, 0 ), 1, 0, 255, FFADE_IN );
 	}
 }
 
@@ -1379,7 +1388,7 @@ static Vector RcCoopAnyFreeSpot( const Vector &vecBase, edict_t *pIgnore )
 // B483: story co-op's per-map rules (the research's map census, I:/COFPP/research_notes): an entity of one map, matched
 // by its brush model, name or target, and what happens when it goes off (a trigger fires, a wall goes up)
 enum { RC_MATCH_MODEL, RC_MATCH_NAME, RC_MATCH_TARGET, RC_MATCH_TARGET_PREFIX };
-enum { RC_RULE_GATHER };
+enum { RC_RULE_GATHER, RC_RULE_GATHER_WATCHERS };
 static const struct RcMapRule_s
 {
 	const char *pszMap;
@@ -1400,6 +1409,9 @@ static const struct RcMapRule_s
 	// B490: a correct photo at a camera_spot_trigger (multispot2 to 11, multispott1) moves the dream on; the wrong
 	// ones (multiwrong, killwrong) do not (CoF_Camera.cpp; cof-coop gathered the far partner)
 	{ "c_nightmare", RC_MATCH_TARGET_PREFIX, "multispot", RC_RULE_GATHER, "to the photographer" },
+	// B491: the elevator (trigger_cofteleport *127, during the hisskam cameras) takes the one who touches it to the
+	// next floor; the others, watching, stayed (cof-coop's elevator follow)
+	{ "c_apartment1", RC_MATCH_MODEL, "*127", RC_RULE_GATHER_WATCHERS, "up with the elevator" },
 };
 
 void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
@@ -1420,6 +1432,8 @@ void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: map rule %s %s\n", rule.pszMap, rule.pszValue ) );
 		if ( rule.iRule == RC_RULE_GATHER )
 			RcCoop_GatherTo( pActivator, rule.pszWhy );
+		else if ( rule.iRule == RC_RULE_GATHER_WATCHERS )
+			RcCoopGatherTo( pActivator, rule.pszWhy, true );
 	}
 }
 
