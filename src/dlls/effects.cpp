@@ -10890,6 +10890,47 @@ void CCoFWheelchairMode::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE
 				pPlayer->m_pWheelchair->pev->fixangle = TRUE;
 			}
 		}
+
+		// ReCoF (B486): story co-op seats every present player, each in his own chair side by side 48 units apart
+		// beside the activator's (only the one who set it off rode, the others walked; cof-coop)
+		if ( RcCoop_Story() && pPlayer->m_pWheelchair )
+		{
+			CBaseEntity *pMine = pPlayer->m_pWheelchair;
+			Vector vecBase = pMine->pev->origin;
+			UTIL_MakeVectors( Vector( 0, pMine->pev->angles.y, 0 ) );
+			Vector vecRight = gpGlobals->v_right;
+			int iUsed = 0;
+			for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+			{
+				CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+				if ( !pEnt || pEnt == pPlayer || !pEnt->IsPlayer() || !pEnt->IsAlive() || pEnt->pev->fuser4 != 0 )
+					continue;
+				CBasePlayer *pOther = (CBasePlayer *)pEnt;
+				if ( pOther->m_pWheelchair )
+					continue;
+				pOther->StartWheelchairMode();
+				if ( !pOther->m_pWheelchair )
+					continue;
+				// the first free place of +48, -48, +96, -96, +144, -144 along the activator's right
+				for ( int k = 0; k < 6; k++ )
+				{
+					if ( iUsed & ( 1 << k ) )
+						continue;
+					float flSide = 48.0f * ( k / 2 + 1 ) * ( ( k & 1 ) ? -1.0f : 1.0f );
+					Vector vecSpot = vecBase + vecRight * flSide;
+					TraceResult tr;
+					UTIL_TraceHull( vecSpot + Vector( 0, 0, 36 ), vecSpot + Vector( 0, 0, 36 ), ignore_monsters, human_hull, pOther->edict(), &tr );
+					if ( tr.fStartSolid || tr.fAllSolid )
+						continue;
+					iUsed |= 1 << k;
+					UTIL_SetOrigin( pOther->m_pWheelchair, vecSpot );
+					pOther->m_pWheelchair->pev->angles = pMine->pev->angles;
+					pOther->m_pWheelchair->pev->fixangle = TRUE;
+					break;
+				}
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is in a wheelchair too\n", STRING( pOther->pev->netname ) ) );
+			}
+		}
 	}
 }
 
