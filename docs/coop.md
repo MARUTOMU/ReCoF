@@ -2,7 +2,7 @@
 
 Simon's story for 2 to 4 players on a listen server, joined through Steam's relay network: no Radmin, no port forwarding, and the players' IP addresses stay hidden. The maps are the retail ones, unmodified; everything is done in code. Single player is unchanged: none of this runs unless a game is started with `rc_coop 1` and more than one player slot.
 
-The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B396 and B402 to B406 in [bugs.md](bugs.md).
+The design and the reasons are in the research reports (`I:\COFPP\reports`, local); the bug rows are B368 to B396, B402 to B406 and B416 to B491 in [bugs.md](bugs.md).
 
 ## Playing
 
@@ -22,7 +22,7 @@ Every player needs the same ReCoF build and Steam running.
 - **Level exits wait for the group.** A player who walks into an exit waits there with "Waiting at the exit: k of N players" on everyone's screen until the whole group is in it, or until `rc_coop_exit_wait` seconds pass (default 60), then the players who are not there are brought to the exit. The host can end the wait with `rc_coop_go`. Exits fired by a door or a script do not wait.
 - **Everyone keeps their things through a level change.** The engine carries every player through the single-player transition (health, weapons, inventory), as it does for Simon alone; once a player's game has loaded the new level the server sends it his HUD, weapons and screen state again, so nothing a scene hid stays hidden.
 - **No bouncing back.** A player who arrives inside the exit back counts for exits only after he has stepped out of every exit once.
-- **Players still loading cannot be hurt.**
+- **Players still loading cannot be hurt, and the level waits for them.** On a new level (or after a load) the world holds still until every player carried in has loaded, 20 seconds at most: scenes, timers and monsters wait, nobody touches a trigger, and those already in see "Waiting for the others to load...".
 - **Respawn.** A player who dies comes back next to a living teammate after `rc_coop_respawn_time` seconds (default 10), with his weapons and ammo. Reviving by CPR works as in the police co-op.
 - **Keys belong to the group.** A key, fuse or other story item one player picks up is in everyone's inventory; when it is used on its door or lock it is gone for everyone.
 - **One code for the group.** The padlock combination and the keypad code (and the keypad it is for) are the same for every player; once one player opens the keypad, the code is used up for everyone.
@@ -30,7 +30,8 @@ Every player needs the same ReCoF build and Steam running.
 - **Scenes take the group along.** A scene that teleports Simon teleports the whole group; an arrival room takes everyone standing in it; nobody lands inside a teammate, and players a level change brings in on one spot step apart, so the triggers where they arrive go off.
 - **Cameras** already show every scene to every player (Cry of Fear's own code).
 - **Skipping scenes.** The host's Enter (or `rc_cutscene_skip`) skips a scene he is watching for everyone: the game hurries through it, and the players watching it see the skip screen. A guest's Enter is his vote: everyone sees "<name> wants to skip the scene (1 of 2): Enter to agree", and once every player in the scene has pressed Enter the group skips it (`rc_coop_skip_vote 0` leaves it to the host).
-- **Teammates.** No friendly fire; a player who joins comes in next to a teammate.
+- **Teammates.** No friendly fire; a player who joins comes in next to a teammate, never inside an exit, a teleport or a hurting trigger. A respawn gives back the weapons in their inventory order, each clip and the quick slots. A revived player stands on a free spot when he lay in a wall.
+- **Stuck?** `rc_unstuck` in the console puts you next to a living teammate (not while down, in a scene, on a ladder or in a door; once every 10 seconds).
 - **Pause.** Only the host pauses (his menu pauses everyone); a guest's menu pauses nobody.
 - **Simon, not a police officer.** Simon's voice, hints, dual wield, the slow walk at low health and the map's own sky, as in single player. In the main campaign the players are Simon: his body, his voice and his arms on the weapons; in another campaign they are Cry of Fear's police officers (`rc_coop_simon`, set by the lobby's campaign). The game has no Simon model made for players, so ReCoF makes one at the first start from the game's own files (the officer's skeleton and animations with Simon's body from the cutscene model) into `models/player/simon/simon.mdl`.
 - **A team wipe** brings everyone back at the level's start with their things, without restarting the map.
@@ -40,7 +41,11 @@ Every player needs the same ReCoF build and Steam running.
 - **Bosses take the nearest player.** The roof boss and Purnell fight the nearest player they can see, Book Simon shoots at the nearest player in a wheelchair, and heads turn to the nearest player. A player in a scene is unseen on his own, not because a teammate is in one.
 - **Players pass through each other** (Cry of Fear's own rule), and each player's game predicts it that way, so walking into a teammate does not stop you and jump you ahead; a teammate whose body surrounds your view is not drawn. Players a level change puts on one spot still set off what they stand in (c_start's opening scene after c_nightmare).
 - **Invites from a game.** Accepting a friend's invite while you play takes you to the menu and opens the lobby; in that lobby's own game already, you stay.
-- **Late joiners** come in with the weapons of the teammate they appear next to; the group's keys follow by themselves.
+- **Late joiners** come in with the weapons of the teammate they appear next to; the group's keys follow by themselves. A player who joins in a slot someone left starts clean.
+- **Phone calls reach someone.** A story call rings a teammate with a phone when the one it was for is down or gone, rings again when its player is lost mid-call, and the story goes on after 30 seconds with nobody able to answer.
+- **One exit at a time.** Two players in two exits do not restart each other's wait: the first exit counts, and no other exit goes in the same moment.
+- **Places that carry one player.** The c_lake boat brings the group to its dock; the c_bridge carriage, the c_hamn door that locks behind, the walls that go up in c_down and c_fsewer1, the c_apartment1 elevator and a right photo in c_nightmare bring the group beside the player who set them off. The roofs' fall fade blacks out only the one who fell, every player gets a wheelchair in c_ending4b (a destroyed one starts the level again for the group, as single player's game over, and no save is made during the ride), the c_village3 door gives the group one ending, and c_college1's left items come back whoever goes through.
+- **Held lights for everyone.** A teammate's lantern, lit flare or book laser lights the room for you too.
 - **Harder with more players.** Monsters get 25% more health for each player beyond the first (at most double), the monsters the map places too; a player joining or leaving changes it, and a hurt monster stays as hurt. This takes the place of the police co-op's damage multiplier; the police co-op's hunting monster Simon never appears.
 
 ## Settings (host)
@@ -63,7 +68,8 @@ These are server settings: they live in the host's game, so the host's value app
 ## Not done yet
 
 - A load menu for co-op saves, and loading the last save after a team wipe.
-- The 28 maps that need a rule of their own (bosses, vehicles, endings) and the rest of the places where the story only looks at the first player (G7): bosses, puzzles, sounds played "from the player", the look-at scenes.
+- The per-map rules not needed so far: c_intro's logo spacing, c_subway2st1's older fuses (the group's keys are used up for everyone), the boss fights' start at their bar (players respawn during them), and the rest of the places where the story only looks at the first player (G7): sounds played "from the player".
+- Matching a returning player to his saved slot by Steam ID (by name today; names are the players' Steam names).
 - The voice's room echo, push to talk tuning, Simon's phone as a radio, and monsters that hear voices (decisions 13 to 18).
 - A death trigger (cof_killplayer) kills the whole group, which brings everyone back at the level's start (a team wipe); single player's death is the same restart for Simon.
 
