@@ -745,9 +745,9 @@ void RcVoice_Frame( void );
 // map from the save screen or the credits) ran with 4 slots: a single-player save or level change then stopped the game
 // with "ENTITY IS NOT A PLAYER: 2" (hw.dll host_cmd.c LoadGamestate, CreateEntityList) and "single player" ran under
 // the story co-op rules. Once this game hosted story co-op and that game is over, single player's settings come back:
-// after 1.5 s with no map "maxplayers 1" (the engine refuses it while a server runs, as between a load and its
-// sign-on; story co-op needs more than one slot, so rc_coop is left alone there), and a menu map that started with 4
-// slots starts again with 1
+// after 1.5 s disconnected with no map "maxplayers 1" (a level change has no map for seconds while the client stays
+// connected; story co-op needs more than one slot, so rc_coop is left alone there), and a menu map that started with
+// 4 slots starts again with 1
 static int s_bRcHostedCoop;
 static DWORD s_dwRcNoMapSince;
 
@@ -767,11 +767,16 @@ static void RcCoopBackToOne( void )
 	if ( s_dwCoopStartAt || s_dwCoopConnectAt )
 		return;	// a co-op start or join is on its way
 	const char *pszLevel = gEngfuncs.pfnGetLevelName();
-	bool bNoMap = !pszLevel || !pszLevel[0];
+	net_status_t rcNet;
+	memset( &rcNet, 0, sizeof( rcNet ) );
+	gEngfuncs.pNetAPI->Status( &rcNet );
+	bool bNoMap = ( !pszLevel || !pszLevel[0] ) && !rcNet.connected;	// out of every game, not between two levels
+	if ( !pszLevel )
+		pszLevel = "";
 	int nSlots = gEngfuncs.GetMaxClients();
-	bool bMenu = !bNoMap && RcCoopMenuMap( pszLevel );
+	bool bMenu = pszLevel[0] && RcCoopMenuMap( pszLevel );
 	// this game hosts story co-op: rc_coop is the host's own hl.dll cvar (0 on a guest's machine)
-	if ( !bNoMap && !bMenu && nSlots > 1 && gEngfuncs.pfnGetCvarFloat( "rc_coop" ) != 0 )
+	if ( pszLevel[0] && !bMenu && nSlots > 1 && gEngfuncs.pfnGetCvarFloat( "rc_coop" ) != 0 )
 	{
 		s_bRcHostedCoop = 1;
 		return;
@@ -806,7 +811,7 @@ static void RcCoopBackToOne( void )
 		gEngfuncs.pfnClientCmd( szCmd );
 		RcCoopPrint( "ReCoF co-op: the co-op game is over, %s starts again for one player\n", szMap );
 	}
-	else if ( nSlots <= 1 )
+	else if ( pszLevel[0] && nSlots <= 1 )
 		s_bRcHostedCoop = 0;
 }
 
