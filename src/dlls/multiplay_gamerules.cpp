@@ -704,33 +704,22 @@ BOOL CHalfLifeMultiplay::ClientCommand( CBasePlayer *pPlayer, const char *pcmd )
 	}
 	else if ( FStrEq( pcmd, "votekick" ) )
 	{
-		char *player = (char *)CMD_ARGV( 1 );
+		// ReCoF (B459): no kick votes among story co-op friends (the host can still kick from the console), and names
+		// are compared without lowercasing every player's name in place (the engine's netname strings; charliee1w
+		// fa857cd0)
+		if ( RcCoop_Story() )
+			return TRUE;
+
+		const char *player = CMD_ARGV( 1 );
 
 		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 		{
 			CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
 
-			if ( plr && player && plr->pev->netname )
+			if ( plr && player && plr->pev->netname && !stricmp( STRING( plr->pev->netname ), player ) )
 			{
-				char *name = (char *)STRING( plr->pev->netname );
-
-				if ( name )
-				{
-					for ( int k = 0; name[k]; k++ )
-						name[k] = tolower( name[k] );
-				}
-
-				if ( player )
-				{
-					for ( int k = 0; player[k]; k++ )
-						player[k] = tolower( player[k] );
-				}
-
-				if ( player && name && !strcmp( name, player ) )
-				{
-					g_pGameRules->StartVoteKick( pPlayer, plr );
-					break;
-				}
+				g_pGameRules->StartVoteKick( pPlayer, plr );
+				break;
 			}
 		}
 
