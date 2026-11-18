@@ -1598,7 +1598,10 @@ void CHalfLifeMultiplay :: PlayerSpawn( CBasePlayer *pPlayer )
 			pPlayer->m_iGameOverCounter = plr->m_iGameOverCounter;
 		}
 
-		if ( plr && plr->pDeathScene && plr->pDeathScene->pev->iuser4 != 1 )
+		// ReCoF (B448): only a running model cutscene (its camera models carry iuser3 0x4D44, effects.cpp); a ladder climb,
+		// the strangle and a death scene make camera models too, and nothing but a model cutscene's end let the
+		// newcomer go: he waited on a black screen for good (cof-coop cd19547, charliee1w 6446bb0f)
+		if ( plr && plr->pDeathScene && plr->pDeathScene->pev->iuser4 != 1 && plr->pDeathScene->pev->iuser3 == 0x4D44 )
 		{
 			pPlayer->m_bCoopWaitingForCutsceneToEnd = true;
 			pPlayer->m_flNextCoopWaitingForCutsceneFadeTime = gpGlobals->time + 1;

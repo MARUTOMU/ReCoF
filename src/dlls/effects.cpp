@@ -9905,6 +9905,7 @@ void CCoFMDLCutscene::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TY
 
 				if ( plr->pDeathScene )
 				{
+					plr->pDeathScene->pev->iuser3 = 0x4D44;	// ReCoF (B448): a model cutscene's (multiplay_gamerules.cpp PlayerSpawn)
 					if ( pev->euser1 )
 						plr->pDeathScene->pev->euser1 = pev->euser1;
 
@@ -9961,6 +9962,7 @@ void CCoFMDLCutscene::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TY
 
 			if ( pPlayer->pDeathScene )
 			{
+				pPlayer->pDeathScene->pev->iuser3 = 0x4D44;	// ReCoF (B448)
 				if ( pev->euser1 )
 					pPlayer->pDeathScene->pev->euser1 = pev->euser1;
 

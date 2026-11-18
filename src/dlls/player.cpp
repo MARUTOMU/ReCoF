@@ -5502,6 +5502,22 @@ void CBasePlayer::PostThink()
 			m_flNextCoopWaitingForCutsceneFadeTime = gpGlobals->time + 5;
 			UTIL_ProMessage( this, "Please wait until cutscene has finished.", 2, false );
 		}
+
+		// ReCoF (B448): let go once no model cutscene runs (one that ended for another reason, a save, a leaver)
+		bool bRcScene = false;
+		for ( int i = 1; i <= gpGlobals->maxClients && !bRcScene; i++ )
+		{
+			CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
+			bRcScene = plr && plr != this && plr->pDeathScene && plr->pDeathScene->pev->iuser3 == 0x4D44;
+		}
+		if ( !bRcScene )
+		{
+			m_bCoopWaitingForCutsceneToEnd = false;
+			EnableControl( TRUE );
+			m_iHideHUD &= ~( HIDEHUD_HEALTH | HIDEHUD_WEAPONS );
+			pev->flags &= ~FL_NOTARGET;
+			UTIL_ScreenFade( this, Vector( 0, 0, 0 ), 1, 0, 255, FFADE_IN );
+		}
 	}
 
 	if ( gpGlobals->time > m_flNextDistanceCheckTime )
