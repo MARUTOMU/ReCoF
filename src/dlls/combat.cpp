@@ -1564,8 +1564,14 @@ CBaseEntity* CBaseMonster :: CheckTraceHullAttack( float flDist, int iDamage, in
 				TraceResult trace;
 				UTIL_TraceModel( vecStart, vecEnd, head_hull, ENT(pCast->pev), &trace );
 
-				if ( trace.pHit )
+				// ReCoF (B461): a player counts only when he is nearer than what the hull trace hit; retail took any
+				// player the swing reached, so monsters (and the Taller's stomp) hit players through walls
+				// (charliee1w 2558acaf)
+				if ( trace.pHit && trace.flFraction < tr.flFraction )
+				{
 					tr.pHit = trace.pHit;
+					tr.flFraction = trace.flFraction;
+				}
 			}
 		}
 	}
