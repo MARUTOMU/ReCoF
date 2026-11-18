@@ -733,16 +733,10 @@ void CHalfLifeStoryCoop::Think( void )
 
 // G1: put the players who are not in the exit next to the one who reached it, with their weapons, so the level
 // change carries them from where it carries him
-static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
+// player i put beside pActivator: rings round him, facing away first (RcCoopSpotFree), else any free spot
+static void RcCoopBringTo( CBasePlayer *pPlayer, CBaseEntity *pActivator, int i, const char *pszWhy )
 {
-	if ( !pActivator || !pActivator->IsPlayer() )
-		return;
-	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
-		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
-		if ( !RcCoopPresent( pEnt ) || pEnt == pActivator || ( pTrigger && RcCoopInside( pTrigger, pEnt ) ) )
-			continue;
-		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
 		Vector vecBase = pActivator->pev->origin;
 		Vector vecSpot = vecBase;
 		static const float s_flRing[3] = { 40, 72, 104 };
@@ -769,7 +763,46 @@ static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
 			for ( CBasePlayerItem *pItem = pPlayer->m_rgpPlayerItems[s]; pItem; pItem = pItem->m_pNext )
 				UTIL_SetOrigin( pItem, vecSpot );
 		}
-		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s brought to the exit\n", STRING( pPlayer->pev->netname ) ) );
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s brought %s\n", STRING( pPlayer->pev->netname ), pszWhy ) );
+	}
+}
+
+static void RcCoopGather( CBaseEntity *pTrigger, CBaseEntity *pActivator )
+{
+	if ( !pActivator || !pActivator->IsPlayer() )
+		return;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !RcCoopPresent( pEnt ) || pEnt == pActivator || ( pTrigger && RcCoopInside( pTrigger, pEnt ) ) )
+			continue;
+		RcCoopBringTo( (CBasePlayer *)pEnt, pActivator, i, "to the exit" );
+	}
+}
+
+// B482: the group brought beside pAnchor where the map carries one player only (the c_lake boat, the c_bridge
+// carriage): players in a scene, on a ladder, in a door or held by a third-person scene stay; the others fade in
+// there and arm the exits only after standing outside them (B463)
+void RcCoop_GatherTo( CBaseEntity *pAnchor, const char *pszWhy )
+{
+	CHalfLifeStoryCoop *pRules = RcCoopRules();
+	if ( !pRules || !pAnchor || !pAnchor->IsPlayer() )
+		return;
+	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !RcCoopPresent( pEnt ) || pEnt == pAnchor )
+			continue;
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		if ( pPlayer->IsInCutscene() || pPlayer->IsOnLadder() || pPlayer->b_GoingThroughADoor || pPlayer->pDeathScene )
+			continue;
+		RcCoopBringTo( pPlayer, pAnchor, i, pszWhy );
+		pPlayer->pev->angles = pAnchor->pev->angles;
+		pPlayer->pev->angles.x = pPlayer->pev->angles.z = 0;
+		pPlayer->pev->fixangle = TRUE;
+		pPlayer->m_vPreviousOrigin = pPlayer->pev->origin;
+		pRules->m_bArmed[i] = false;
+		UTIL_ScreenFade( pPlayer, Vector( 0, 0, 0 ), 1, 0, 255, FFADE_IN );
 	}
 }
 

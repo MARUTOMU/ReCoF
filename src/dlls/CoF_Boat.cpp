@@ -148,6 +148,14 @@ void CBoat::Disembark( void )
 
 	m_pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
 
+	// ReCoF (B482): the boat carries one player; in story co-op the group comes to the dock with him instead of
+	// staying on the other side of the lake (charliee1w b068ee53, ae9a3cf3)
+	if ( RcCoop_Story() )
+	{
+		extern void RcCoop_GatherTo( CBaseEntity *pAnchor, const char *pszWhy );
+		RcCoop_GatherTo( m_pPlayer, "to the boat's dock" );
+	}
+
 	m_pPlayer->m_pBoat = NULL;
 	m_pPlayer = NULL;
 	pExitEntity = NULL;
