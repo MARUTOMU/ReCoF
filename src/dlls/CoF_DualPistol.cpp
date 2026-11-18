@@ -40,6 +40,9 @@ extern void GetCurrentPath( char *path );
 
 #include "CoF_Dual_Weapon.h"
 
+// ReCoF (B467): every use here is in a CDualWeapon method: the left hand of this weapon's player
+#define gDualWeapon RcDualFor( m_pPlayer )
+
 
 
 void MessageGet( int phonemessage )

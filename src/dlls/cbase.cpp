@@ -30,6 +30,18 @@
 
 CDualWeaponRight gDualWeapon;
 
+// ReCoF (B467): dual wield's left hand per player slot (gDualWeapon was one for every player, so two players dual
+// wielding drove each other's timers and animations; charliee1w 335dea26)
+static CDualWeaponRight g_RcDualWeapons[33];
+
+CDualWeaponRight &RcDualFor( CBaseEntity *pPlayer )
+{
+	int i = pPlayer ? ENTINDEX( pPlayer->edict() ) : 0;
+	if ( i < 0 || i > 32 )
+		i = 0;
+	return g_RcDualWeapons[i];
+}
+
 void EntvarsKeyvalue( entvars_t *pev, KeyValueData *pkvd );
 
 extern "C" void PM_Move ( struct playermove_s *ppmove, int server );

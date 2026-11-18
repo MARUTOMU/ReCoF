@@ -5603,10 +5603,10 @@ void CBasePlayer::PostThink()
 			((CBasePlayerWeapon *)m_pActiveItem)->m_flTimeWeaponIdle = gpGlobals->time;
 			((CBasePlayerWeapon *)m_pActiveItem)->WeaponIdle();
 
-			gDualWeapon.m_flNextPrimaryAttack = gpGlobals->time;
-			gDualWeapon.m_flNextSecondaryAttack = gpGlobals->time;
-			gDualWeapon.m_flNextIdleTime = gpGlobals->time;
-			gDualWeapon.WeaponThink( this );
+			RcDualFor( this ).m_flNextPrimaryAttack = gpGlobals->time;
+			RcDualFor( this ).m_flNextSecondaryAttack = gpGlobals->time;
+			RcDualFor( this ).m_flNextIdleTime = gpGlobals->time;
+			RcDualFor( this ).WeaponThink( this );
 		}
 
 		// ReCoF (B289): doctor mode put the mask back on after every level change and load, also when the
@@ -6995,8 +6995,8 @@ void CBasePlayer::PostThink()
 	// do weapon stuff
 	ItemPostFrame( );
 
-	if ( gDualWeapon.HasDualWeapon( this ) )
-		gDualWeapon.WeaponThink( this );
+	if ( RcDualFor( this ).HasDualWeapon( this ) )
+		RcDualFor( this ).WeaponThink( this );
 
 	if ( FBitSet( pev->flags, FL_ONGROUND ) && pev->health > 0 && m_flFallVelocity > 175 && m_flFallVelocity < 350 )
 	{
@@ -9697,7 +9697,7 @@ void CBasePlayer :: UpdateClientData( void )
 		{
 			MESSAGE_BEGIN( MSG_ONE, gmsgDualWield, NULL, pev );
 				WRITE_STRING( STRING( m_sDualWieldViewModel ) );
-				WRITE_BYTE( gDualWeapon.dualbody );
+				WRITE_BYTE( RcDualFor( this ).dualbody );
 				WRITE_BYTE( m_iDualWeaponLeftID );
 				WRITE_BYTE( m_iDualWeaponRightID );
 			MESSAGE_END();
@@ -14635,7 +14635,7 @@ void CBasePlayer::SetDualWieldWeapon( int model )
 	{
 		MESSAGE_BEGIN( MSG_ONE, gmsgDualWield, NULL, pev );
 			WRITE_STRING( STRING( m_sDualWieldViewModel ) );
-			WRITE_BYTE( gDualWeapon.dualbody );
+			WRITE_BYTE( RcDualFor( this ).dualbody );
 			WRITE_BYTE( m_iDualWeaponLeftID );
 			WRITE_BYTE( m_iDualWeaponRightID );
 		MESSAGE_END();

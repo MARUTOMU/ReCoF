@@ -51,5 +51,6 @@ public:
 };
 
 extern CDualWeaponRight gDualWeapon;
+CDualWeaponRight &RcDualFor( CBaseEntity *pPlayer );	// ReCoF (B467): the left hand of this player (cbase.cpp)
 
 #endif // COF_DUAL_WEAPON_H
