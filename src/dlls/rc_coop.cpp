@@ -194,16 +194,36 @@ void CHalfLifeStoryCoop::ClientDisconnected( edict_t *pClient )
 
 extern int gmsgQSlotUpdate;	// B478 (player.cpp)
 
-// B478: the inventory place (0 to 6) of a player's weapon, 99 when it has none
-static int RcCoopInvIndex( CBasePlayer *pPlayer, const char *pszClass )
+// B478: the class names in a player's 7 inventory places, each read once (GetDescriptionFromItem loads and parses
+// the item's script file at every call and returns the parser's token buffer)
+struct RcInv_s
+{
+	char sz[7][64];
+};
+
+static void RcCoopInvRead( CBasePlayer *pPlayer, RcInv_s &inv )
 {
 	for ( int q = 0; q < 7; q++ )
 	{
+		inv.sz[q][0] = 0;
 		const char *pszScript = STRING( pPlayer->inventorySlot[q] );
 		if ( !pszScript || strlen( pszScript ) <= 1 )
 			continue;
 		const char *pszHere = pPlayer->GetDescriptionFromItem( "classname", (char *)pszScript );
-		if ( pszHere && !strcmp( pszHere, pszClass ) )
+		if ( pszHere )
+		{
+			strncpy( inv.sz[q], pszHere, 63 );
+			inv.sz[q][63] = 0;
+		}
+	}
+}
+
+// the inventory place (0 to 6) of a weapon, 99 when it has none
+static int RcCoopInvIndex( const RcInv_s &inv, const char *pszClass )
+{
+	for ( int q = 0; q < 7; q++ )
+	{
+		if ( inv.sz[q][0] && !strcmp( inv.sz[q], pszClass ) )
 			return q;
 	}
 	return 99;
@@ -563,6 +583,8 @@ void CHalfLifeStoryCoop::Think( void )
 		{
 			m_iSnapItems[i] = 0;
 			int rgRcOrder[24];
+			RcInv_s rcInv;
+			RcCoopInvRead( pPl, rcInv );
 			for ( int s = 0; s < MAX_ITEM_TYPES; s++ )
 			{
 				for ( CBasePlayerItem *pItem = pPl->m_rgpPlayerItems[s]; pItem && m_iSnapItems[i] < 24; pItem = pItem->m_pNext )
@@ -571,7 +593,7 @@ void CHalfLifeStoryCoop::Think( void )
 					int n = m_iSnapItems[i]++;
 					m_iszSnapItem[i][n] = pItem->pev->classname;
 					m_iSnapClip[i][n] = pItem->GetWeaponPtr() ? ( (CBasePlayerWeapon *)pItem )->m_iClip : -1;
-					rgRcOrder[n] = RcCoopInvIndex( pPl, STRING( pItem->pev->classname ) );
+					rgRcOrder[n] = RcCoopInvIndex( rcInv, STRING( pItem->pev->classname ) );
 				}
 			}
 			for ( int a = 1; a < m_iSnapItems[i]; a++ )
@@ -617,12 +639,14 @@ void CHalfLifeStoryCoop::Think( void )
 				if ( pItem && pItem->GetWeaponPtr() )
 					( (CBasePlayerWeapon *)pItem )->m_iClip = m_iSnapClip[i][n];
 			}
+			RcInv_s rcInvNow;
+			RcCoopInvRead( pPl, rcInvNow );
 			for ( int q = 1; q <= 3; q++ )
 			{
 				if ( !m_iszSnapQuick[i][q] )
 					continue;
 				const char *pszQuick = STRING( m_iszSnapQuick[i][q] );
-				int iInv = RcCoopInvIndex( pPl, pszQuick );
+				int iInv = RcCoopInvIndex( rcInvNow, pszQuick );
 				if ( iInv >= 7 || strlen( pszQuick ) >= 128 )
 					continue;
 				strcpy( RcCoopQuickSel( pPl, q ), pszQuick );
