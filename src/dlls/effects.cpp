@@ -165,6 +165,7 @@ public:
 	string_t m_sCvarNo;
 	int m_cvarvalue;
 	int m_cvarvalueno;
+	int m_iRcHeld;	// ReCoF (B457): the players ryesno holds, by index bit
 };
 
 class CCoFDocument : public CBaseEntity
@@ -7695,7 +7696,17 @@ void CCofYesNo::YesActivate( CBaseEntity *pActivator )
 			GetClassPtr( (CBasePlayer *)pActivator->pev )->pev->fuser3 = 0;
 	}
 
-
+	// ReCoF (B457): every player this question holds is let go, not only the one who answered
+	if ( !strcmp( STRING(pev->targetname), "ryesno" ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients && i < 32; i++ )
+		{
+			CBaseEntity *pHeld = UTIL_PlayerByIndex( i );
+			if ( ( m_iRcHeld & ( 1 << i ) ) && pHeld && pHeld->IsPlayer() && pHeld->pev->fuser3 == 1 )
+				pHeld->pev->fuser3 = 0;
+		}
+		m_iRcHeld = 0;
+	}
 
 
 
@@ -7744,6 +7755,18 @@ void CCofYesNo::NoActivate( CBaseEntity *pActivator )
 			GetClassPtr( (CBasePlayer *)pActivator->pev )->pev->fuser3 = 0;
 	}
 
+	// ReCoF (B457): every player this question holds is let go, not only the one who answered
+	if ( !strcmp( STRING(pev->targetname), "ryesno" ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients && i < 32; i++ )
+		{
+			CBaseEntity *pHeld = UTIL_PlayerByIndex( i );
+			if ( ( m_iRcHeld & ( 1 << i ) ) && pHeld && pHeld->IsPlayer() && pHeld->pev->fuser3 == 1 )
+				pHeld->pev->fuser3 = 0;
+		}
+		m_iRcHeld = 0;
+	}
+
 	if ( m_sCvarNo )
 		CVAR_SET_FLOAT( STRING(m_sCvarNo), m_cvarvalueno );
 
@@ -7775,6 +7798,9 @@ void CCofYesNo::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE use
 			pPlayer->pev->velocity.x = 0;
 			pPlayer->pev->velocity.y = 0;
 			pPlayer->pev->fuser3 = 1;
+			int iRc = ENTINDEX( pPlayer->edict() );
+			if ( iRc > 0 && iRc < 32 )
+				m_iRcHeld |= 1 << iRc;	// ReCoF (B457)
 		}
 
 		if ( m_sWeapon || m_sItem )
