@@ -319,8 +319,11 @@ void CGameUI::Start(struct cl_enginefuncs_s *engineFuncs, int interfaceVersion, 
 
 	staticPanel->SetBackgroundRenderState(CBasePanel::BACKGROUND_DESKTOPIMAGE);
 
-	// start the startup music
-	engine->pfnClientCmd("mp3 loop media/gamestartup.mp3\n");
+	// ReCoF (B496): Valve's GameUI started the menu music here in the engine's MP3 player ("mp3 loop
+	// media/gamestartup.mp3"). Cry of Fear's own menu (client.dll CGameMenu::setVisible) plays the same theme
+	// through irrKlang at the player's music volume, so at every launch the engine's copy played for half a second
+	// at the engine's default MP3Volume (its volume is set before config.cfg is read), was cut, and the theme
+	// started again from the beginning
 }
 
 //-----------------------------------------------------------------------------
