@@ -1,7 +1,7 @@
 // ReCoF (B405): the main menu in the modern look. Cry of Fear's picture menu (eleven picture rows under the logo) is
 // hidden and a short text list under a wordmark takes its place, in the look of ReCoF's other screens (rc_ui.h):
-// New Game, Load Game, Story Co-op, Custom Campaign, Multiplayer (Find Servers, Host Server), Extras (Unlockables,
-// Bonus Content, Language), Options, Quit. Every entry runs what the picture row ran (CGameMenu::ActionSignal).
+// New Game, Load Game, Co-op, Custom Campaign, Extras (Unlockables, Bonus Content, Language), Options, Quit.
+// B497: the Multiplayer page (Find Servers, Host Server) went into the Co-op lobby. Every entry runs what the picture row ran (CGameMenu::ActionSignal).
 // B410: only with rc_menu_text 1; Cry of Fear's picture menu is the default (the user's choice).
 #include "hud.h"
 #include "cl_util.h"
@@ -14,7 +14,6 @@ void RcCoopMenu_Open( void );
 void RcCoopMenu_Show( bool bShow );
 
 #define RC_CMD_COOP		-1
-#define RC_CMD_MP		-2
 #define RC_CMD_EXTRAS	-3
 #define RC_CMD_BACK		-4
 
@@ -26,12 +25,8 @@ struct RcMainItem_t
 
 static const RcMainItem_t s_RcMainPage[] =
 {
-	{ "New Game", 1 }, { "Load Game", 2 }, { "Story Co-op", RC_CMD_COOP }, { "Custom Campaign", 3 },
-	{ "Multiplayer", RC_CMD_MP }, { "Extras", RC_CMD_EXTRAS }, { "Options", 5 }, { "Quit", 10 },
-};
-static const RcMainItem_t s_RcMpPage[] =
-{
-	{ "Find Servers", 4 }, { "Host Server", 9 }, { "Back", RC_CMD_BACK },
+	{ "New Game", 1 }, { "Load Game", 2 }, { "Co-op", RC_CMD_COOP }, { "Custom Campaign", 3 },
+	{ "Extras", RC_CMD_EXTRAS }, { "Options", 5 }, { "Quit", 10 },
 };
 static const RcMainItem_t s_RcExtrasPage[] =
 {
@@ -67,11 +62,11 @@ static void RcMainMenu_Pictures( bool bShow )
 	CGameMenu *m = s_pRcMain;
 	Panel *pPanels[] =
 	{
-		m->m_pLogo_guess, m->m_pNewGame_guess, m->m_pLoadGame_guess, m->m_pCustom_guess, m->m_pJoinServer_guess,
-		m->m_pOptions_guess, m->m_pLanguage_guess, m->m_pUnlockables_guess, m->m_pExtras_guess, m->m_pHostServer_guess,
-		m->m_pQuit_guess, m->m_pNewGameButton_guess, m->m_pLoadGameButton_guess, m->m_pCustomButton_guess,
-		m->m_pJoinServerButton_guess, m->m_pOptionsButton_guess, m->m_pLanguageButton_guess,
-		m->m_pUnlockablesButton_guess, m->m_pExtrasButton_guess, m->m_pHostServerButton_guess, m->m_pQuitButton_guess,
+		// B497: not Join Server and Host Server, which stay hidden
+		m->m_pLogo_guess, m->m_pNewGame_guess, m->m_pLoadGame_guess, m->m_pCustom_guess, m->m_pOptions_guess,
+		m->m_pLanguage_guess, m->m_pUnlockables_guess, m->m_pExtras_guess, m->m_pQuit_guess, m->m_pNewGameButton_guess,
+		m->m_pLoadGameButton_guess, m->m_pCustomButton_guess, m->m_pOptionsButton_guess, m->m_pLanguageButton_guess,
+		m->m_pUnlockablesButton_guess, m->m_pExtrasButton_guess, m->m_pQuitButton_guess,
 	};
 	for ( int i = 0; i < (int)( sizeof( pPanels ) / sizeof( pPanels[0] ) ); i++ )
 	{
@@ -128,10 +123,6 @@ static void RcMainMenu_Item( int i )
 	{
 	case RC_CMD_COOP:
 		RcCoopMenu_Open();
-		break;
-	case RC_CMD_MP:
-		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
-		RcMainMenu_SetPage( s_RcMpPage, sizeof( s_RcMpPage ) / sizeof( s_RcMpPage[0] ) );
 		break;
 	case RC_CMD_EXTRAS:
 		gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );

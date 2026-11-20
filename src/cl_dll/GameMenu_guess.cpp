@@ -153,36 +153,36 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pJoinServer_guess = new CRcImagePanel( m_pJoinServerImage_guess );
 	m_pJoinServer_guess->setParent( this );
 	m_pJoinServer_guess->setPos( x, y - tall * 8 );
-	m_pJoinServer_guess->setVisible( true );
+	m_pJoinServer_guess->setVisible( false );	// ReCoF (B497)
 
 	m_pOptions_guess = new CRcImagePanel( m_pOptionsImage_guess );
 	m_pOptions_guess->setParent( this );
-	m_pOptions_guess->setPos( x, y - tall * 2 );
+	m_pOptions_guess->setPos( x, y - tall * 4 );
 	m_pOptions_guess->setVisible( true );
 
 	m_pLanguage_guess = new CRcImagePanel( m_pLanguageImage_guess );
 	m_pLanguage_guess->setParent( this );
-	m_pLanguage_guess->setPos( x, y - tall * 5 );
+	m_pLanguage_guess->setPos( x, y - tall * 7 );
 	m_pLanguage_guess->setVisible( true );
 
 	m_pUnlockables_guess = new CRcImagePanel( m_pUnlockablesImage_guess );
 	m_pUnlockables_guess->setParent( this );
-	m_pUnlockables_guess->setPos( x, y - tall * 4 );
+	m_pUnlockables_guess->setPos( x, y - tall * 6 );
 	m_pUnlockables_guess->setVisible( true );
 
 	m_pExtras_guess = new CRcImagePanel( m_pExtrasImage_guess );
 	m_pExtras_guess->setParent( this );
-	m_pExtras_guess->setPos( x, y - tall * 3 );
+	m_pExtras_guess->setPos( x, y - tall * 5 );
 	m_pExtras_guess->setVisible( true );
 
 	m_pHostServer_guess = new CRcImagePanel( m_pHostServerImage_guess );
 	m_pHostServer_guess->setParent( this );
 	m_pHostServer_guess->setPos( x, y - tall * 7 );
-	m_pHostServer_guess->setVisible( true );
+	m_pHostServer_guess->setVisible( false );	// ReCoF (B497)
 
 	m_pQuit_guess = new CRcImagePanel( m_pQuitImage_guess );
 	m_pQuit_guess->setParent( this );
-	m_pQuit_guess->setPos( x, y - tall );
+	m_pQuit_guess->setPos( x, y - tall * 3 );
 	m_pQuit_guess->setVisible( true );
 
 	m_pNewGameButton_guess = new ColorButton( "", x, y - tall * 11, wide, tall, false, true );
@@ -201,19 +201,19 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pJoinServerButton_guess->setParent( this );
 	m_pJoinServerButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 4 ) );
 
-	m_pOptionsButton_guess = new ColorButton( "", x, y - tall * 2, wide, tall, false, true );
+	m_pOptionsButton_guess = new ColorButton( "", x, y - tall * 4, wide, tall, false, true );
 	m_pOptionsButton_guess->setParent( this );
 	m_pOptionsButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 5 ) );
 
-	m_pLanguageButton_guess = new ColorButton( "", x, y - tall * 5, wide, tall, false, true );
+	m_pLanguageButton_guess = new ColorButton( "", x, y - tall * 7, wide, tall, false, true );
 	m_pLanguageButton_guess->setParent( this );
 	m_pLanguageButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 6 ) );
 
-	m_pUnlockablesButton_guess = new ColorButton( "", x, y - tall * 4, wide, tall, false, true );
+	m_pUnlockablesButton_guess = new ColorButton( "", x, y - tall * 6, wide, tall, false, true );
 	m_pUnlockablesButton_guess->setParent( this );
 	m_pUnlockablesButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 7 ) );
 
-	m_pExtrasButton_guess = new ColorButton( "", x, y - tall * 3, wide, tall, false, true );
+	m_pExtrasButton_guess = new ColorButton( "", x, y - tall * 5, wide, tall, false, true );
 	m_pExtrasButton_guess->setParent( this );
 	m_pExtrasButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 8 ) );
 
@@ -221,11 +221,16 @@ CGameMenu::CGameMenu() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	m_pHostServerButton_guess->setParent( this );
 	m_pHostServerButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 9 ) );
 
-	m_pQuitButton_guess = new ColorButton( "", x, y - tall, wide, tall, false, true );
+	m_pQuitButton_guess = new ColorButton( "", x, y - tall * 3, wide, tall, false, true );
 	m_pQuitButton_guess->setParent( this );
 	m_pQuitButton_guess->addActionSignal( new CGameMenuHandler_Command( this, 10 ) );
 
-	RcCoopMenu_Create( this, x, y - tall * 6, wide, tall );	// ReCoF (B393)
+	RcCoopMenu_Create( this, x, y - tall * 8, wide, tall );	// ReCoF (B393); B497: in Join Server's row
+
+	// ReCoF (B497): the Co-op lobby hosts every co-op game and lists the servers, so Join Server and Host Server
+	// are no longer shown; the rows under them moved up two places, the column still starts under the logo
+	m_pJoinServerButton_guess->setVisible( false );
+	m_pHostServerButton_guess->setVisible( false );
 
 	// list of the custom campaigns
 	int iCancelWide = ScreenWidth;
@@ -419,23 +424,19 @@ void CGameMenu::ActionSignal( int cmd )
 		m_pNewGameButton_guess->setVisible( true );
 		m_pLoadGameButton_guess->setVisible( true );
 		m_pCustomButton_guess->setVisible( true );
-		m_pJoinServerButton_guess->setVisible( true );
 		m_pOptionsButton_guess->setVisible( true );
 		m_pLanguageButton_guess->setVisible( true );
 		m_pUnlockablesButton_guess->setVisible( true );
 		m_pExtrasButton_guess->setVisible( true );
-		m_pHostServerButton_guess->setVisible( true );
 		m_pQuitButton_guess->setVisible( true );
 		m_pLogo_guess->setVisible( true );
 		m_pNewGame_guess->setVisible( true );
 		m_pLoadGame_guess->setVisible( true );
 		m_pCustom_guess->setVisible( true );
-		m_pJoinServer_guess->setVisible( true );
 		m_pOptions_guess->setVisible( true );
 		m_pLanguage_guess->setVisible( true );
 		m_pUnlockables_guess->setVisible( true );
 		m_pExtras_guess->setVisible( true );
-		m_pHostServer_guess->setVisible( true );
 		m_pQuit_guess->setVisible( true );
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );
@@ -631,13 +632,13 @@ void CGameMenu::ResetButtonPositions_guess()
 	m_pLoadGame_guess->setPos( x, y - tall * 10 );
 	m_pCustom_guess->setPos( x, y - tall * 9 );
 	m_pJoinServer_guess->setPos( x, y - tall * 8 );
-	m_pOptions_guess->setPos( x, y - tall * 2 );
-	m_pLanguage_guess->setPos( x, y - tall * 5 );
-	m_pUnlockables_guess->setPos( x, y - tall * 4 );
-	m_pExtras_guess->setPos( x, y - tall * 3 );
+	m_pOptions_guess->setPos( x, y - tall * 4 );
+	m_pLanguage_guess->setPos( x, y - tall * 7 );
+	m_pUnlockables_guess->setPos( x, y - tall * 6 );
+	m_pExtras_guess->setPos( x, y - tall * 5 );
 	m_pHostServer_guess->setPos( x, y - tall * 7 );
-	m_pQuit_guess->setPos( x, y - tall );
-	RcCoopMenu_SetPos( x, y - tall * 6, wide, tall );	// ReCoF (B393)
+	m_pQuit_guess->setPos( x, y - tall * 3 );
+	RcCoopMenu_SetPos( x, y - tall * 8, wide, tall );	// ReCoF (B393, B497)
 
 	// ReCoF (B429): the click areas and the logos were placed once, when the menu was made: after a resolution
 	// change (or a new rc_menu_scale) the pictures moved and a click on one of them hit nothing
@@ -645,12 +646,12 @@ void CGameMenu::ResetButtonPositions_guess()
 	m_pLoadGameButton_guess->setBounds( x, y - tall * 10, wide, tall );
 	m_pCustomButton_guess->setBounds( x, y - tall * 9, wide, tall );
 	m_pJoinServerButton_guess->setBounds( x, y - tall * 8, wide, tall );
-	m_pOptionsButton_guess->setBounds( x, y - tall * 2, wide, tall );
-	m_pLanguageButton_guess->setBounds( x, y - tall * 5, wide, tall );
-	m_pUnlockablesButton_guess->setBounds( x, y - tall * 4, wide, tall );
-	m_pExtrasButton_guess->setBounds( x, y - tall * 3, wide, tall );
+	m_pOptionsButton_guess->setBounds( x, y - tall * 4, wide, tall );
+	m_pLanguageButton_guess->setBounds( x, y - tall * 7, wide, tall );
+	m_pUnlockablesButton_guess->setBounds( x, y - tall * 6, wide, tall );
+	m_pExtrasButton_guess->setBounds( x, y - tall * 5, wide, tall );
 	m_pHostServerButton_guess->setBounds( x, y - tall * 7, wide, tall );
-	m_pQuitButton_guess->setBounds( x, y - tall, wide, tall );
+	m_pQuitButton_guess->setBounds( x, y - tall * 3, wide, tall );
 	logoWide = RcMenuScaled( logoWide );
 	logoTall = RcMenuScaled( logoTall );
 	m_pLogo_guess->setPos( ScreenWidth / 2 - logoWide / 2, ScreenHeight / 2 - logoTall * 3 );
@@ -701,23 +702,19 @@ void CGameMenu::setVisible( bool state )
 		m_pNewGameButton_guess->setVisible( true );
 		m_pLoadGameButton_guess->setVisible( true );
 		m_pCustomButton_guess->setVisible( true );
-		m_pJoinServerButton_guess->setVisible( true );
 		m_pOptionsButton_guess->setVisible( true );
 		m_pLanguageButton_guess->setVisible( true );
 		m_pUnlockablesButton_guess->setVisible( true );
 		m_pExtrasButton_guess->setVisible( true );
-		m_pHostServerButton_guess->setVisible( true );
 		m_pQuitButton_guess->setVisible( true );
 		m_pLogo_guess->setVisible( true );
 		m_pNewGame_guess->setVisible( true );
 		m_pLoadGame_guess->setVisible( true );
 		m_pCustom_guess->setVisible( true );
-		m_pJoinServer_guess->setVisible( true );
 		m_pOptions_guess->setVisible( true );
 		m_pLanguage_guess->setVisible( true );
 		m_pUnlockables_guess->setVisible( true );
 		m_pExtras_guess->setVisible( true );
-		m_pHostServer_guess->setVisible( true );
 		m_pQuit_guess->setVisible( true );
 		m_pCancelButton_guess->setVisible( false );
 		m_pCampaignList_guess->setVisible( false );

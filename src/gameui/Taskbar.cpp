@@ -401,7 +401,7 @@ static void RcAddCoopMenuItems( KeyValues *datafile )
 {
 	static const char *s_pszItems[3][4] =
 	{
-		{ "RcCoopHost", "Story co-op", "engine rc_coop_lobby", "notmulti" },	// B408: the lobby, on the main menu
+		{ "RcCoopHost", "Co-op", "engine rc_coop_lobby", "notmulti" },	// B408: the lobby, on the main menu (B497: "Co-op")
 		{ "RcCoopInvite", "Invite friends", "engine rc_coop_invite", "notsingle" },
 		{ "RcCoopLeave", "Leave co-op", "engine rc_coop_leave", "notsingle" },
 	};
@@ -458,6 +458,27 @@ static void RcShortMenuLabels( KeyValues *datafile )
 }
 
 //-----------------------------------------------------------------------------
+// ReCoF (B497): the Co-op lobby hosts every co-op game (story co-op and Cry of Fear's own campaigns) and opens the
+// server list, so the game menu's Find servers (OpenServerBrowser) and Host server (OpenCreateMultiplayerGameDialog)
+// lines go, found by their command so a translated or modded GameMenu.res loses them too
+//-----------------------------------------------------------------------------
+static void RcDropServerItems( KeyValues *datafile )
+{
+	KeyValues *dat = datafile->GetFirstSubKey();
+	while ( dat )
+	{
+		KeyValues *next = dat->GetNextKey();
+		const char *cmd = dat->GetString( "command" );
+		if ( !stricmp( cmd, "OpenServerBrowser" ) || !stricmp( cmd, "OpenCreateMultiplayerGameDialog" ) )
+		{
+			datafile->RemoveSubKey( dat );
+			dat->deleteThis();
+		}
+		dat = next;
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: loads the game menu from Resource/GameMenu.res
 //-----------------------------------------------------------------------------
 void CTaskbar::CreateGameMenu()
@@ -467,6 +488,7 @@ void CTaskbar::CreateGameMenu()
 	if ( datafile->LoadFromFile( filesystem(), "Resource/GameMenu.res" ) )
 	{
 		RcShortMenuLabels( datafile );	// ReCoF (B407)
+		RcDropServerItems( datafile );	// ReCoF (B497)
 		RcAddCoopMenuItems( datafile );	// ReCoF (B393)
 		m_pGameMenu = RecursiveLoadGameMenu( datafile );
 		datafile->deleteThis();
