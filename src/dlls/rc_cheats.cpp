@@ -236,6 +236,30 @@ bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 
 	// B346: a weapon, ammo or item given at the player's feet, as if picked up there; the unlockable weapons keep
 	// their own tests (GiveNamedItem)
+	// B501: rc_ch_fire <targetname> [on | off | toggle]: fires the entities of that name as a relay would, with this
+	// player as the one who set them off, to try a scene or a map event without walking to its trigger
+	if ( FStrEq( pcmd, "rc_ch_fire" ) )
+	{
+		if ( !RcCheatsOn( pPlayer ) )
+			return true;
+		if ( argc < 2 || argc > 3 )
+		{
+			RcUsage( pPlayer, "rc_ch_fire <targetname> [on | off | toggle]" );
+			return true;
+		}
+		USE_TYPE useType = USE_TOGGLE;
+		if ( argc == 3 )
+			useType = FStrEq( CMD_ARGV( 2 ), "on" ) ? USE_ON : FStrEq( CMD_ARGV( 2 ), "off" ) ? USE_OFF : USE_TOGGLE;
+		if ( FNullEnt( FIND_ENTITY_BY_TARGETNAME( NULL, CMD_ARGV( 1 ) ) ) )
+		{
+			ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_fire: nothing is named %s\n", CMD_ARGV( 1 ) ) );
+			return true;
+		}
+		FireTargets( CMD_ARGV( 1 ), pPlayer, pPlayer, useType, 0 );
+		ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_fire: fired %s\n", CMD_ARGV( 1 ) ) );
+		return true;
+	}
+
 	if ( FStrEq( pcmd, "rc_ch_give" ) )
 	{
 		if ( !RcCheatsOn( pPlayer ) )
