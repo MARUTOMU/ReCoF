@@ -1460,6 +1460,19 @@ static const struct RcMapRule_s
 	// B491: the elevator (trigger_cofteleport *127, during the hisskam cameras) takes the one who touches it to the
 	// next floor; the others, watching, stayed (cof-coop's elevator follow)
 	{ "c_apartment1", RC_MATCH_MODEL, "*127", RC_RULE_GATHER_WATCHERS, "up with the elevator" },
+	// B502: c_apartmentsick has the same elevator (trigger_cofteleport *9 to hiss1_land1)
+	{ "c_apartmentsick", RC_MATCH_MODEL, "*9", RC_RULE_GATHER_WATCHERS, "up with the elevator" },
+	// B502: trigger_once *81 puts the fence fenceapp (*82) up for good; it seals where the rusty-key door lands, so a
+	// teammate who used that door later could only go back up
+	{ "c_sewer3", RC_MATCH_MODEL, "*81", RC_RULE_GATHER, "before the fence goes up" },
+	// B502: triggers *30, *38 and *123 put the doorway walls wato3, wato10 and wato11 back up behind the first one past
+	// them, after the photo that opened them (B490 gathers at the photo itself)
+	{ "c_nightmare", RC_MATCH_MODEL, "*30", RC_RULE_GATHER, "before the doorway closes" },
+	{ "c_nightmare", RC_MATCH_MODEL, "*38", RC_RULE_GATHER, "before the doorway closes" },
+	{ "c_nightmare", RC_MATCH_MODEL, "*123", RC_RULE_GATHER, "before the doorway closes" },
+	// B502: trigger_once *20 starts sob_mm: sob_door slams, sob_block goes up and both change back 27 s later, so the
+	// group goes through that scene on one side of the door
+	{ "c_asylum1", RC_MATCH_MODEL, "*20", RC_RULE_GATHER, "before the door slams" },
 };
 
 void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
