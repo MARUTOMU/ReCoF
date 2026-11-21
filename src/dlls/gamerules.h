@@ -425,6 +425,8 @@ public:
 	int m_iExitGone;
 	float m_flExitGone;
 	float m_flHidden[33];	// B477: since when this living player has been hidden outside a scene, 0 when he is not
+	Vector m_vecRcFollow[33];	// B503: where a group teleport went while this player was in a door or on a ladder
+	float m_flRcFollow[33];		// B503: until when he follows it once he is out, 0 for none
 	// B472: the arrival hold (rc_coop.cpp RcCoopHold)
 	bool m_bHoldDone;
 	float m_flHoldStart;

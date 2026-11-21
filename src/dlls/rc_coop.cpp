@@ -170,6 +170,7 @@ CHalfLifeStoryCoop::CHalfLifeStoryCoop()
 		m_bWasAlive[i] = false;
 		m_bRestore[i] = false;
 		m_iSnapItems[i] = 0;
+		m_flRcFollow[i] = 0;	// B503
 	}
 }
 
@@ -487,6 +488,29 @@ void CHalfLifeStoryCoop::Think( void )
 	CHalfLifeMultiplay::Think();
 
 	RcCoopHold();	// B472
+
+	// B503: a player a group teleport found in a door or on a ladder goes to the group once he is out
+	for ( int f = 1; f <= gpGlobals->maxClients && f <= 32; f++ )
+	{
+		if ( !m_flRcFollow[f] )
+			continue;
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( f );
+		if ( !RcCoopPresent( pEnt ) || gpGlobals->time > m_flRcFollow[f] )
+		{
+			m_flRcFollow[f] = 0;
+			continue;
+		}
+		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		if ( pPlayer->b_GoingThroughADoor || pPlayer->IsOnLadder() )
+			continue;
+		m_flRcFollow[f] = 0;
+		Vector vecSpot = RcCoopAnyFreeSpot( m_vecRcFollow[f], pPlayer->edict() );
+		UTIL_SetOrigin( pPlayer, vecSpot );
+		pPlayer->m_vPreviousOrigin = vecSpot;
+		pPlayer->pev->velocity = pPlayer->pev->basevelocity = g_vecZero;
+		pPlayer->pev->flags &= ~FL_ONGROUND;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s followed the group's teleport after his door or ladder\n", STRING( pPlayer->pev->netname ) ) );
+	}
 
 	// G6 (B390): a vote lasts while its player is in a scene (the cameras of one scene follow each other)
 	for ( int v = 1; v <= gpGlobals->maxClients && v <= 32; v++ )
@@ -1056,19 +1080,38 @@ static void RcCoopSyncCodes( void )
 // G5: cof_teleport moved pMoved. Fired by a trigger he walked into (an arrival room), the other players standing in
 // that trigger go with him (its wait would ignore their touch and leave them behind); fired by anything else (a scene's
 // relays and managers), the whole group goes. They land on free spots around him.
+// B503: walk-in triggers whose teleport takes the whole group: the c_ending5b arrival shaft's floor plate is its only
+// way out and a trigger_once, so a teammate still falling or arriving when the first one stepped on it was sealed in
+static const char *s_pszRcTeleportAll[][2] = { { "c_ending5b", "*2" } };
+
+static bool RcCoopTeleportsAll( CBaseEntity *pCaller )
+{
+	if ( !pCaller || FStringNull( pCaller->pev->model ) )
+		return false;
+	for ( int i = 0; i < (int)ARRAYSIZE( s_pszRcTeleportAll ); i++ )
+	{
+		if ( !stricmp( STRING( gpGlobals->mapname ), s_pszRcTeleportAll[i][0] ) && !stricmp( STRING( pCaller->pev->model ), s_pszRcTeleportAll[i][1] ) )
+			return true;
+	}
+	return false;
+}
+
 void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
 {
-	if ( !RcCoopRules() || !pMoved )
+	CHalfLifeStoryCoop *pRules = RcCoopRules();
+	if ( !pRules || !pMoved )
 		return;
-	bool bTrigger = pCaller && pCaller->pev->solid == SOLID_TRIGGER && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 );
+	bool bTrigger = pCaller && pCaller->pev->solid == SOLID_TRIGGER && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 ) && !RcCoopTeleportsAll( pCaller );
 	int nMoved = 0;
 
 	// B464: a teleport into a deadly drop (a working trigger_hurt of 100 or more where he lands: the c_roofs fall, the
 	// c_city flower trap) is the end of that player only; the group stayed with him and died (charliee1w 907d5013)
+	// B503: a switched off one too: c_city's flower trap turns its hurt (kallamig, 1000) on 5.5 s after the teleport, and
+	// c_bridge's carriage timeout (telemia) turns tjenahaha on 3 s after, so the group went along and died with him
 	CBaseEntity *pRcHurt = NULL;
 	while ( ( pRcHurt = UTIL_FindEntityByClassname( pRcHurt, "trigger_hurt" ) ) != NULL )
 	{
-		if ( pRcHurt->pev->solid != SOLID_NOT && pRcHurt->pev->dmg >= 100 && RcCoopInside( pRcHurt, pMoved ) )
+		if ( pRcHurt->pev->dmg >= 100 && RcCoopInside( pRcHurt, pMoved ) )
 		{
 			g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s went into a deadly place, the group stays\n", STRING( pMoved->pev->netname ) ) );
 			return;
@@ -1114,6 +1157,14 @@ void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller )
 		if ( bTrigger && !RcCoopInside( pCaller, pEnt ) )
 			continue;
 		CBasePlayer *pPlayer = (CBasePlayer *)pEnt;
+		// B503: in a door's sequence the door puts him at its exit up to 2 s later, and a ladder holds him: he goes
+		// once he is out (CHalfLifeStoryCoop::Think)
+		if ( pPlayer->b_GoingThroughADoor || pPlayer->IsOnLadder() )
+		{
+			pRules->m_vecRcFollow[i] = pMoved->pev->origin;
+			pRules->m_flRcFollow[i] = gpGlobals->time + 10;
+			continue;
+		}
 		Vector vecBase = pMoved->pev->origin;
 		Vector vecSpot = vecBase;
 		static const float s_flRing[3] = { 40, 72, 104 };
