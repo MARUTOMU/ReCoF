@@ -4,6 +4,9 @@
 // B406: the panel is the group's lobby (a Steam lobby, rc_steamnet.cpp RcLobby_*), shown before anyone enters the
 // game: the players in it, the difficulty and the game the host picks (a new game or the last co-op save), Invite
 // friends, Leave and Start. When the host starts, the guests' games join by themselves.
+// B498: the lobby hosts every co-op game: story co-op, and Cry of Fear's own co-op games (the co-op campaign,
+// Manhunt, the survival maps and any multiplayer map of Host Server's list) with their own settings; Server list
+// opens the server browser that the main menu's Join Server opened
 
 #include "hud.h"
 #include "cl_util.h"
@@ -263,8 +266,10 @@ enum
 	RC_LOBBY_TAB_SET,
 	RC_LOBBY_CAMP_PREV,
 	RC_LOBBY_CAMP_NEXT,
+	RC_LOBBY_SERVERS,	// B498
 	RC_LOBBY_SKILL = 30,	// + 0 to 3
 	RC_LOBBY_SET = 40,		// + 2 * the setting, + 1 for the next value
+	RC_LOBBY_SETMP = 60,	// B498: + 2 * the setting, + 1 for the next value
 };
 
 // B412: the co-op settings: the host's rules (hl.dll rc_coop.cpp; the lobby passes them to rc_coop_start after the
@@ -316,13 +321,46 @@ static int RcSetIndex( int s, int v )
 	return best;
 }
 
-// the campaigns: the main campaign, then the custom campaigns of maps/*.custom (the main menu's Custom Campaign list)
+// the games the host picks from (B498): story co-op, then Cry of Fear's own co-op games
 struct RcLobbyCampaign_t
 {
 	char name[64];
 	char firstmap[64];
+	bool classic;	// B498: Cry of Fear's own multiplayer rules (rc_coop_mp), not story co-op
 };
 #define RC_MAX_CAMPAIGNS	64
+
+// B498: Cry of Fear's own co-op games, the maps Host Server lists, in this order and under these names; any other
+// map of that list comes after them under its file name
+static const char *s_pszRcClassic[][2] =
+{
+	{ "cof_campaign_01", "Co-op campaign" },
+	{ "cof_campaign_01_p2", "Co-op campaign, part 2" },
+	{ "cof_campaign_01_p3", "Co-op campaign, part 3" },
+	{ "cof_campaign_01_p4", "Co-op campaign, part 4" },
+	{ "cof_manhunt_campaign", "Manhunt" },
+	{ "cof_suicide1", "Survival 1" },
+	{ "cof_suicide2", "Survival 2" },
+	{ "cof_suicide3", "Survival 3" },
+	{ "cof_suicide4", "Survival 4" },
+};
+#define RC_CLASSIC_KNOWN	( sizeof( s_pszRcClassic ) / sizeof( s_pszRcClassic[0] ) )
+
+// B498: their settings, two of Host Server's (the game's settings.scr): the time before a dead player comes back by
+// himself, and how long the game's own lobby waits for the players before it starts (mp_footsteps, which Cry of Fear
+// uses for it)
+#define RC_SETMP	2
+static const RcLobbySetting_t s_RcSetMp[RC_SETMP] =
+{
+	{ "Back after dying", "sv_auto_respawn_time", true, 5, { 30, 60, 120, 240, 384 }, { "30 s", "1 min", "2 min", "4 min", "Original (384 s)" } },
+	{ "Game starts after", "mp_footsteps", true, 4, { 30, 60, 120, 300 }, { "30 s", "1 min", "Original (2 min)", "5 min" } },
+};
+static const int s_iRcSetMpDefault[RC_SETMP] = { 4, 2 };
+
+static int RcCampaignSort( const void *a, const void *b )
+{
+	return stricmp( ( (const RcLobbyCampaign_t *)a )->name, ( (const RcLobbyCampaign_t *)b )->name );
+}
 
 // B406, B412: the lobby, a frame in the middle of the screen over a dark veil, with a Game tab and a Co-op settings tab
 class CRcCoopPanel : public Panel
@@ -378,11 +416,21 @@ public:
 			m_pSetValue[s] = AddText( m_pSet, "", RCF_BODY, RCC_TEXT );
 			m_pSetValue[s]->setRcAlign( 1 );
 		}
+		for ( int s = 0; s < RC_SETMP; s++ )	// B498
+		{
+			m_pMpLabel[s] = AddText( m_pSet, s_RcSetMp[s].label, RCF_BODY, RCC_TEXT );
+			m_pMpPrev[s] = AddButton( m_pSet, "<", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_SETMP + 2 * s );
+			m_pMpNext[s] = AddButton( m_pSet, ">", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_SETMP + 2 * s + 1 );
+			m_pMpValue[s] = AddText( m_pSet, "", RCF_BODY, RCC_TEXT );
+			m_pMpValue[s]->setRcAlign( 1 );
+			m_iMp[s] = s_iRcSetMpDefault[s];
+		}
 
 		m_pStatus = AddText( m_pFrame, "", RCF_LABEL, RCC_DIM );
 		m_pStatus->setRcAlign( 1 );
 		m_pInvite = AddButton( m_pFrame, "Invite friends", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_INVITE );
 		m_pLeave = AddButton( m_pFrame, "Leave", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_LEAVE );
+		m_pServers = AddButton( m_pFrame, "Server list", CRcUiButton::STYLE_BOX, RCF_BUTTON, RC_LOBBY_SERVERS );	// B498
 		m_pStart = AddButton( m_pFrame, "Start", CRcUiButton::STYLE_PRIMARY, RCF_BUTTON, RC_LOBBY_START );
 		// under the frame: the launch options a friend's Steam needs to start ReCoF from an invite (B395)
 		m_pLaunch = new CRcUiButton( "Copy Steam launch options", 0, 0, 10, 10, CRcUiButton::STYLE_ITEM, RCF_LABEL );
@@ -397,6 +445,10 @@ public:
 		m_iCampaign = 0;
 		m_nCampaigns = 0;
 		m_bLookSet = false;
+		m_bLaidClassic = false;
+		m_iW = 10;
+		m_iServersY = 0;
+		m_iServersX[0] = m_iServersX[1] = 0;
 		RulesFromSkill( RcSkill() );
 		setVisible( false );
 	}
@@ -446,30 +498,80 @@ public:
 			m_iSet[RC_SET_SIMON] = m_iCampaign == 0 ? 0 : 1;
 	}
 
+	// B498: story co-op (the main campaign), then Cry of Fear's own co-op games: the maps Host Server lists (the
+	// game's maps/*.bsp without liblist.gam's mpfilter, "c_"), the known ones first under their names, then any
+	// other (a multiplayer map a player added) under its file name. The custom campaigns (the main menu's Custom
+	// Campaign list: The Stairway and the others) are single player campaigns and are no longer offered here
 	void ReadCampaigns( void )
 	{
 		m_nCampaigns = 1;
-		strcpy( m_Campaign[0].name, "Main campaign" );
+		strcpy( m_Campaign[0].name, "Story co-op" );
 		strcpy( m_Campaign[0].firstmap, "c_intro" );
-		if ( s_pRcMenu )
+		m_Campaign[0].classic = false;
+
+		char dir[MAX_PATH];
+		GetModuleFileNameA( NULL, dir, sizeof( dir ) );
+		char *slash = strrchr( dir, '\\' );
+		if ( slash )
 		{
-			s_pRcMenu->ReadCampaigns_guess();
-			for ( int i = 0; i < MAX_CAMPAIGNS_guess && m_nCampaigns < RC_MAX_CAMPAIGNS; i++ )
+			_snprintf( slash + 1, sizeof( dir ) - 1 - ( slash + 1 - dir ), "%s\\maps\\", gEngfuncs.pfnGetGameDirectory() );
+			dir[sizeof( dir ) - 1] = 0;
+			for ( int i = 0; i < (int)RC_CLASSIC_KNOWN && m_nCampaigns < RC_MAX_CAMPAIGNS; i++ )
 			{
-				campaign_t_guess &c = s_pRcMenu->m_Campaigns_guess[i];
-				if ( !c.bValid || !c.szFirstMap[0] )
+				char path[MAX_PATH];
+				_snprintf( path, sizeof( path ) - 1, "%s%s.bsp", dir, s_pszRcClassic[i][0] );
+				path[sizeof( path ) - 1] = 0;
+				if ( GetFileAttributesA( path ) == INVALID_FILE_ATTRIBUTES )
 					continue;
-				RcLobbyCampaign_t &d = m_Campaign[m_nCampaigns++];
-				strncpy( d.firstmap, c.szFirstMap, 63 );
-				d.firstmap[63] = 0;
-				strncpy( d.name, c.szDescription[0] ? c.szDescription : c.szFirstMap, 63 );
-				d.name[63] = 0;
-				for ( int k = (int)strlen( d.name ) - 1; k >= 0 && d.name[k] == ' '; k-- )
-					d.name[k] = 0;	// the files pad the names with spaces
+				AddCampaign( s_pszRcClassic[i][0], s_pszRcClassic[i][1] );
 			}
+			int nFirstOther = m_nCampaigns;
+			char pattern[MAX_PATH];
+			_snprintf( pattern, sizeof( pattern ) - 1, "%s*.bsp", dir );
+			pattern[sizeof( pattern ) - 1] = 0;
+			WIN32_FIND_DATAA fd;
+			HANDLE hFind = FindFirstFileA( pattern, &fd );
+			if ( hFind != INVALID_HANDLE_VALUE )
+			{
+				do
+				{
+					char map[64];
+					strncpy( map, fd.cFileName, 63 );
+					map[63] = 0;
+					char *dot = strrchr( map, '.' );
+					if ( dot )
+						*dot = 0;
+					if ( strstr( map, "c_" ) || IsKnownClassic( map ) )
+						continue;
+					AddCampaign( map, map );
+				} while ( m_nCampaigns < RC_MAX_CAMPAIGNS && FindNextFileA( hFind, &fd ) );
+				FindClose( hFind );
+			}
+			if ( m_nCampaigns - nFirstOther > 1 )
+				qsort( &m_Campaign[nFirstOther], m_nCampaigns - nFirstOther, sizeof( RcLobbyCampaign_t ), RcCampaignSort );
 		}
 		if ( m_iCampaign >= m_nCampaigns )
 			m_iCampaign = 0;
+	}
+
+	void AddCampaign( const char *pszMap, const char *pszName )
+	{
+		RcLobbyCampaign_t &d = m_Campaign[m_nCampaigns++];
+		strncpy( d.firstmap, pszMap, 63 );
+		d.firstmap[63] = 0;
+		strncpy( d.name, pszName, 63 );
+		d.name[63] = 0;
+		d.classic = true;
+	}
+
+	static bool IsKnownClassic( const char *pszMap )
+	{
+		for ( int i = 0; i < (int)RC_CLASSIC_KNOWN; i++ )
+		{
+			if ( !stricmp( pszMap, s_pszRcClassic[i][0] ) )
+				return true;
+		}
+		return false;
 	}
 
 	// this player decides: the lobby's owner, or a player alone (no lobby: Steam is not there)
@@ -492,6 +594,16 @@ public:
 			gEngfuncs.pfnClientCmd( szCmd );
 			gEngfuncs.Cvar_SetValue( "difficulty", iSkill );	// shown at once, before the command runs
 			RulesFromSkill( iSkill );
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Refresh();
+			return;
+		}
+		if ( cmd >= RC_LOBBY_SETMP && cmd < RC_LOBBY_SETMP + 2 * RC_SETMP )	// B498
+		{
+			int s = ( cmd - RC_LOBBY_SETMP ) / 2, dir = ( cmd - RC_LOBBY_SETMP ) % 2 ? 1 : -1;
+			if ( !bHost )
+				return;
+			m_iMp[s] = ( m_iMp[s] + dir + s_RcSetMp[s].n ) % s_RcSetMp[s].n;
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			Refresh();
 			return;
@@ -536,6 +648,11 @@ public:
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			Close();
 			break;
+		case RC_LOBBY_SERVERS:	// B498: the server browser, as the main menu's Join Server opened it
+			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
+			Close();
+			gEngfuncs.pfnServerCmd( "optionshack 0" );
+			break;
 		case RC_LOBBY_LEAVE:
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			RcLobby_Leave();
@@ -548,8 +665,8 @@ public:
 			break;
 		case RC_LOBBY_NEW:
 		case RC_LOBBY_CONTINUE:
-			if ( !bHost || ( cmd == RC_LOBBY_CONTINUE && !m_bSave ) )
-				return;
+			if ( !bHost || ( cmd == RC_LOBBY_CONTINUE && ( !m_bSave || m_Campaign[m_iCampaign].classic ) ) )
+				return;	// B498: Cry of Fear's multiplayer has no saves
 			m_iGame = cmd == RC_LOBBY_CONTINUE ? 1 : 0;
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_click.wav", 0.5 );
 			Refresh();
@@ -578,7 +695,10 @@ public:
 			if ( strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
 				IrrKlangStop_guess( 1 );
 			// rc_coop_start <map> <difficulty> <exit wait> <back after dying> <autosave> <monster health> <skip vote> <simon>
-			if ( m_iGame == 0 )
+			if ( m_Campaign[m_iCampaign].classic )	// B498: rc_coop_mp <map> <back after dying> <game starts after>
+				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_mp %s %d %d\n", m_Campaign[m_iCampaign].firstmap,
+					s_RcSetMp[0].values[m_iMp[0]], s_RcSetMp[1].values[m_iMp[1]] );
+			else if ( m_iGame == 0 )
 				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_start %s %s %d %d %d %d %d %d\n", m_Campaign[m_iCampaign].firstmap,
 					s_pszRcPreset[RcSkill()], v[0], v[1], v[3], v[2], v[4], v[5] );
 			else	// a save keeps its campaign's look unless the host chose one
@@ -628,6 +748,8 @@ public:
 		bool bContinue;
 		const char *pszCampaign;
 		int iRule[RC_SET_HOST];
+		bool bClassic;		// B498
+		int iMp[RC_SETMP];
 		if ( bHost )
 		{
 			iSkill = RcSkill();
@@ -643,6 +765,13 @@ public:
 			_snprintf( sz, sizeof( sz ) - 1, "%d %d %d %d %d %d", iRule[0], iRule[1], iRule[2], iRule[3], iRule[4], iRule[5] );
 			sz[sizeof( sz ) - 1] = 0;
 			SetData( "rules", sz );
+			bClassic = m_Campaign[m_iCampaign].classic && !bContinue;
+			SetData( "mode", bClassic ? "classic" : "story" );
+			for ( int s = 0; s < RC_SETMP; s++ )
+				iMp[s] = m_iMp[s];
+			_snprintf( sz, sizeof( sz ) - 1, "%d %d", iMp[0], iMp[1] );
+			sz[sizeof( sz ) - 1] = 0;
+			SetData( "mprules", sz );
 		}
 		else
 		{
@@ -651,7 +780,12 @@ public:
 			pszCampaign = RcLobby_Data( "campaign" );
 			memset( iRule, 0, sizeof( iRule ) );
 			sscanf( RcLobby_Data( "rules" ), "%d %d %d %d %d %d", &iRule[0], &iRule[1], &iRule[2], &iRule[3], &iRule[4], &iRule[5] );
+			bClassic = !strcmp( RcLobby_Data( "mode" ), "classic" );
+			iMp[0] = iMp[1] = 0;
+			sscanf( RcLobby_Data( "mprules" ), "%d %d", &iMp[0], &iMp[1] );
 		}
+		if ( bClassic != m_bLaidClassic )
+			LayoutSettings( bClassic );
 
 		m_pTabGame->setRcSelected( m_iTab == 0 );
 		m_pTabSet->setRcSelected( m_iTab == 1 );
@@ -667,6 +801,9 @@ public:
 			m_pSkill[i]->setRcSelected( i + 1 == iSkill );
 			m_pSkill[i]->setRcDisabled( !bHost || ( i == 3 && !( gHUD.m_iUnlocks_guess & 32 ) ) );
 		}
+		m_pGameCap->setVisible( !bClassic );	// B498: no saves in Cry of Fear's multiplayer
+		m_pNew->setVisible( !bClassic );
+		m_pContinue->setVisible( !bClassic );
 		m_pNew->setRcSelected( !bContinue );
 		m_pNew->setRcDisabled( !bHost );
 		m_pContinue->setRcSelected( bContinue );
@@ -685,8 +822,20 @@ public:
 				i = 0;
 			m_pSetValue[s]->setRcText( s_RcSet[s].names[i] );
 			bool bCan = !s_RcSet[s].host || bHost;
-			m_pSetPrev[s]->setVisible( bCan );
-			m_pSetNext[s]->setVisible( bCan );
+			bool bShown = s >= RC_SET_HOST || !bClassic;	// B498: story co-op's rules only for story co-op
+			m_pSetLabel[s]->setVisible( bShown );
+			m_pSetValue[s]->setVisible( bShown );
+			m_pSetPrev[s]->setVisible( bCan && bShown );
+			m_pSetNext[s]->setVisible( bCan && bShown );
+		}
+		for ( int s = 0; s < RC_SETMP; s++ )	// B498
+		{
+			int i = iMp[s] >= 0 && iMp[s] < s_RcSetMp[s].n ? iMp[s] : 0;
+			m_pMpValue[s]->setRcText( s_RcSetMp[s].names[i] );
+			m_pMpLabel[s]->setVisible( bClassic );
+			m_pMpValue[s]->setVisible( bClassic );
+			m_pMpPrev[s]->setVisible( bClassic && bHost );
+			m_pMpNext[s]->setVisible( bClassic && bHost );
 		}
 
 		// a host back on the menu after a game: the lobby's guests no longer have a game to join
@@ -708,6 +857,7 @@ public:
 			pszStatus = pszConnect[0] ? "The host's game is on" : "Waiting for the host to start";
 		m_pStatus->setRcText( pszStatus );
 		m_pInvite->setVisible( iState == RCLOBBY_IN );
+		m_pServers->setPos( m_iServersX[iState == RCLOBBY_IN ? 1 : 0], m_iServersY );	// B498: next to Invite friends
 		m_pStart->setRcText( bHost ? "Start" : "Join game" );
 		m_pStart->setVisible( bHost || pszConnect[0] );
 	}
@@ -760,33 +910,56 @@ public:
 		m_pNew->setBounds( pad, y, gw, RcUiS( 32 ) );
 		m_pContinue->setBounds( pad + gw + gap, y, gw, RcUiS( 32 ) );
 
-		// the Co-op settings tab: a label, then < value > on the right
-		y = 0;
-		int pitch = RcUiS( 32 ), vw = RcUiS( 170 ), aw = RcUiS( 30 );
-		for ( int s = 0; s < RC_SET_ALL; s++ )
-		{
-			if ( s == 0 || s == RC_SET_HOST )
-			{
-				( s == 0 ? m_pHostCap : m_pOwnCap )->setBounds( pad, y, cw, RcUiS( 20 ) );
-				y += RcUiS( 22 );
-			}
-			int x = W - pad - aw;
-			m_pSetNext[s]->setBounds( x, y, aw, RcUiS( 28 ) );
-			x -= vw;
-			m_pSetValue[s]->setBounds( x, y, vw, RcUiS( 28 ) );
-			x -= aw;
-			m_pSetPrev[s]->setBounds( x, y, aw, RcUiS( 28 ) );
-			m_pSetLabel[s]->setBounds( pad, y, x - pad - gap, RcUiS( 28 ) );
-			y += pitch;
-			if ( s == RC_SET_HOST - 1 )
-				y += RcUiS( 10 );
-		}
+		// the Co-op settings tab (B498: its host's rows by the game's kind)
+		m_iW = W;
+		LayoutSettings( m_bLaidClassic );
 
 		m_pStatus->setBounds( pad, by - RcUiS( 30 ), cw, RcUiS( 22 ) );
 		m_pInvite->setBounds( pad, by, RcUiS( 170 ), RcUiS( 34 ) );
+		m_iServersY = by;	// B498: Server list, next to Invite friends when it shows
+		m_iServersX[0] = pad;
+		m_iServersX[1] = pad + RcUiS( 170 ) + RcUiS( 12 );
+		m_pServers->setBounds( m_iServersX[1], by, RcUiS( 140 ), RcUiS( 34 ) );
 		m_pStart->setBounds( W - pad - RcUiS( 150 ), by, RcUiS( 150 ), RcUiS( 34 ) );
 		m_pLeave->setBounds( W - pad - RcUiS( 150 ) - RcUiS( 12 ) - RcUiS( 120 ), by, RcUiS( 120 ), RcUiS( 34 ) );
 		m_pLaunch->setBounds( x0, y0 + H + RcUiS( 10 ), W, RcUiS( 28 ) );
+	}
+
+	// the Co-op settings tab: the host's rules, story co-op's or Cry of Fear's own (B498), then the player's own; a
+	// label, then < value > on the right
+	void LayoutSettings( bool bClassic )
+	{
+		m_bLaidClassic = bClassic;
+		int pad = RcUiS( 24 ), cw = m_iW - 2 * pad, pitch = RcUiS( 32 ), y = 0;
+		m_pHostCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
+		if ( bClassic )
+		{
+			for ( int s = 0; s < RC_SETMP; s++, y += pitch )
+				RowBounds( m_pMpLabel[s], m_pMpPrev[s], m_pMpValue[s], m_pMpNext[s], y );
+		}
+		else
+		{
+			for ( int s = 0; s < RC_SET_HOST; s++, y += pitch )
+				RowBounds( m_pSetLabel[s], m_pSetPrev[s], m_pSetValue[s], m_pSetNext[s], y );
+		}
+		y += RcUiS( 10 );
+		m_pOwnCap->setBounds( pad, y, cw, RcUiS( 20 ) );
+		y += RcUiS( 22 );
+		for ( int s = RC_SET_HOST; s < RC_SET_ALL; s++, y += pitch )
+			RowBounds( m_pSetLabel[s], m_pSetPrev[s], m_pSetValue[s], m_pSetNext[s], y );
+	}
+
+	void RowBounds( CRcUiText *pLabel, CRcUiButton *pPrev, CRcUiText *pValue, CRcUiButton *pNext, int y )
+	{
+		int pad = RcUiS( 24 ), gap = RcUiS( 8 ), vw = RcUiS( 170 ), aw = RcUiS( 30 );
+		int x = m_iW - pad - aw;
+		pNext->setBounds( x, y, aw, RcUiS( 28 ) );
+		x -= vw;
+		pValue->setBounds( x, y, vw, RcUiS( 28 ) );
+		x -= aw;
+		pPrev->setBounds( x, y, aw, RcUiS( 28 ) );
+		pLabel->setBounds( pad, y, x - pad - gap, RcUiS( 28 ) );
 	}
 
 	virtual void solve()
@@ -860,6 +1033,12 @@ private:
 	bool m_bLookSet;	// the host chose Simon or the police officers himself
 	RcLobbyCampaign_t m_Campaign[RC_MAX_CAMPAIGNS];
 	int m_nCampaigns, m_iCampaign;
+	// B498: Cry of Fear's own co-op games' settings, Server list
+	CRcUiButton *m_pServers, *m_pMpPrev[RC_SETMP], *m_pMpNext[RC_SETMP];
+	CRcUiText *m_pMpLabel[RC_SETMP], *m_pMpValue[RC_SETMP];
+	int m_iMp[RC_SETMP];	// each setting's value, as an index into its list
+	bool m_bLaidClassic;	// the settings tab shows the rows of Cry of Fear's own games
+	int m_iW, m_iServersY, m_iServersX[2];
 };
 
 void CRcCoopHandler::actionPerformed( Panel *panel )

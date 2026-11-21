@@ -19,6 +19,7 @@
 #include "Scope_guess.h"
 
 #include <stdio.h>
+#include <ctype.h>	// B498
 #include <windows.h>
 #include "rc_bones.h"	// ReCoF (B339)
 #include "rc_steamnet.h"	// co-op spike
@@ -537,6 +538,37 @@ static void RcCoopStart_f( void )
 	s_dwCoopStartAt = GetTickCount() + 1500;
 }
 
+// B498: rc_coop_mp <map> [<back after dying, s> <game starts after, s>]: one of Cry of Fear's own co-op games (the
+// co-op campaign, Manhunt, the survival maps, any map of Host Server's list) for up to 4 players who join through
+// Steam, set up as rc_coop_start sets up story co-op but with Cry of Fear's multiplayer rules (rc_coop 0) and two of
+// Host Server's settings (settings.scr: sv_auto_respawn_time, and mp_footsteps for its lobby's wait)
+static int s_bRcHostedClassic;	// read by RcCoopBackToOne: this game hosts one
+
+static void RcCoopMp_f( void )
+{
+	const char *pszMap = gEngfuncs.Cmd_Argc() > 1 ? gEngfuncs.Cmd_Argv( 1 ) : "";
+	bool bOk = pszMap[0] != 0 && strlen( pszMap ) < 64;
+	for ( const char *p = pszMap; *p && bOk; p++ )
+		bOk = isalnum( (unsigned char)*p ) || *p == '_' || *p == '-';	// a map name and nothing the console would run
+	if ( !bOk )
+	{
+		RcCoopPrint( "usage: rc_coop_mp <map> [<back after dying, s> <game starts after, s>]\n" );
+		return;
+	}
+	char szSet[96];
+	szSet[0] = 0;
+	if ( gEngfuncs.Cmd_Argc() > 3 )
+		_snprintf( szSet, sizeof( szSet ) - 1, "sv_auto_respawn_time %d\nmp_footsteps %d\n", atoi( gEngfuncs.Cmd_Argv( 2 ) ),
+			atoi( gEngfuncs.Cmd_Argv( 3 ) ) );
+	szSet[sizeof( szSet ) - 1] = 0;
+	// maxplayers 4 sets deathmatch 1 (net_ws.c MaxPlayers_f), and rc_coop 0 gives Cry of Fear's multiplayer rules
+	_snprintf( s_szCoopStart, sizeof( s_szCoopStart ) - 1, "disconnect\nmaxplayers 4\nsv_lan 1\nsv_lan_rate 100000\n"
+		"sv_maxupdaterate 60\nrc_coop 0\npausable 0\n%src_coop_host\nmap %s\n", szSet, pszMap );
+	s_szCoopStart[sizeof( s_szCoopStart ) - 1] = 0;
+	s_dwCoopStartAt = GetTickCount() + 1500;
+	s_bRcHostedClassic = 1;
+}
+
 void RcCoopMenu_Open( void );	// B393, rc_coopmenu.cpp
 
 // B397: rc_options opens the Options window from anywhere, as the main menu's Options does
@@ -775,8 +807,9 @@ static void RcCoopBackToOne( void )
 		pszLevel = "";
 	int nSlots = gEngfuncs.GetMaxClients();
 	bool bMenu = pszLevel[0] && RcCoopMenuMap( pszLevel );
-	// this game hosts story co-op: rc_coop is the host's own hl.dll cvar (0 on a guest's machine)
-	if ( pszLevel[0] && !bMenu && nSlots > 1 && gEngfuncs.pfnGetCvarFloat( "rc_coop" ) != 0 )
+	// this game hosts story co-op: rc_coop is the host's own hl.dll cvar (0 on a guest's machine); B498: or one of
+	// Cry of Fear's own co-op games the lobby started (rc_coop_mp)
+	if ( pszLevel[0] && !bMenu && nSlots > 1 && ( gEngfuncs.pfnGetCvarFloat( "rc_coop" ) != 0 || s_bRcHostedClassic ) )
 	{
 		s_bRcHostedCoop = 1;
 		return;
@@ -792,12 +825,14 @@ static void RcCoopBackToOne( void )
 		if ( (long)( GetTickCount() - s_dwRcNoMapSince ) < 1500 )
 			return;
 		s_bRcHostedCoop = 0;
+		s_bRcHostedClassic = 0;
 		gEngfuncs.pfnClientCmd( "maxplayers 1\n" );
 		RcCoopPrint( "ReCoF co-op: the co-op game is over, back to one player\n" );
 	}
 	else if ( bMenu && nSlots > 1 )
 	{
 		s_bRcHostedCoop = 0;
+		s_bRcHostedClassic = 0;
 		char szMap[64];
 		const char *pszBase = strrchr( pszLevel, '/' );
 		_snprintf( szMap, sizeof( szMap ) - 1, "%s", pszBase ? pszBase + 1 : pszLevel );
@@ -901,6 +936,7 @@ void RcClient_Init( void )
 	gEngfuncs.pfnAddCommand( "rc_coop_autotest", RcCoopAutotest_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_start", RcCoopStart_f );
 	gEngfuncs.pfnAddCommand( "rc_coop_continue", RcCoopContinue_f );	// B393
+	gEngfuncs.pfnAddCommand( "rc_coop_mp", RcCoopMp_f );	// B498
 	gEngfuncs.pfnAddCommand( "rc_coop_menu", RcCoopMenu_Open );	// B393: the main menu's Story Co-op panel
 	gEngfuncs.pfnAddCommand( "rc_options", RcOptions_f );	// B397
 	gEngfuncs.pfnAddCommand( "rc_coop_launchoptions", RcCoopMenu_LaunchOptions );	// B395
