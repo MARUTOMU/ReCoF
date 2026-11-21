@@ -40,6 +40,10 @@ COptionsSubAudio::COptionsSubAudio( vgui::Panel *parent ) : PropertyPage( parent
 	m_pRcSamePitch = RcCreateOptionRow( this, "rc_omgbruh_sound", this );
 	if ( m_pRcSamePitch )
 		m_pRcSamePitch->SetBounds( 40, 180, 440, 28 );
+	// B499: the music's loading in the background (rc_music_thread), under it
+	m_pRcMusicThread = RcCreateOptionRow( this, "rc_music_thread", this );
+	if ( m_pRcMusicThread )
+		m_pRcMusicThread->SetBounds( 40, 212, 440, 28 );
 
 	// multiplayer only mods have no HEV suit
 	if ( ModInfo().IsMultiplayerOnly() )
@@ -79,6 +83,8 @@ void COptionsSubAudio::OnResetData()
 
 	if ( m_pRcSamePitch )
 		m_pRcSamePitch->Load();
+	if ( m_pRcMusicThread )
+		m_pRcMusicThread->Load();
 }
 
 //-----------------------------------------------------------------------------
@@ -99,6 +105,8 @@ void COptionsSubAudio::OnApplyChanges()
 
 	if ( m_pRcSamePitch )
 		m_pRcSamePitch->Apply();
+	if ( m_pRcMusicThread )
+		m_pRcMusicThread->Apply();
 
 	if ( bRcDevice )
 		engine->pfnClientCmd( "rc_snd_restart\n" );

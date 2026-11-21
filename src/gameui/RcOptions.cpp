@@ -136,6 +136,8 @@ static const RcOption s_RcOptions[] =
 	// B399: the menus' size
 	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
 		"Larger menus and windows. Applies when a window opens again." },
+	{ "game_general", "rc_menu_text", RC_LIST, "Main menu", "0", 0, 0, "Cry of Fear's pictures=0|Text list=1",	// B499
+		"The main menu's look: the game's own pictures, or a short text list." },
 
 	// Graphics, Quality
 	{ "gfx_quality", "gl_contrast", RC_FLOAT, "Contrast", "1", 0, 20, NULL,
@@ -172,6 +174,11 @@ static const RcOption s_RcOptions[] =
 		"Frames a second for smooth frames. 0 follows the monitor." },
 	{ "gfx_performance", "rc_prof", RC_LIST, "Frame profiler", "0", 0, 0, "Off=0|Frame times=1|Frame and graphics card times=2",
 		"Shows how long each part of a frame takes." },
+	{ "gfx_performance", "rc_threads", RC_LIST, "Bone threads", "-1", 0, 0,	// B499
+		"Automatic=-1|Off=0|1=1|2=2|3=3|4=4|5=5|6=6|7=7",
+		"Sets up the models' bones on other cores. Automatic uses none below 8 threads." },
+	{ "gfx_performance", "rc_perflog", RC_BOOL, "Performance log (this session)", "0", 0, 0, NULL,	// B499
+		"Logs the frame rate and every stutter to cryoffear/perflogs, for the ReCoF developers." },
 
 	// Graphics, Weapon view
 	{ "gfx_weapon", "rc_viewmodel_fov", RC_INT, "Weapon field of view", "0", 0, 170, NULL,
@@ -252,6 +259,8 @@ static const RcOption s_RcOptions[] =
 	// Audio, Sound (a row on the audio page)
 	{ "audio_sound", "rc_omgbruh_sound", RC_BOOL, "Same pitch on every shot", "0", 0, 0, NULL,
 		"Weapon sounds at their recorded pitch, not changed at every shot." },
+	{ "audio_sound", "rc_music_thread", RC_BOOL, "Music loads in the background", "1", 0, 0, NULL,	// B499
+		"A music track starts without a stutter, a few frames later." },
 
 	// Multiplayer, Player
 	{ "mp_player", "name", RC_TEXT, "Co-op name", "James", 0, 0, NULL,
@@ -259,6 +268,8 @@ static const RcOption s_RcOptions[] =
 	{ "mp_player", "cl_coop_language", RC_LIST, "Co-op language", "1", 0, 0,
 		"Default (English)=0|English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
 		"The language of the co-op texts." },
+	{ "mp_player", "rc_spray_size", RC_INT, "Spray size", "0", 0, 512, NULL,	// B499
+		"Your spray's longer side in units. 0 keeps a unit a pixel, as in Half-Life." },
 
 	// B400: Multiplayer, Co-op: the story co-op host's rules (they are the host's: a guest's do nothing) and the voice
 	{ "mp_coop", "rc_coop_exit_wait", RC_INT, "Exit waits for the group (s)", "60", 0, 180, NULL,
