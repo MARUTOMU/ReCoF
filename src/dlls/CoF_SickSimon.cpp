@@ -318,7 +318,7 @@ void CBookSimon :: Spawn()
 		}
 	}
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !alreadyaboss )
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !alreadyaboss && !RcCoop_Story() )	// ReCoF (B508): the map's bar, as single player
 	{
 		m_bIsBoss = true;
 

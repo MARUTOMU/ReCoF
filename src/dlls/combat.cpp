@@ -43,6 +43,7 @@ extern entvars_t *g_pevLastInflictor;
 
 extern int gmsgParticle;
 extern int gmsgBossBar;
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 
 
 bool fvisiblecheck;
@@ -549,7 +550,9 @@ Activity CBaseMonster :: GetDeathActivity ( void )
 			}
 		}
 
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		// ReCoF (B508): not in story co-op, whose boss bar ends as single player's: c_ending4b's Simon (justhealth)
+		// died and the bar went on full over the conclusion and the credits, a Book Simon's
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoop_Story() )
 		{
 			CBaseEntity *pBossEntity = UTIL_FindEntityByClassname( NULL, "monster_booksimon" );
 
