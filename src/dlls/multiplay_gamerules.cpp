@@ -704,33 +704,22 @@ BOOL CHalfLifeMultiplay::ClientCommand( CBasePlayer *pPlayer, const char *pcmd )
 	}
 	else if ( FStrEq( pcmd, "votekick" ) )
 	{
-		char *player = (char *)CMD_ARGV( 1 );
+		// ReCoF (B459): no kick votes among story co-op friends (the host can still kick from the console), and names
+		// are compared without lowercasing every player's name in place (the engine's netname strings; charliee1w
+		// fa857cd0)
+		if ( RcCoop_Story() )
+			return TRUE;
+
+		const char *player = CMD_ARGV( 1 );
 
 		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 		{
 			CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
 
-			if ( plr && player && plr->pev->netname )
+			if ( plr && player && plr->pev->netname && !stricmp( STRING( plr->pev->netname ), player ) )
 			{
-				char *name = (char *)STRING( plr->pev->netname );
-
-				if ( name )
-				{
-					for ( int k = 0; name[k]; k++ )
-						name[k] = tolower( name[k] );
-				}
-
-				if ( player )
-				{
-					for ( int k = 0; player[k]; k++ )
-						player[k] = tolower( player[k] );
-				}
-
-				if ( player && name && !strcmp( name, player ) )
-				{
-					g_pGameRules->StartVoteKick( pPlayer, plr );
-					break;
-				}
+				g_pGameRules->StartVoteKick( pPlayer, plr );
+				break;
 			}
 		}
 
@@ -1466,6 +1455,12 @@ float CHalfLifeMultiplay :: FlPlayerFallDamage( CBasePlayer *pPlayer )
 //=========================================================
 BOOL CHalfLifeMultiplay::FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity *pAttacker )
 {
+	// ReCoF (B443): a hit from an entity that is gone comes with no attacker (the roof boss's head landing after the
+	// Carcass was removed: CoF_RoofBoss.cpp DieTouch passes its freed owner), and this crashed the host (cof-coop
+	// 90c2109)
+	if ( !pAttacker )
+		return TRUE;
+
 	if ( pAttacker->IsPlayer() && !( pPlayer->pev->flags & FL_FAKECLIENT ) )
 		return FALSE;
 
@@ -1592,7 +1587,10 @@ void CHalfLifeMultiplay :: PlayerSpawn( CBasePlayer *pPlayer )
 			pPlayer->m_iGameOverCounter = plr->m_iGameOverCounter;
 		}
 
-		if ( plr && plr->pDeathScene && plr->pDeathScene->pev->iuser4 != 1 )
+		// ReCoF (B448): only a running model cutscene (its camera models carry iuser3 0x4D44, effects.cpp); a ladder climb,
+		// the strangle and a death scene make camera models too, and nothing but a model cutscene's end let the
+		// newcomer go: he waited on a black screen for good (cof-coop cd19547, charliee1w 6446bb0f)
+		if ( plr && plr->pDeathScene && plr->pDeathScene->pev->iuser4 != 1 && plr->pDeathScene->pev->iuser3 == 0x4D44 )
 		{
 			pPlayer->m_bCoopWaitingForCutsceneToEnd = true;
 			pPlayer->m_flNextCoopWaitingForCutsceneFadeTime = gpGlobals->time + 1;
@@ -1662,6 +1660,14 @@ int CHalfLifeMultiplay :: IPointsForKill( CBasePlayer *pAttacker, CBasePlayer *p
 //=========================================================
 void CHalfLifeMultiplay :: PlayerKilled( CBasePlayer *pVictim, entvars_t *pKiller, entvars_t *pInflictor )
 {
+	// ReCoF (B432): a monster's direct kill (Killed without TakeDamage: the chainsaw grab, Book Simon's sledgehammer)
+	// comes with no inflictor, or no killer, and DeathNotice read their classnames: the host crashed (charliee1w
+	// 10811392, cof-coop issue 7). The world, and the killer as his own inflictor
+	if ( !pKiller )
+		pKiller = VARS( INDEXENT( 0 ) );
+	if ( !pInflictor )
+		pInflictor = pKiller;
+
 	DeathNotice( pVictim, pKiller, pInflictor );
 
 	pVictim->m_iDeaths += 1;

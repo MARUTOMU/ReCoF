@@ -938,6 +938,15 @@ public:
 
 	wrect_t& GetSpriteRect( int index )
 	{
+		// ReCoF (B357): an empty rectangle for a sprite hud.txt does not have (index -1), as GetSprite gives 0 for it.
+		// m_rgrcRects[-1] was the memory in front of the array: CHudAmmo::VidInit asks for "bucket1", which Cry of
+		// Fear's hud.txt lacks, on every map load, and the game crashed there when the array began a page
+		if ( index < 0 )
+		{
+			static wrect_t s_rcNone;
+			s_rcNone.left = s_rcNone.right = s_rcNone.top = s_rcNone.bottom = 0;
+			return s_rcNone;
+		}
 		return m_rgrcRects[index];
 	}
 

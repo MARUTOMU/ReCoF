@@ -2886,12 +2886,28 @@ void CTriggerMultiple :: ActivateMultiTrigger( CBaseEntity *pActivator )
 // pev->takedamage = DAMAGE_NO;
 
 	m_hActivator = pActivator;
+	extern bool g_bRcKeepArmed;	// ReCoF (B453), effects.cpp CCoFKillPlayer
+	g_bRcKeepArmed = false;
+	if ( RcCoop_Story() )
+	{
+		extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+		RcCoop_MapEvent( this, pActivator );	// ReCoF (B483): story co-op's per-map rules (rc_coop.cpp)
+	}
 	SUB_UseTargets( m_hActivator, USE_TOGGLE, 0 );
 
 	if ( pev->message && pActivator->IsPlayer() )
 	{
 		UTIL_ShowMessage( STRING(pev->message), pActivator );
 //		CLIENT_PRINTF( ENT( pActivator->pev ), print_center, STRING(pev->message) );
+	}
+
+	// ReCoF (B453): a story co-op death floor kills only the one who fell, so it waits for the next one
+	if ( g_bRcKeepArmed )
+	{
+		g_bRcKeepArmed = false;
+		SetThink( &CTriggerMultiple::MultiWaitOver );
+		SetNextThink( 0.5 );
+		return;
 	}
 
 	if (m_flWait > 0)
@@ -3435,6 +3451,11 @@ void CChangeLevel :: UseChangeLevel ( CBaseEntity *pActivator, CBaseEntity *pCal
 	ChangeLevelNow( pActivator );
 }
 
+// ReCoF story co-op (rc_coop.cpp): an exit touched by a player waits for the group, one used fires at once; both
+// bring the players who are not in it to the activator first
+bool RcCoop_ExitReady( CBaseEntity *pTrigger, CBaseEntity *pActivator, bool bTouch );
+static bool s_bRcExitTouch;
+
 void CChangeLevel :: ChangeLevelNow( CBaseEntity *pActivator )
 {
 	edict_t	*pentLandmark;
@@ -3455,6 +3476,10 @@ void CChangeLevel :: ChangeLevelNow( CBaseEntity *pActivator )
 		return;
 
 	pev->dmgtime = gpGlobals->time;
+
+	// ReCoF: story co-op waits for the group at this exit (only a story co-op game takes this path)
+	if ( !RcCoop_ExitReady( this, pActivator, s_bRcExitTouch ) )
+		return;
 
 
 	CBaseEntity *pPlayer = UTIL_FirstPlayerInstance_rc();
@@ -3508,7 +3533,9 @@ void CChangeLevel :: TouchChangeLevel( CBaseEntity *pOther )
 	if (!FClassnameIs(pOther->pev, "player"))
 		return;
 
+	s_bRcExitTouch = true;	// ReCoF: story co-op waits for the group only at exits players walk into
 	ChangeLevelNow( pOther );
+	s_bRcExitTouch = false;
 }
 
 
@@ -5945,7 +5972,8 @@ void CTriggerCamera::FollowTarget( )
 
 			if ( pSkipTarget )
 			{
-				CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+				// ReCoF story co-op (B387): the player the camera started for, as the skip path above
+				CBaseEntity *pPlayer = RcCoop_User( m_hPlayer );
 
 				if ( pPlayer )
 					pSkipTarget->Use( pPlayer, pPlayer, USE_TOGGLE, 0 );
@@ -6427,6 +6455,12 @@ void CTriggerCofTeleport :: Touch( CBaseEntity *pOther )
 
 		pPlayer->pev->flags &= ~FL_ONGROUND;
 		pPlayer->pev->fixangle = TRUE;
+
+		if ( RcCoop_Story() )
+		{
+			extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+			RcCoop_MapEvent( this, pPlayer );	// ReCoF (B491): c_apartment1's elevator takes the group along
+		}
 	}
 
 	if ( pev->spawnflags & 1 )

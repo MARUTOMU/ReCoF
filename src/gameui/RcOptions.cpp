@@ -22,6 +22,9 @@
 #include <vgui_controls/Slider.h>
 #include <vgui_controls/TextEntry.h>
 
+#include <windows.h>
+#include <mmsystem.h>	// B422: the microphones
+
 #undef PostMessage	// windows.h, through the engine headers, renames vgui's
 
 using namespace vgui2;
@@ -34,6 +37,7 @@ enum
 	RC_INT,			// a slider of whole numbers
 	RC_FLOAT,		// a slider with two decimals
 	RC_TEXT,		// a text box (colors, positions, the name)
+	RC_LISTSTR,		// B422: a list whose values are text, not numbers (the microphones)
 };
 
 struct RcOption
@@ -53,33 +57,36 @@ struct RcOption
 // Every option of ReCoF's tabs, in the order they are shown. The launcher's options (recof-cvars.json) use
 // the same names; the ones only the launcher has start the game (-novid, -noborder, crash reports).
 //-----------------------------------------------------------------------------
+// B422: the microphones for the Talking page, "Text=value|..." with the Windows names (RcFillMics)
+static char s_szRcMics[1024] = "Windows default=";
+
 static const RcOption s_RcOptions[] =
 {
 	// Game, General
 	{ "game_general", "ironsights_toggle", RC_LIST, "Iron sights", "1", 0, 0, "Hold the key=0|Press to aim, again to stop=1",
-		"How the iron sights key works: aim while you hold it, or press it once to aim and again to stop." },
+		"Hold to aim, or press once to aim and again to stop." },
 	{ "game_general", "cl_subtitles", RC_BOOL, "Subtitles", "1", 0, 0, NULL,
-		"Shows what is said at the bottom of the screen. The language is picked in Language, in the main menu." },
+		"Shows what is said at the bottom of the screen." },
 	{ "game_general", "sv_disablehints", RC_BOOLINV, "Hints", "0", 0, 0, NULL,
 		"The hints the game shows the first time you meet something new." },
 	{ "game_general", "cl_nodoubletapdodge", RC_BOOLINV, "Dodge by double-tapping", "0", 0, 0, NULL,
 		"Double-tapping a direction key dodges. The Dodge key works either way." },
 	{ "game_general", "rc_endstats", RC_BOOL, "Readable end statistics", "1", 0, 0, NULL,
-		"The statistics and grade at the end of the game get a dark backdrop, and a click before they are fully shown is ignored. Off is the original." },
+		"A dark backdrop behind the end statistics. Off: the original." },
 
 	// Game, Gameplay
 	{ "game_gameplay", "rc_retail_gameplay", RC_BOOL, "Original balance", "0", 0, 0, NULL,
-		"Brings back the original game's behavior of every balance fix at once: monster damage and health, AI, ladder climbs and collision." },
+		"Brings back the original monster damage, health, AI and collision." },
 	{ "game_gameplay", "rc_infinite_stamina", RC_BOOL, "Infinite stamina", "0", 0, 0, NULL,
 		"Stamina never runs out. The stamina bar still shows." },
 	{ "game_gameplay", "rc_door_skip", RC_BOOL, "Skip the door fades", "0", 0, 0, NULL,
-		"The doors that take you to the other side move you at once, without the fade to black and back. For fun: runs with it do not compare with the original game." },
+		"Doors take you through at once, without the fade. Not for comparable runs." },
 
 	// Game, Movement
 	{ "game_movement", "rc_hlmovement", RC_BOOL, "Half-Life movement", "0", 0, 0, NULL,
-		"Half-Life 1 physics as in its first version: run speed 320, no sprint, dodge or stamina cost for jumps, no movement camera punches, with bunny hop, ducktap and autojump." },
+		"Half-Life 1 physics: run 320, no sprint or stamina, bunny hop and ducktap." },
 	{ "game_movement", "rc_bhopcap", RC_BOOL, "Bunny hop speed cap", "1", 0, 0, NULL,
-		"On as in the original game. Off removes the cap, which a separate speedrun category uses." },
+		"On as in the original game. Off is a separate speedrun category." },
 	{ "game_movement", "rc_ducktap", RC_BOOL, "Ducktap", "0", 0, 0, NULL,
 		"Brings back the Half-Life ducktap that Cry of Fear removed." },
 	{ "game_movement", "rc_autojump", RC_BOOL, "Autojump", "0", 0, 0, NULL,
@@ -98,8 +105,8 @@ static const RcOption s_RcOptions[] =
 		"The game's black and white and color effects." },
 	{ "gfx_effects", "gl_screenblur", RC_BOOL, "Screen blur", "1", 0, 0, NULL,
 		"Blurs the screen when you are hurt or on morphine." },
-	{ "gfx_effects", "cl_vignette", RC_BOOL, "Vignette", "1", 0, 0, NULL,
-		"Darkens the corners of the screen." },
+	{ "gfx_effects", "rc_vignette", RC_BOOL, "Vignette", "0", 0, 0, NULL,
+		"Darkens the screen's corners, as Cry of Fear 1.55 did." },
 	{ "gfx_effects", "cl_noiseeffect", RC_BOOL, "Film grain", "0", 0, 0, NULL,
 		"A grain over the picture, as on old film." },
 	{ "gfx_effects", "cl_noiseamount", RC_FLOAT, "Film grain amount", "0.5", 0, 1, NULL,
@@ -119,9 +126,20 @@ static const RcOption s_RcOptions[] =
 	{ "gfx_effects", "cl_smokeparticlelimit", RC_INT, "Gun smoke particles", "5", 0, 20, NULL,
 		"The most gun smoke particles at a time." },
 
+	// B400: from the Language and Difficulty screens
+	{ "game_general", "cof_subtitlelanguage", RC_LIST, "Subtitle language", "1", 0, 0,
+		"English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
+		"The language of subtitles and on-screen texts." },
+	{ "game_general", "dev_commentary", RC_BOOL, "Developer commentary", "0", 0, 0, NULL,
+		"Commentary nodes from the developers in the levels." },
+
+	// B399: the menus' size
+	{ "game_general", "rc_menu_scale", RC_INT, "Menu size", "100", 100, 200, NULL,
+		"Larger menus and windows. Applies when a window opens again." },
+	{ "game_general", "rc_menu_text", RC_LIST, "Main menu", "0", 0, 0, "Cry of Fear's pictures=0|Text list=1",	// B499
+		"The main menu's look: the game's own pictures, or a short text list." },
+
 	// Graphics, Quality
-	{ "gfx_quality", "gl_brightness", RC_FLOAT, "Brightness boost", "0", 0, 0.3f, NULL,
-		"Lights up the picture on top of the Brightness of the Display tab." },
 	{ "gfx_quality", "gl_contrast", RC_FLOAT, "Contrast", "1", 0, 20, NULL,
 		"1 is normal." },
 	{ "gfx_quality", "gl_bump", RC_BOOL, "Bump maps", "1", 0, 0, NULL,
@@ -135,21 +153,32 @@ static const RcOption s_RcOptions[] =
 
 	// Graphics, Performance
 	{ "gfx_performance", "rc_worldbatch", RC_BOOL, "Faster world drawing", "1", 0, 0, NULL,
-		"Sends the world to the graphics card in fewer calls. The picture is the same; off is the original way, for comparison." },
+		"Sends the world to the graphics card in fewer calls. Same picture." },
 	{ "gfx_performance", "rc_lightshader", RC_BOOL, "Faster dynamic lights", "1", 0, 0, NULL,
-		"Draws the flashlight and the other lights with a shader, in far fewer calls. The picture is the same." },
+		"Draws the flashlight and other lights with a shader. Same picture." },
 	{ "gfx_performance", "rc_gpumodels", RC_BOOL, "Models on the graphics card", "1", 0, 0, NULL,
-		"Moves and lights the models on the graphics card instead of the processor. The picture is the same." },
+		"Models are moved and lit on the graphics card. Same picture." },
 	{ "gfx_performance", "rc_modelarrays", RC_BOOL, "Faster model drawing", "1", 0, 0, NULL,
-		"Sends each model mesh to the graphics card in one call. The picture is the same." },
+		"Each model mesh in one call to the graphics card. Same picture." },
 	{ "gfx_performance", "rc_dlightcull", RC_BOOL, "Skip lights off screen", "1", 0, 0, NULL,
-		"A light that cannot reach anything on screen is not drawn. The picture is the same." },
+		"Lights that reach nothing on screen are not drawn. Same picture." },
+	{ "gfx_performance", "rc_bmodelcull", RC_BOOL, "Skip hidden entity faces", "1", 0, 0, NULL,
+		"Faces of doors and other entities out of view are not drawn." },
+	{ "gfx_performance", "rc_worldsort", RC_BOOL, "World grouped by texture", "1", 0, 0, NULL,
+		"Draws the world grouped by texture, in far fewer calls. Same picture." },
+	{ "gfx_performance", "rc_fxbatch", RC_BOOL, "Faster rain and grass", "1", 0, 0, NULL,
+		"Rain, snow and grass in one block each. Same picture." },
 	{ "gfx_performance", "rc_smoothframes", RC_BOOL, "Smooth frames (experimental)", "0", 0, 0, NULL,
-		"On monitors faster than 100 Hz, draws extra pictures between the game's 100 frames a second, turned with the mouse." },
+		"Extra frames between the game's 100 a second, on fast monitors." },
 	{ "gfx_performance", "rc_smoothframes_fps", RC_INT, "Smooth frames rate", "0", 0, 500, NULL,
-		"The pictures a second smooth frames aim for. 0 follows the monitor's refresh rate." },
+		"Frames a second for smooth frames. 0 follows the monitor." },
 	{ "gfx_performance", "rc_prof", RC_LIST, "Frame profiler", "0", 0, 0, "Off=0|Frame times=1|Frame and graphics card times=2",
 		"Shows how long each part of a frame takes." },
+	{ "gfx_performance", "rc_threads", RC_LIST, "Bone threads", "-1", 0, 0,	// B499
+		"Automatic=-1|Off=0|1=1|2=2|3=3|4=4|5=5|6=6|7=7",
+		"Sets up the models' bones on other cores. Automatic uses none below 8 threads." },
+	{ "gfx_performance", "rc_perflog", RC_BOOL, "Performance log (this session)", "0", 0, 0, NULL,	// B499
+		"Logs the frame rate and every stutter to cryoffear/perflogs, for the ReCoF developers." },
 
 	// Graphics, Weapon view
 	{ "gfx_weapon", "rc_viewmodel_fov", RC_INT, "Weapon field of view", "0", 0, 170, NULL,
@@ -165,7 +194,7 @@ static const RcOption s_RcOptions[] =
 	{ "hud_crosshair", "rc_crosshair", RC_BOOL, "Cry of Fear crosshair", "1", 0, 0, NULL,
 		"The game's red crosshair. Off hides it and keeps the ammo display." },
 	{ "hud_crosshair", "rc_cross", RC_BOOL, "Custom crosshair", "0", 0, 0, NULL,
-		"A crosshair set up by the options below. It shows with or without a weapon." },
+		"A crosshair made from the options below." },
 	{ "hud_crosshair", "rc_cross_color", RC_TEXT, "Color (red green blue)", "0 255 0", 0, 0, NULL,
 		"Three numbers from 0 to 255, for example 0 255 0 for green." },
 	{ "hud_crosshair", "rc_cross_alpha", RC_INT, "Opacity", "255", 0, 255, NULL,
@@ -191,7 +220,7 @@ static const RcOption s_RcOptions[] =
 
 	// HUD, Information panel
 	{ "hud_info", "rc_info", RC_BOOL, "Information panel", "0", 0, 0, NULL,
-		"RebuiltSimon's panel at the top right: ReCoF and its version, Simon's health, stamina and speed, and a clock." },
+		"A panel at the top right: version, health, stamina, speed and a clock." },
 	{ "hud_info", "rc_info_health", RC_BOOL, "Health", "1", 0, 0, NULL, "Simon's health in the panel." },
 	{ "hud_info", "rc_info_stamina", RC_BOOL, "Stamina", "1", 0, 0, NULL, "Simon's stamina in the panel." },
 	{ "hud_info", "rc_info_speed", RC_BOOL, "Speed", "1", 0, 0, NULL, "Simon's speed in the panel." },
@@ -206,30 +235,32 @@ static const RcOption s_RcOptions[] =
 
 	// HUD, Speedrun
 	{ "hud_speedrun", "rc_hud_timer", RC_BOOL, "Run timer", "0", 0, 0, NULL,
-		"A run timer on the left that counts as the LiveSplit autosplitter does: it starts with a new game and stops for pauses, loads, menus and cutscenes." },
+		"A run timer that counts as the LiveSplit autosplitter does." },
 	{ "hud_speedrun", "rc_hud_timer_color", RC_TEXT, "Timer color", "255 255 255", 0, 0, NULL, "Three numbers from 0 to 255." },
 	{ "hud_speedrun", "rc_hud_timer_pos", RC_TEXT, "Timer position (x y)", "0 .5", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_speedometer", RC_BOOL, "Speedometer", "0", 0, 0, NULL, "Shows your horizontal speed on screen." },
 	{ "hud_speedrun", "rc_speedometer_jump", RC_BOOL, "Takeoff speed", "1", 0, 0, NULL, "Shows the speed at your last jump under the speedometer." },
 	{ "hud_speedrun", "rc_speedometer_3d", RC_BOOL, "3D speed", "0", 0, 0, NULL, "The speedometer counts vertical speed too." },
 	{ "hud_speedrun", "rc_speedometer_color", RC_TEXT, "Speedometer color", "255 255 255", 0, 0, NULL, "Three numbers from 0 to 255." },
 	{ "hud_speedrun", "rc_speedometer_pos", RC_TEXT, "Speedometer position (x y)", ".5 .9", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_speedometer_jump_pos", RC_TEXT, "Takeoff speed position (x y)", ".5 .95", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_health", RC_BOOL, "Health number", "0", 0, 0, NULL, "Simon's health in HUD digits, as RebuiltSimon shows it." },
 	{ "hud_speedrun", "rc_hud_health_pos", RC_TEXT, "Health number position (x y)", ".02 .73", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_stamina", RC_BOOL, "Stamina number", "0", 0, 0, NULL, "Simon's stamina in HUD digits, as RebuiltSimon shows it." },
 	{ "hud_speedrun", "rc_hud_stamina_pos", RC_TEXT, "Stamina number position (x y)", ".07 .73", 0, 0, NULL,
-		"Two numbers from 0 to 1: 0 0 is the top left of the screen, 1 1 the bottom right." },
+		"0 0 is the top left of the screen, 1 1 the bottom right." },
 	{ "hud_speedrun", "rc_hud_centered", RC_BOOL, "Numbers centered on their position", "1", 0, 0, NULL,
 		"Off, a number starts at its position instead." },
 
 	// Audio, Sound (a row on the audio page)
 	{ "audio_sound", "rc_omgbruh_sound", RC_BOOL, "Same pitch on every shot", "0", 0, 0, NULL,
-		"Plays your weapon sounds at their recorded pitch. The original game changes it a little at every shot." },
+		"Weapon sounds at their recorded pitch, not changed at every shot." },
+	{ "audio_sound", "rc_music_thread", RC_BOOL, "Music loads in the background", "1", 0, 0, NULL,	// B499
+		"A music track starts without a stutter, a few frames later." },
 
 	// Multiplayer, Player
 	{ "mp_player", "name", RC_TEXT, "Co-op name", "James", 0, 0, NULL,
@@ -237,10 +268,40 @@ static const RcOption s_RcOptions[] =
 	{ "mp_player", "cl_coop_language", RC_LIST, "Co-op language", "1", 0, 0,
 		"Default (English)=0|English=1|Dutch=2|French=3|German=4|Norwegian=5|Spanish=6|Swedish=7",
 		"The language of the co-op texts." },
+	{ "mp_player", "rc_spray_size", RC_INT, "Spray size", "0", 0, 512, NULL,	// B499
+		"Your spray's longer side in units. 0 keeps a unit a pixel, as in Half-Life." },
+
+	// B400: Multiplayer, Co-op: the story co-op host's rules (they are the host's: a guest's do nothing) and the voice
+	{ "mp_coop", "rc_coop_exit_wait", RC_INT, "Exit waits for the group (s)", "60", 0, 180, NULL,
+		"Host: how long a level exit waits for everyone. 0: no wait." },
+	{ "mp_coop", "rc_coop_respawn_time", RC_INT, "Back after dying (s)", "10", 0, 60, NULL,
+		"Host: seconds before a dead player comes back. 0: the original rule." },
+	{ "mp_coop", "rc_coop_monster_health", RC_INT, "Monster health per friend (%)", "25", 0, 100, NULL,
+		"Host: extra monster health for each player beyond the first." },
+	{ "mp_coop", "rc_coop_autosave", RC_BOOL, "Autosave on each level", "1", 0, 0, NULL,
+		"Host: saves the group's game as coop_auto once everyone is in on a new level." },
+	{ "mp_coop", "rc_player_collide", RC_BOOL, "Players collide", "1", 0, 0, NULL,	// B500
+		"Players are solid to each other. Off, they pass through each other. The host's setting counts." },
+	{ "mp_coop", "rc_coop_skip_vote", RC_BOOL, "Friends vote to skip scenes", "1", 0, 0, NULL,
+		"Host: a scene is skipped once everyone watching presses Enter." },
+	{ "mp_coop", "rc_voice_3d", RC_BOOL, "Voices from where friends stand", "1", 0, 0, NULL,
+		"Friends' voices come from where they stand. Off: the original radio voice." },
+	{ "mp_coop", "rc_voice_range", RC_INT, "Voice range", "1400", 400, 4000, NULL,
+		"How far a friend's voice carries, in game units." },
+	{ "mp_coop", "rc_voice_wall", RC_INT, "Voice behind a wall (%)", "10", 0, 100, NULL,
+		"How loud a friend behind a wall still is, in percent." },
+
+	// B422: Audio, Talking (client.dll rc_voice.cpp)
+	{ "audio_voice", "rc_voice_mode", RC_LIST, "How you talk", "0", 0, 0, "Push to talk=0|Open mic=1",
+		"Push to talk: hold the voice key. Open mic: sends when you speak." },
+	{ "audio_voice", "rc_voice_open_level", RC_INT, "Open mic threshold (%)", "4", 1, 30, NULL,
+		"How loud you must be for the open mic to send. Higher ignores more noise." },
+	{ "audio_voice", "rc_voice_mic", RC_LISTSTR, "Microphone", "", 0, 0, s_szRcMics,
+		"The microphone the game records. A new choice applies from the next map." },
 
 	// ReCoF
 	{ "about", "rc_discord", RC_BOOL, "Discord status", "1", 0, 0, NULL,
-		"While Discord is open, your profile shows that you are playing ReCoF: the map, the version and whether you are playing or in the menu." },
+		"Shows on your Discord profile that you are playing ReCoF." },
 };
 
 #define RC_NUM_OPTIONS ( sizeof( s_RcOptions ) / sizeof( s_RcOptions[0] ) )
@@ -274,6 +335,32 @@ static bool RcGetChoice( const RcOption *option, int n, char *text, int textSize
 	return false;
 }
 
+// B422: the Windows microphones into s_szRcMics, named as client.dll's rc_voice.cpp matches them (no characters a
+// cvar value or this list cannot hold)
+static void RcFillMics( void )
+{
+	strcpy( s_szRcMics, "Windows default=" );
+	UINT n = waveInGetNumDevs();
+	for ( UINT i = 0; i < n; i++ )
+	{
+		WAVEINCAPSA caps;
+		if ( waveInGetDevCapsA( i, &caps, sizeof( caps ) ) != MMSYSERR_NOERROR )
+			continue;
+		caps.szPname[sizeof( caps.szPname ) - 1] = 0;
+		for ( char *p = caps.szPname; *p; p++ )
+		{
+			if ( *p == '"' || *p == ';' || *p == '|' || *p == '=' || *p == '\n' || *p == '\r' )
+				*p = ' ';
+		}
+		if ( !caps.szPname[0] || strlen( s_szRcMics ) + 2 * strlen( caps.szPname ) + 3 >= sizeof( s_szRcMics ) )
+			continue;
+		strcat( s_szRcMics, "|" );
+		strcat( s_szRcMics, caps.szPname );
+		strcat( s_szRcMics, "=" );
+		strcat( s_szRcMics, caps.szPname );
+	}
+}
+
 // the cvar's value; empty when the cvar does not exist
 static void RcGetCvar( const char *cvar, char *out, int size )
 {
@@ -290,7 +377,14 @@ static bool RcSameNumber( const char *a, const char *b )
 //-----------------------------------------------------------------------------
 // The row of one option
 //-----------------------------------------------------------------------------
-#define RC_ROW_TALL		28
+int RcUiScaled( int value );	// B399, RcTheme.cpp: a 720p length at this screen
+
+// B399: the player's menu size in percent (client.dll registers rc_menu_scale), for RcTheme.cpp's RcUiScale
+float RcMenuScaleSetting( void )
+{
+	return engine ? engine->pfnGetCvarFloat( "rc_menu_scale" ) : 100.0f;
+}
+#define RC_ROW_TALL		RcUiScaled( 28 )
 #define RC_FLOAT_SCALE	100.0f
 
 CRcOptionRow::CRcOptionRow( vgui::Panel *parent, const RcOption *option, vgui::Panel *target ) : BaseClass( parent, option->cvar )
@@ -320,6 +414,7 @@ CRcOptionRow::CRcOptionRow( vgui::Panel *parent, const RcOption *option, vgui::P
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96], value[32];
 		int count = 0;
@@ -363,22 +458,24 @@ void CRcOptionRow::PerformLayout()
 
 	int labelWide = wide / 2;
 	int x = labelWide;
-	int controlWide = wide - labelWide - 8;
-	if ( controlWide > 240 )
-		controlWide = 240;
+	int controlWide = wide - labelWide - RcUiScaled( 8 );
+	if ( controlWide > RcUiScaled( 240 ) )
+		controlWide = RcUiScaled( 240 );
 
-	m_pLabel->SetBounds( 0, 2, labelWide - 8, 24 );
+	// B399: the 720p sizes, grown with the screen
+	int s2 = RcUiScaled( 2 ), s24 = RcUiScaled( 24 );
+	m_pLabel->SetBounds( 0, s2, labelWide - RcUiScaled( 8 ), s24 );
 
 	if ( m_pCheck )
-		m_pCheck->SetBounds( x, 2, 24, 24 );
+		m_pCheck->SetBounds( x, s2, s24, s24 );
 	if ( m_pCombo )
-		m_pCombo->SetBounds( x, 2, controlWide, 24 );
+		m_pCombo->SetBounds( x, s2, controlWide, s24 );
 	if ( m_pText )
-		m_pText->SetBounds( x, 2, controlWide, 24 );
+		m_pText->SetBounds( x, s2, controlWide, s24 );
 	if ( m_pSlider )
 	{
-		m_pSlider->SetBounds( x, 0, controlWide - 56, 26 );
-		m_pValue->SetBounds( x + controlWide - 52, 2, 52, 24 );
+		m_pSlider->SetBounds( x, 0, controlWide - RcUiScaled( 56 ), RcUiScaled( 26 ) );
+		m_pValue->SetBounds( x + controlWide - RcUiScaled( 52 ), s2, RcUiScaled( 52 ), s24 );
 	}
 }
 
@@ -397,12 +494,13 @@ void CRcOptionRow::SetValue( const char *value )
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96], choice[32];
 		int row = 0;
 		for ( int i = 0; RcGetChoice( o, i, text, sizeof( text ), choice, sizeof( choice ) ); i++ )
 		{
-			if ( RcSameNumber( choice, value ) )
+			if ( o->type == RC_LISTSTR ? !strcmp( choice, value ) : RcSameNumber( choice, value ) )
 				row = i;
 		}
 		m_pCombo->ActivateItemByRow( row );
@@ -445,6 +543,7 @@ void CRcOptionRow::GetValue( char *out, int size )
 		break;
 
 	case RC_LIST:
+	case RC_LISTSTR:
 	{
 		char text[96];
 		if ( !RcGetChoice( o, m_pCombo->GetActiveItem(), text, sizeof( text ), out, size ) )
@@ -504,7 +603,7 @@ void CRcOptionRow::Apply( void )
 	char value[64];
 	GetValue( value, sizeof( value ) );
 
-	bool same = m_pOption->type == RC_TEXT ? !strcmp( value, m_szLoaded ) : RcSameNumber( value, m_szLoaded );
+	bool same = m_pOption->type == RC_TEXT || m_pOption->type == RC_LISTSTR ? !strcmp( value, m_szLoaded ) : RcSameNumber( value, m_szLoaded );
 	if ( same && m_szLoaded[0] )
 		return;
 
@@ -517,6 +616,10 @@ void CRcOptionRow::Apply( void )
 
 	char command[160];
 	_snprintf( command, sizeof( command ), "%s \"%s\"\n", m_pOption->cvar, value );
+	// B400: the subtitle language goes through the game's subtitleset (the Language screen's), which also keeps it in
+	// the statistics that a game from the beginning sets it back from
+	if ( !strcmp( m_pOption->cvar, "cof_subtitlelanguage" ) )
+		_snprintf( command, sizeof( command ), "cof_subtitlelanguage \"%s\"\ncmd subtitleset %s\n", value, value );
 	command[sizeof( command ) - 1] = 0;
 	engine->pfnClientCmd( command );
 
@@ -683,6 +786,9 @@ CRcOptionsPage::CRcOptionsPage( vgui::Panel *parent, const char *tab, const char
 
 	m_pList = new CPanelListPanel( this, "Options" );
 
+	if ( !stricmp( tab, "audio_voice" ) )
+		RcFillMics();	// B422
+
 	for ( unsigned int i = 0; i < RC_NUM_OPTIONS && m_nRows < 40; i++ )
 	{
 		if ( stricmp( s_RcOptions[i].tab, tab ) )
@@ -713,16 +819,18 @@ void CRcOptionsPage::PerformLayout()
 	int wide, tall;
 	GetSize( wide, tall );
 
-	int listWide = wide - 16;
+	// B399: the 720p sizes, grown with the screen
+	int s8 = RcUiScaled( 8 );
+	int listWide = wide - RcUiScaled( 16 );
 	if ( m_pPreview )
 	{
-		listWide -= 168;
-		m_pPreview->SetBounds( wide - 168, 8, 160, 160 );
+		listWide -= RcUiScaled( 168 );
+		m_pPreview->SetBounds( wide - RcUiScaled( 168 ), s8, RcUiScaled( 160 ), RcUiScaled( 160 ) );
 	}
 
-	m_pList->SetBounds( 8, 8, listWide, tall - 64 );
-	m_pHelp->SetBounds( 10, tall - 52, wide - 120, 46 );
-	m_pDefaults->SetBounds( wide - 100, tall - 34, 90, 24 );
+	m_pList->SetBounds( s8, s8, listWide, tall - RcUiScaled( 64 ) );
+	m_pHelp->SetBounds( RcUiScaled( 10 ), tall - RcUiScaled( 52 ), wide - RcUiScaled( 120 ), RcUiScaled( 46 ) );
+	m_pDefaults->SetBounds( wide - RcUiScaled( 100 ), tall - RcUiScaled( 34 ), RcUiScaled( 90 ), RcUiScaled( 24 ) );
 
 	// wrapped again at this width: a label keeps the wrap of the size it had when its text was set, and a page
 	// is first laid out tiny, before its tab is shown
@@ -868,7 +976,7 @@ static const char s_szRcAbout[] =
 	"The ReCoF Launcher installs and updates it: github.com/caixax/ReCoF-Launcher\n\n"
 	"Cry of Fear is by Team Psykskallar. Thanks to cd_n0 (RebuiltSimon), YaLTeR (BunnymodXT) and Valve.";
 
-CRcAboutPage::CRcAboutPage( vgui::Panel *parent ) : BaseClass( parent, "about", "Point at an option to see what it does." )
+CRcAboutPage::CRcAboutPage( vgui::Panel *parent ) : BaseClass( parent, "about", "" )
 {
 	m_pText = new Label( this, "About", s_szRcAbout );
 	m_pText->SetWrap( true );

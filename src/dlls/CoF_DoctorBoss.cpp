@@ -274,7 +274,8 @@ void CDoctorBoss :: Killed( entvars_t *pevAttacker, int iGib )
 
 	if ( pev->target )
 	{
-		CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+		// ReCoF story co-op (B387): the player who killed him
+		CBaseEntity *pPlayer = RcCoop_User( pevAttacker ? CBaseEntity::Instance( pevAttacker ) : NULL );
 
 		if ( pPlayer && pPlayer->IsPlayer() )
 			FireTargets( STRING( pev->target ), pPlayer, pPlayer, USE_TOGGLE, 0 );
@@ -588,6 +589,14 @@ void CDoctorBoss :: MonsterThink( void )
 
 		SetNextThink( 0.05 );
 		return;
+	}
+
+	// ReCoF story co-op (B389): Purnell duels the nearest player he can see; he keeps his target while he sees him
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pNear = RcCoop_NearestPlayer( this, true );
+		if ( pNear && pNear->IsPlayer() && ( !pPlayer || pPlayer->pev->fuser4 != 0 || !pPlayer->IsAlive() || !FVisible( pPlayer ) ) )
+			pPlayer = (CBasePlayer *)pNear;
 	}
 
 	StudioFrameAdvance( );

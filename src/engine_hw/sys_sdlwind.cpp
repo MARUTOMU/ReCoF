@@ -433,8 +433,11 @@ LRESULT CGame::WindowProc_guess( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		break;
 
 	case WM_CLOSE:
+		// ReCoF (B352): the quit command, as the menu's Quit and the console's quit do. Leaving the main loop at once
+		// skipped its server shutdown: the Steam game server stayed up and Steam's crash handler ended the process
+		// with 0xC0000409 on its way out, every time the window was closed (retail too)
 		if ( eng->GetState() == DLL_ACTIVE )
-			eng->SetQuitting( IEngine::QUIT_TODESKTOP );
+			Cbuf_AddText( "quit\n" );
 
 		lRet = 0;
 		break;

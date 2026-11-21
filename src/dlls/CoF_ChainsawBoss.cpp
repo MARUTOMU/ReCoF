@@ -53,6 +53,16 @@ public:
 	void AttackSound( void );
 	void Killed( entvars_t *pevAttacker, int iGib );
 
+	// ReCoF (B433): story co-op keeps the boss through a grab (see RcSawGrab)
+	void RcSawGrab( CBaseEntity *pScene, CBaseEntity *pVictim );
+	void EXPORT RcSawWait( void );
+	EHANDLE m_hRcScene;
+	EHANDLE m_hRcVictim;
+	float m_flRcBack;
+	virtual int Save( CSave &save );
+	virtual int Restore( CRestore &restore );
+	static TYPEDESCRIPTION m_SaveData[];
+
 	static const char *pAttackSounds[];
 	static const char *pAlertSounds[];
 	static const char *pPainSounds[];
@@ -194,6 +204,7 @@ void CChainsawBoss :: AlertSound( void )
 {
 	int pitch = 95 + RANDOM_LONG(0,9);
 
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// ReCoF (B462): one copy at a time
 	EMIT_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav", 1.0, ATTN_NORM );
 }
 
@@ -232,7 +243,7 @@ void CChainsawBoss :: HandleAnimEvent( MonsterEvent_t *pEvent )
 					pKiller->Spawn();
 
 
-					UTIL_Remove( this );
+					RcSawGrab( pKiller, pHurt );	// ReCoF (B433): was UTIL_Remove( this )
 				}
 			}
 			else
@@ -263,7 +274,7 @@ void CChainsawBoss :: HandleAnimEvent( MonsterEvent_t *pEvent )
 					pKiller->Spawn();
 
 
-					UTIL_Remove( this );
+					RcSawGrab( pKiller, pHurt );	// ReCoF (B433): was UTIL_Remove( this )
 				}
 			}
 			else
@@ -294,7 +305,7 @@ void CChainsawBoss :: HandleAnimEvent( MonsterEvent_t *pEvent )
 					pKiller->Spawn();
 
 
-					UTIL_Remove( this );
+					RcSawGrab( pKiller, pHurt );	// ReCoF (B433): was UTIL_Remove( this )
 				}
 			}
 			else
@@ -404,8 +415,69 @@ int CChainsawBoss::IgnoreConditions ( void )
 	return iIgnore;
 }
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
+TYPEDESCRIPTION CChainsawBoss::m_SaveData[] =
+{
+	DEFINE_FIELD( CChainsawBoss, m_hRcScene, FIELD_EHANDLE ),
+	DEFINE_FIELD( CChainsawBoss, m_hRcVictim, FIELD_EHANDLE ),
+	DEFINE_FIELD( CChainsawBoss, m_flRcBack, FIELD_TIME ),
+};
+IMPLEMENT_SAVERESTORE( CChainsawBoss, CBaseMonster );
+
+// ReCoF (B433): a grab puts a kill scene (third_person_interaction) in the boss's place and the boss removed itself;
+// in single player the game is over, but in story co-op the others play on, the boss's death target never fired and
+// they were stuck (charliee1w 38836e1c). There the boss hides through the scene and comes back where it stood, with
+// its health, once the victim is dead (or after 20 s)
+void CChainsawBoss :: RcSawGrab( CBaseEntity *pScene, CBaseEntity *pVictim )
+{
+	if ( !RcCoop_Story() )
+	{
+		STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// B462
+		UTIL_Remove( this );
+		return;
+	}
+	m_hRcScene = pScene;
+	m_hRcVictim = pVictim;
+	m_flRcBack = gpGlobals->time + 20;
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// B462: hidden, silent
+	pev->effects |= EF_NODRAW;
+	pev->solid = SOLID_NOT;
+	pev->takedamage = DAMAGE_NO;
+	UTIL_SetOrigin( this, pev->origin );
+	SetThink( &CChainsawBoss::RcSawWait );
+	pev->nextthink = gpGlobals->time + 0.5;
+}
+
+void CChainsawBoss :: RcSawWait( void )
+{
+	CBaseEntity *pVictim = m_hRcVictim;
+	if ( ( !pVictim || !pVictim->IsAlive() ) && m_flRcBack > gpGlobals->time + 3 )
+		m_flRcBack = gpGlobals->time + 3;	// the scene's end shows a moment longer
+	if ( gpGlobals->time < m_flRcBack )
+	{
+		pev->nextthink = gpGlobals->time + 0.5;
+		return;
+	}
+	CBaseEntity *pScene = m_hRcScene;
+	if ( pScene )
+		UTIL_Remove( pScene );
+	m_hRcScene = NULL;
+	m_hRcVictim = NULL;
+	pev->effects &= ~EF_NODRAW;
+	pev->solid = SOLID_SLIDEBOX;
+	pev->takedamage = DAMAGE_AIM;
+	UTIL_SetOrigin( this, pev->origin );
+	m_hEnemy = NULL;
+	ClearSchedule();
+	SetThink( &CBaseMonster::CallMonsterThink );
+	pev->nextthink = gpGlobals->time + 0.1;
+	ALERT( at_console, "ReCoF co-op: the chainsaw boss is back after a grab\n" );
+}
+
 void CChainsawBoss :: KillMonster( void )
 {
+	STOP_SOUND( ENT(pev), CHAN_AUTO, "boss/sawer/chainsaw_loop.wav" );	// ReCoF (B462)
 	UTIL_Remove( this );
 }
 

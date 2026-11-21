@@ -23,9 +23,22 @@ void RcSpeedrun_Frame( void );
 void RcSpeedrun_Redraw( void );
 
 // rc_crash.cpp (B314): crash and hang reports in crashes\ next to cof.exe. Init installs them (from InitInput, after
-// SteamAPI_Init), Frame is the hang watchdog's heartbeat (from HUD_Frame)
+// SteamAPI_Init), Frame is the hang watchdog's heartbeat (from HUD_Frame), Shutdown ends its threads before client.dll
+// is unloaded (from IN_Shutdown, B351)
 void RcCrash_Init( void );
 void RcCrash_Frame( void );
+void RcCrash_Shutdown( void );
+
+// rc_client.cpp (B363): the thread that reads the files the HUD reads during play when the game starts ends before
+// client.dll is unloaded (from IN_Shutdown)
+void RcPrefetch_Shutdown( void );
+void RcPrefetch_Map( const char *pszLevel );	// B365: a map is loading (from CHud::VidInit)
+
+// mp3.cpp (B364): registers rc_music_thread (from RcClient_Init)
+void RcMusic_Init( void );
+
+// co-op spike: rc_steamnet.cpp's FakeIP poll and the rc_coop_autotest timer (from HUD_Frame)
+void RcCoop_Frame( void );
 
 // the run timer's view of the game: the engine's pause flag, the player's health and the map drawn (from
 // V_CalcRefdef), a map loading (from CHud::VidInit)

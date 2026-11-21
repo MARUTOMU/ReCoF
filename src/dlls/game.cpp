@@ -16,6 +16,7 @@
 #include "eiface.h"
 #include "util.h"
 #include "game.h"
+#include "rc_svprof.h"	// ReCoF (B337)
 
 // Cry of Fear: GameDLLInit starts the Steam API (steam_api.dll)
 extern "C" __declspec( dllimport ) bool __cdecl SteamAPI_Init();
@@ -84,6 +85,12 @@ cvar_t	rc_show_triggers = {"rc_show_triggers","0" };
 // ReCoF (B319): 1, the default, lets only ReCoF players into a multiplayer game; the original game's client is turned
 // away with a message that names ReCoF. Bots are let in.
 cvar_t	rc_require_recof = {"rc_require_recof","1", FCVAR_SERVER };
+// ReCoF story co-op: 1 with maxplayers above 1 plays Simon's story in co-op (rc_coop.cpp, src/engine_hw/rc_coop.c)
+cvar_t	rc_coop = {"rc_coop","0", FCVAR_SERVER };
+// ReCoF (B500): 1 (the default) keeps players solid to each other in multiplayer, 0 lets them pass through; sent to
+// pm_shared as physinfo "rpc". On a listen server client.dll registers it first, so player.cpp reads it by name
+cvar_t	rc_player_collide = {"rc_player_collide","1", FCVAR_SERVER | FCVAR_ARCHIVE };
+cvar_t	rc_dominicanpapi = {"rc_dominicanpapi","0", 0 };
 cvar_t	cof_walksteptime = {"cof_walksteptime","410", FCVAR_SERVER };
 cvar_t	cof_runsteptime = {"cof_runsteptime","375", FCVAR_SERVER };
 cvar_t	cof_sprintsteptime = {"cof_sprintsteptime","300", FCVAR_SERVER };
@@ -571,6 +578,11 @@ void GameDLLInit( void )
 	CVAR_REGISTER (&rc_novis);
 	CVAR_REGISTER (&rc_show_triggers);
 	CVAR_REGISTER (&rc_require_recof);
+	CVAR_REGISTER (&rc_coop);	// ReCoF story co-op
+	CVAR_REGISTER (&rc_player_collide);	// ReCoF (B500)
+	RcCoop_Init();
+	CVAR_REGISTER (&rc_dominicanpapi);
+	RcSvProf_Init();	// ReCoF (B337): rc_svprof
 	CVAR_REGISTER (&cof_walksteptime);
 	CVAR_REGISTER (&cof_runsteptime);
 	CVAR_REGISTER (&cof_sprintsteptime);

@@ -79,6 +79,12 @@ void CTelescope::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE us
 			return;
 		}
 
+		// ReCoF (B469): one player at a time: a second one switched it off (for himself) and the first stayed frozen in
+		// the scope (charliee1w 6446bb0f)
+		CBaseEntity *pRcUser = m_pPlayer;
+		if ( pev->health != 0 && pRcUser && pRcUser != pPlayer && pRcUser->IsPlayer() && pRcUser->IsAlive() && pRcUser->pev->fuser4 == 0 )
+			return;
+
 		m_pPlayer = pPlayer;
 
 		if ( pev->message && !m_pView )

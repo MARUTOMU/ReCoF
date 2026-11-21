@@ -2443,6 +2443,8 @@ void TeamFortressViewport::UpdateOnPlayerInfo()
 		m_pHUDControl_guess->UpdateOnPlayerInfo_guess();
 }
 
+bool RcCoopMenu_Visible( void );	// ReCoF (B393), rc_coopmenu.cpp
+
 void TeamFortressViewport::UpdateCursorState()
 {
 	// Need cursor if any VGUI window is up
@@ -2463,6 +2465,7 @@ void TeamFortressViewport::UpdateCursorState()
 		(m_pSaveLoad_guess && m_pSaveLoad_guess->isVisible()) ||
 		(m_pLanguage_guess && m_pLanguage_guess->isVisible()) ||
 		(m_pGameMenu_guess && m_pGameMenu_guess->isVisible()) ||
+		RcCoopMenu_Visible() ||	// ReCoF (B393): the main menu's Story Co-op panel
 		(m_pPadlock_guess && m_pPadlock_guess->isVisible()) ||
 		(m_pDocuments_guess && m_pDocuments_guess->isVisible()) ||
 		(m_pTelephone_guess && m_pTelephone_guess->isVisible()) ||

@@ -37,6 +37,7 @@
 #include "game.h"
 #include "player.h" // buz
 #include <cmath>
+#include "rc_svprof.h"	// ReCoF (B337)
 
 #define MONSTER_CUT_CORNER_DIST		8 // 8 means the monster's bounding box is contained without the box of the node in WC
 
@@ -154,6 +155,7 @@ TYPEDESCRIPTION	CBaseMonster::m_SaveData[] =
 	DEFINE_FIELD( CBaseMonster, m_bIsFlickerAppearing, FIELD_BOOLEAN ),
 	DEFINE_FIELD( CBaseMonster, m_flFlickerAppearTime, FIELD_TIME ),
 	DEFINE_FIELD( CBaseMonster, m_flNextFlickerAppear, FIELD_TIME ),
+	DEFINE_FIELD( CBaseMonster, m_flRcCoopScale, FIELD_FLOAT ),	// ReCoF story co-op (G16); older saves read 0
 };
 
 //IMPLEMENT_SAVERESTORE( CBaseMonster, CBaseToggle );
@@ -256,6 +258,7 @@ void CBaseMonster :: BarnacleVictimReleased ( void )
 //=========================================================
 void CBaseMonster :: Listen ( void )
 {
+	RcSvScope rcsv( RCSV_LISTEN );	// ReCoF (B337): rc_svprof
 	int		iSound;
 	int		iMySounds;
 	float	hearingSensitivity;
@@ -362,6 +365,7 @@ BOOL CBaseMonster :: FValidateHintType ( short sHint )
 //=========================================================
 void CBaseMonster :: Look ( int iDistance )
 {
+	RcSvScope rcsv( RCSV_LOOK );	// ReCoF (B337): rc_svprof
 	int	iSighted = 0;
 
 	// DON'T let visibility information from last frame sit around!
@@ -617,6 +621,7 @@ CSound* CBaseMonster :: PBestScent ( void )
 //=========================================================
 void CBaseMonster :: MonsterThink ( void )
 {
+	RcSvScope rcsv( RCSV_MTHINK );	// ReCoF (B337): rc_svprof
 	if ( m_bFrozenByCamera )
 	{
 		StopAnimation();
@@ -809,6 +814,7 @@ BOOL CBaseMonster :: FRouteClear ( void )
 //=========================================================
 BOOL CBaseMonster :: FRefreshRoute ( void )
 {
+	RcSvScope rcsv( RCSV_ROUTE );	// ReCoF (B337): rc_svprof
 	CBaseEntity	*pPathCorner;
 	int			i;
 	BOOL		returnCode;
@@ -1514,6 +1520,7 @@ static BOOL RcStepCrossesWall( CBaseMonster *pMonster, const Vector &vecFrom )
 //#define	LOCAL_STEP_SIZE	8 // buz test
 int CBaseMonster :: CheckLocalMove ( const Vector &vecStart, const Vector &vecEnd, CBaseEntity *pTarget, float *pflDist )
 {
+	RcSvScope rcsv( RCSV_LOCALMOVE );	// ReCoF (B337): rc_svprof
 	Vector	vecStartPos;// record monster's position before trying the move
 	float	flYaw;
 	float	flDist;
@@ -1748,6 +1755,7 @@ int CBaseMonster :: RouteClassify( int iMoveFlag )
 //=========================================================
 BOOL CBaseMonster :: BuildRoute ( const Vector &vecGoal, int iMoveFlag, CBaseEntity *pTarget )
 {
+	RcSvScope rcsv( RCSV_ROUTE );	// ReCoF (B337): rc_svprof
 	float	flDist;
 	Vector	vecApex;
 	int		iLocalMove;
@@ -2011,6 +2019,7 @@ BOOL CBaseMonster :: FTriangulate ( const Vector &vecStart , const Vector &vecEn
 
 void CBaseMonster :: Move ( float flInterval ) 
 {
+	RcSvScope rcsv( RCSV_MOVE );	// ReCoF (B337): rc_svprof
 	float		flWaypointDist;
 	float		flCheckDist;
 	float		flDist;// how far the lookahead check got before hitting an object.
@@ -2232,6 +2241,7 @@ BOOL CBaseMonster:: ShouldAdvanceRoute( float flWaypointDist )
 
 void CBaseMonster::MoveExecute( CBaseEntity *pTargetEnt, const Vector &vecDir, float flInterval )
 {
+	RcSvScope rcsv( RCSV_MOVEEXEC );	// ReCoF (B337): rc_svprof
 //	float flYaw = UTIL_VecToYaw ( m_Route[ m_iRouteIndex ].vecLocation - pev->origin );// build a yaw that points to the goal.
 //	WALK_MOVE( ENT(pev), flYaw, m_flGroundSpeed * flInterval, WALKMOVE_NORMAL );
 	
@@ -2293,6 +2303,8 @@ void CBaseMonster::MoveExecute( CBaseEntity *pTargetEnt, const Vector &vecDir, f
 // initialization that should take place for all monsters
 // goes here.
 //=========================================================
+void RcCoop_ScaleMonster( CBaseMonster *pMonster );	// ReCoF story co-op (rc_coop.cpp): nothing outside story co-op
+
 void CBaseMonster :: MonsterInit ( void )
 {
 	if ( g_pGameRules && !g_pGameRules->FAllowMonsters() )
@@ -2313,6 +2325,10 @@ void CBaseMonster :: MonsterInit ( void )
 //		pev->takedamage		= DAMAGE_NO;
 //	else
 		pev->takedamage		= DAMAGE_AIM;
+
+	// ReCoF story co-op (G16): more health with more players (rc_coop.cpp), in place of the police co-op's damage
+	// multiplier; a monster the map places before the players are in gets it from the rules' Think
+	RcCoop_ScaleMonster( this );
 
 	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && false )
 	{
@@ -2576,6 +2592,7 @@ int CBaseMonster::IRelationship ( CBaseEntity *pTarget )
 
 BOOL CBaseMonster :: FindCover ( Vector vecThreat, Vector vecViewOffset, float flMinDist, float flMaxDist )
 {
+	RcSvScope rcsv( RCSV_COVER );	// ReCoF (B337): rc_svprof
 	int i;
 	int iMyHullIndex;
 	int iMyNode;
@@ -2682,6 +2699,7 @@ BOOL CBaseMonster :: FindCover ( Vector vecThreat, Vector vecViewOffset, float f
 //=========================================================
 BOOL CBaseMonster :: BuildNearestRoute ( Vector vecThreat, Vector vecViewOffset, float flMinDist, float flMaxDist )
 {
+	RcSvScope rcsv( RCSV_ROUTE );	// ReCoF (B337): rc_svprof
 	int i;
 	int iMyHullIndex;
 	int iMyNode;

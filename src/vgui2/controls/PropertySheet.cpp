@@ -23,6 +23,8 @@
 
 using namespace vgui2;
 
+int RcUiScaled( int value );	// ReCoF (B399), GameUI's RcTheme.cpp: lengths grow with the screen
+
 template <class T>
 inline T max_guess(T a, T b)
 {
@@ -95,6 +97,17 @@ public:
 		{
 			return _dimTextColor;
 		}
+	}
+
+	// ReCoF (B413): flat tabs as cof-enhanced's: the chosen one on a dark red, the one under the mouse a little
+	// lighter, the others on nothing (the red line under the chosen one is its border, RcTheme.cpp)
+	virtual Color GetButtonBgColor()
+	{
+		if (_active)
+			return Color(150, 24, 20, 70);
+		if (IsArmed())
+			return Color(255, 255, 255, 18);
+		return Color(0, 0, 0, 0);
 	}
 
 	virtual void SetActive(bool state)
@@ -425,7 +438,7 @@ void PropertySheet::PerformLayout()
 	{
 		if (_showTabs)
 		{
-			_activePage->SetBounds(0, 28, wide, tall - 28);
+			_activePage->SetBounds(0, RcUiScaled(28), wide, tall - RcUiScaled(28));	// ReCoF (B399)
 		}
 		else
 		{
@@ -447,11 +460,11 @@ void PropertySheet::PerformLayout()
 			if (_pageTabs[i] == _activeTab)
 			{
 				// active tab is taller
-				_activeTab->SetBounds(xtab, 2, width, 27);
+				_activeTab->SetBounds(xtab, RcUiScaled(2), width, RcUiScaled(27));
 			}
 			else
 			{
-				_pageTabs[i]->SetBounds(xtab, 4, width, 25);
+				_pageTabs[i]->SetBounds(xtab, RcUiScaled(4), width, RcUiScaled(25));
 			}
 			_pageTabs[i]->SetVisible(true);
 			xtab += (width + 1);

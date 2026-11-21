@@ -25,6 +25,8 @@
 
 extern int gmsgStatue;
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
 // declared in effects.h
 class CStatueEagle : public CBaseAnimating
 {
@@ -155,6 +157,22 @@ void CheckStatuePuzzle( void )
 		if ( GetClassPtr( (CStatueEagle *)pEagle->pev )->m_iPosition == 2 && GetClassPtr( (CStatueHorse *)pHorse->pev )->m_iPosition == 1 && GetClassPtr( (CStatueLion *)pLion->pev )->m_iPosition == 1 && GetClassPtr( (CStatueOwl *)pOwl->pev )->m_iPosition == 4 )
 		{
 			CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+
+			// ReCoF story co-op (B388): any player may have moved the last statue; every statue screen closes
+			if ( RcCoop_Story() )
+			{
+				for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+				{
+					CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+					if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || pEnt == pPlayer )
+						continue;
+					MESSAGE_BEGIN( MSG_ONE, gmsgStatue, NULL, pEnt->pev );
+						WRITE_BYTE( 0 );
+						WRITE_STRING( "gfx/vgui/640_eagle_button.tga" );
+					MESSAGE_END();
+				}
+			}
+
 			pStatueEnd->Use( pPlayer, pPlayer, USE_TOGGLE, 0 );
 		}
 	}

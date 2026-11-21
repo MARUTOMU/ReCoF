@@ -58,6 +58,15 @@ public:
 
 	EHANDLE m_hPhoneUser;
 	bool m_bAnswered;
+
+	// ReCoF (B471): story co-op rings a teammate who can answer and starts a dropped call again; the target fires
+	// once, after 30 s with nobody able to answer
+	float m_flRcNoTaker;
+	bool m_bRcFired;
+	bool RcCanTake( CBasePlayer *pPlayer );
+	CBasePlayer *RcTaker( void );
+	void RcDrop( CBasePlayer *pPlayer );
+	void RcFire( void );
 };
 
 TYPEDESCRIPTION	CPhoneCall::m_SaveData[] =
@@ -69,6 +78,8 @@ TYPEDESCRIPTION	CPhoneCall::m_SaveData[] =
 	DEFINE_FIELD( CPhoneCall, m_hPhoneUser, FIELD_EHANDLE ),
 	DEFINE_FIELD( CPhoneCall, m_bAnswered, FIELD_BOOLEAN ),
 	DEFINE_FIELD( CPhoneCall, m_pPlayer, FIELD_EHANDLE ),
+	DEFINE_FIELD( CPhoneCall, m_flRcNoTaker, FIELD_TIME ),	// ReCoF (B471)
+	DEFINE_FIELD( CPhoneCall, m_bRcFired, FIELD_BOOLEAN ),
 };
 
 IMPLEMENT_SAVERESTORE( CPhoneCall, CBaseEntity );
@@ -430,8 +441,87 @@ void CPhoneCall::KeyValue( KeyValueData *pkvd )
 		CBaseEntity::KeyValue( pkvd );
 }
 
+// a player in the game who can take a call: alive, not one who left (B320), with a client (B391) and a phone
+bool CPhoneCall::RcCanTake( CBasePlayer *pPlayer )
+{
+	if ( !pPlayer || !pPlayer->IsPlayer() || !pPlayer->IsAlive() || pPlayer->pev->deadflag != DEAD_NO || pPlayer->pev->fuser4 != 0 )
+		return false;
+	char *pszInfo = g_engfuncs.pfnGetInfoKeyBuffer( pPlayer->edict() );
+	return pszInfo && pszInfo[0] && pPlayer->HasNamedPlayerItem( "weapon_mobile" );
+}
+
+// the activator when he can take the call, else the first teammate who can
+CBasePlayer *CPhoneCall::RcTaker( void )
+{
+	CBaseEntity *pWas = m_pPlayer;
+	if ( pWas && pWas->IsPlayer() && RcCanTake( (CBasePlayer *)pWas ) )
+		return (CBasePlayer *)pWas;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( pEnt && pEnt->IsPlayer() && RcCanTake( (CBasePlayer *)pEnt ) )
+			return (CBasePlayer *)pEnt;
+	}
+	return NULL;
+}
+
+// this player's part of the call ends: its sounds, the holds and the bars
+void CPhoneCall::RcDrop( CBasePlayer *pPlayer )
+{
+	if ( !pPlayer )
+		return;
+	STOP_SOUND( pPlayer->edict(), CHAN_AUTO, pev->iuser1 ? "phone/phone_ringing.wav" : "phone/phone_ringtone.wav" );
+	if ( m_sAudioFile )
+		STOP_SOUND( pPlayer->edict(), CHAN_AUTO, STRING( m_sAudioFile ) );
+	if ( pPlayer->m_iUsingComputerOrPhone == 3 )
+		pPlayer->m_iUsingComputerOrPhone = 0;
+	if ( pPlayer->pev->fuser3 == 5 )
+		pPlayer->pev->fuser3 = 0;
+	pPlayer->m_bInPhoneCall = false;
+	pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
+	pPlayer->m_DrawBars = 0;
+}
+
+void CPhoneCall::RcFire( void )
+{
+	if ( pev->target && !m_bRcFired )
+	{
+		m_bRcFired = true;
+		FireTargets( STRING( pev->target ), this, this, USE_TOGGLE, 0 );
+	}
+}
+
 void CPhoneCall::WaitForCall( void )
 {
+	// ReCoF (B471): story co-op rings whoever can take the call; with nobody for 30 s the story goes on without it
+	if ( RcCoop_Story() )
+	{
+		CBasePlayer *pTaker = RcTaker();
+		if ( !pTaker )
+		{
+			if ( m_flRcNoTaker <= 0 )
+				m_flRcNoTaker = gpGlobals->time;
+			if ( gpGlobals->time - m_flRcNoTaker > 30 )
+			{
+				g_engfuncs.pfnServerPrint( "ReCoF co-op: nobody could take a phone call, the story goes on\n" );
+				RcFire();
+				SetThink( NULL );
+				return;
+			}
+			SetNextThink( 1 );
+			return;
+		}
+		m_flRcNoTaker = 0;
+		CBaseEntity *pWas = m_pPlayer;
+		if ( pTaker != pWas )
+		{
+			if ( pWas && pWas->IsPlayer() )
+				RcDrop( (CBasePlayer *)pWas );
+			m_pPlayer = pTaker;
+			m_bRinging = false;
+		}
+	}
+
 	if ( !m_pPlayer || !m_pPlayer->IsPlayer() )
 		return;
 
@@ -504,6 +594,8 @@ void CPhoneCall::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE us
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	m_bAnswered = false;
+	m_bRcFired = false;	// ReCoF (B471)
+	m_flRcNoTaker = 0;
 
 	if ( pPlayer )
 	{
@@ -515,7 +607,27 @@ void CPhoneCall::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE us
 
 void CPhoneCall::ChangeSubtitle( void )
 {
-	if ( !m_hPhoneUser->IsPlayer() )
+	// ReCoF (B471): in story co-op a call whose taker died, left or put the phone away rings again (for him or a
+	// teammate) instead of stopping for good with its target never fired
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pUser = m_hPhoneUser;
+		CBasePlayer *pTaker = ( pUser && pUser->IsPlayer() ) ? (CBasePlayer *)pUser : NULL;
+		if ( !pTaker || !RcCanTake( pTaker ) || !pTaker->m_pActiveItem || !FClassnameIs( pTaker->m_pActiveItem->edict(), "weapon_mobile" ) )
+		{
+			RcDrop( pTaker );
+			m_bAnswered = false;
+			m_bRinging = false;
+			m_iCurrentSubtitle = 1;
+			m_hPhoneUser = NULL;
+			SetThink( &CPhoneCall::WaitForCall );
+			SetNextThink( 1 );
+			g_engfuncs.pfnServerPrint( "ReCoF co-op: a phone call was dropped, it rings again\n" );
+			return;
+		}
+	}
+
+	if ( !m_hPhoneUser || !m_hPhoneUser->IsPlayer() )
 		return;
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)m_hPhoneUser->pev );
@@ -607,10 +719,14 @@ void CPhoneCall::ChangeSubtitle( void )
 
 void CPhoneCall::EndCall( void )
 {
-	if ( !m_hPhoneUser->IsPlayer() )
-		return;
+	// ReCoF (B471): the target fires and the call's holds end even when the phone is no longer in hand; retail
+	// returned first, so the story stopped there and the player kept the bars, the hidden HUD, fuser3 5 and the call
+	// lock (charliee1w 6446bb0f, 03fb6cad)
+	CBaseEntity *pUser = m_hPhoneUser;
+	CBasePlayer *pPlayer = ( pUser && pUser->IsPlayer() ) ? GetClassPtr( (CBasePlayer *)pUser->pev ) : NULL;
 
-	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)m_hPhoneUser->pev );
+	RcFire();
+	SetThink( NULL );
 
 	if ( !pPlayer )
 		return;
@@ -618,15 +734,24 @@ void CPhoneCall::EndCall( void )
 	pPlayer->m_iUsingComputerOrPhone = 0;
 
 	if ( !pPlayer->m_pActiveItem || !FClassnameIs( pPlayer->m_pActiveItem->edict(), "weapon_mobile" ) )
+	{
+		pPlayer->m_bInPhoneCall = false;
+		pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
+		pPlayer->m_DrawBars = 0;
+		pPlayer->pev->fuser3 = 0;
 		return;
+	}
 
 	CMobile *pMobile = GetClassPtr( (CMobile *)pPlayer->m_pActiveItem->pev );
 
-	if ( pev->target )
-		FireTargets( STRING( pev->target ), this, this, USE_TOGGLE, 0 );
-
 	if ( !pMobile )
+	{
+		pPlayer->m_bInPhoneCall = false;
+		pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
+		pPlayer->m_DrawBars = 0;
+		pPlayer->pev->fuser3 = 0;
 		return;
+	}
 
 	// lower the phone
 	if ( pPlayer->m_iMobileFlashMode )
@@ -650,6 +775,4 @@ void CPhoneCall::EndCall( void )
 	pPlayer->m_DrawBars = 0;
 
 	pPlayer->pev->fuser3 = 0;
-
-	SetThink( NULL );
 }

@@ -403,6 +403,21 @@ void CVoiceStatus::CreateEntities()
 }
 
 
+// ReCoF (B425): Cry of Fear's voice is the police officers' radio: a click when anyone starts and stops talking and
+// "via radio channel" under the name. Story co-op as Simon (the server's physinfo "rcs" 1, hl.dll rc_coop.cpp) has
+// no radio: players just talk
+static bool RcVoiceRadio( void )
+{
+	const char *pszSimon = gEngfuncs.PhysInfo_ValueForKey( "rcs" );
+	return !pszSimon || strcmp( pszSimon, "1" );
+}
+
+static void RcRadioSound( const char *pszSound, float flVolume )
+{
+	if ( RcVoiceRadio() )
+		gEngfuncs.pfnPlaySoundByName( (char *)pszSound, flVolume );
+}
+
 void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 {
 	if(!*m_pParentPanel)
@@ -427,7 +442,7 @@ void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 			m_bPlayerTalking_guess[1] = true;
 			if( m_bPlayerWasTalking_guess[1] != m_bPlayerTalking_guess[1] )
 			{
-				gEngfuncs.pfnPlaySoundByName( "weapons/radio/radio_start.wav", 1 );
+				RcRadioSound( "weapons/radio/radio_start.wav", 1 );
 				m_bPlayerWasTalking_guess[1] = m_bPlayerTalking_guess[1];
 			}
 		}
@@ -436,7 +451,7 @@ void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 			m_bPlayerTalking_guess[1] = false;
 			if( m_bPlayerWasTalking_guess[1] != m_bPlayerTalking_guess[1] )
 			{
-				gEngfuncs.pfnPlaySoundByName( "weapons/radio/radio_end.wav", 1 );
+				RcRadioSound( "weapons/radio/radio_end.wav", 1 );
 				m_bPlayerWasTalking_guess[1] = m_bPlayerTalking_guess[1];
 			}
 		}
@@ -460,7 +475,7 @@ void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 			m_bPlayerTalking_guess[entindex] = true;
 			if( m_bPlayerWasTalking_guess[entindex] != m_bPlayerTalking_guess[entindex] )
 			{
-				gEngfuncs.pfnPlaySoundByName( "weapons/radio/radio_start.wav", 0.5 );
+				RcRadioSound( "weapons/radio/radio_start.wav", 0.5 );
 				m_bPlayerWasTalking_guess[entindex] = m_bPlayerTalking_guess[entindex];
 			}
 
@@ -475,7 +490,10 @@ void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 					GetPlayerInfo(entindex, &info);
 
 					char paddedName[512];
-					_snprintf(paddedName, sizeof(paddedName), "%s via radio channel %i", info.name, entindex);
+					if ( RcVoiceRadio() )
+						_snprintf(paddedName, sizeof(paddedName), "%s via radio channel %i", info.name, entindex);
+					else
+						_snprintf(paddedName, sizeof(paddedName), "%s", info.name);	// ReCoF (B425)
 
 					int color[3];
 					m_pHelper->GetPlayerTextColor( entindex, color );
@@ -505,7 +523,7 @@ void CVoiceStatus::UpdateSpeakerStatus(int entindex, qboolean bTalking)
 			m_bPlayerTalking_guess[entindex] = false;
 			if( m_bPlayerWasTalking_guess[entindex] != m_bPlayerTalking_guess[entindex] )
 			{
-				gEngfuncs.pfnPlaySoundByName( "weapons/radio/radio_end.wav", 0.5 );
+				RcRadioSound( "weapons/radio/radio_end.wav", 0.5 );
 				m_bPlayerWasTalking_guess[entindex] = m_bPlayerTalking_guess[entindex];
 			}
 

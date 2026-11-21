@@ -92,6 +92,7 @@ The decompilation's own notes (how each compiler was identified, the source work
 - **YaLTeR** made BunnymodXT, whose practice commands, crosshair, timer and ideas ReCoF follows, and the fork of discord-rpc that ReCoF's Discord status uses.
 - **IlyaTsyganov** wrote the Cry of Fear LiveSplit script, whose timing rules ReCoF's run timer follows.
 - **Discord** made discord-rpc, and **Tencent and Milo Yip** made RapidJSON; both are MIT and come in as submodules.
+- **The Inter Project Authors** made Inter, the menus' font, under the SIL Open Font License 1.1; GameUI.dll carries a subset of it ([src/gameui/fonts](src/gameui/fonts)).
 
 ## License
 

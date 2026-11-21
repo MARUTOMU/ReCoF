@@ -670,6 +670,14 @@
         {
           "name": "dlls/rc_cheats",
           "source": "src/dlls/rc_cheats.cpp"
+        },
+        {
+          "name": "dlls/rc_coop",
+          "source": "src/dlls/rc_coop.cpp"
+        },
+        {
+          "name": "dlls/rc_svprof",
+          "source": "src/dlls/rc_svprof.cpp"
         }
       ],
       "toolchain": "msvc1444",
@@ -875,7 +883,9 @@
           "dlls/util",
           "dlls/weapons",
           "dlls/world",
-          "dlls/rc_cheats"
+          "dlls/rc_cheats",
+          "dlls/rc_coop",
+          "dlls/rc_svprof"
         ]
       }
     },
@@ -1524,6 +1534,10 @@
           "source": "src/cl_dll/rc_prof.cpp"
         },
         {
+          "name": "cl_dll/rc_bones",
+          "source": "src/cl_dll/rc_bones.cpp"
+        },
+        {
           "name": "cl_dll/rc_glsl",
           "source": "src/cl_dll/rc_glsl.cpp"
         },
@@ -1550,6 +1564,34 @@
         {
           "name": "cl_dll/rc_practice",
           "source": "src/cl_dll/rc_practice.cpp"
+        },
+        {
+          "name": "cl_dll/rc_steamnet",
+          "source": "src/cl_dll/rc_steamnet.cpp"
+        },
+        {
+          "name": "cl_dll/rc_coopmenu",
+          "source": "src/cl_dll/rc_coopmenu.cpp"
+        },
+        {
+          "name": "cl_dll/rc_vgui1",
+          "source": "src/cl_dll/rc_vgui1.cpp"
+        },
+        {
+          "name": "cl_dll/rc_ui",
+          "source": "src/cl_dll/rc_ui.cpp"
+        },
+        {
+          "name": "cl_dll/rc_mainmenu",
+          "source": "src/cl_dll/rc_mainmenu.cpp"
+        },
+        {
+          "name": "cl_dll/rc_simonmodel",
+          "source": "src/cl_dll/rc_simonmodel.cpp"
+        },
+        {
+          "name": "cl_dll/rc_voice",
+          "source": "src/cl_dll/rc_voice.cpp"
         },
         {
           "name": "external/discord-rpc/src/discord_rpc",
@@ -1788,6 +1830,7 @@
           "cl_dll/view",
           "cl_dll/rc_client",
           "cl_dll/rc_prof",
+          "cl_dll/rc_bones",
           "cl_dll/rc_glsl",
           "cl_dll/rc_gpumodel",
           "cl_dll/rc_speedrun",
@@ -1795,6 +1838,13 @@
           "cl_dll/rc_smooth",
           "cl_dll/rc_discord",
           "cl_dll/rc_practice",
+          "cl_dll/rc_steamnet",
+          "cl_dll/rc_coopmenu",
+          "cl_dll/rc_vgui1",
+          "cl_dll/rc_ui",
+          "cl_dll/rc_mainmenu",
+          "cl_dll/rc_simonmodel",
+          "cl_dll/rc_voice",
           "external/discord-rpc/src/discord_rpc",
           "external/discord-rpc/src/rpc_connection",
           "external/discord-rpc/src/serialization",
@@ -1930,6 +1980,10 @@
         {
           "name": "engine/sv_main",
           "source": "src/engine_hw/sv_main.c"
+        },
+        {
+          "name": "engine/rc_coop",
+          "source": "src/engine_hw/rc_coop.c"
         },
         {
           "name": "engine/CL_PARSE",
@@ -3680,6 +3734,9 @@
           "/debug",
           "/pdb:build/link/hw/hw.pdb",
           "/base:0x1D00000",
+          "/MERGE:.rctext=.rcdata",
+          "/MERGE:.rcbss=.rcdata",
+          "/SECTION:.rcdata,ERW",
           "/nodefaultlib:libc.lib",
           "/nodefaultlib:libcp.lib"
         ],
@@ -4030,7 +4087,8 @@
           "bzip2/blocksort",
           "bzip2/huffman",
           "bzip2/crctable",
-          "bzip2/randtable"
+          "bzip2/randtable",
+          "engine/rc_coop"
         ]
       }
     },
@@ -4132,6 +4190,16 @@
       ],
       "link": {
         "out": "GameUI.dll",
+        "rcdata": [
+          {
+            "id": 101,
+            "file": "src/gameui/fonts/Inter-Regular-recof.ttf"
+          },
+          {
+            "id": 102,
+            "file": "src/gameui/fonts/Inter-SemiBold-recof.ttf"
+          }
+        ],
         "retail": "versions/1.6a/cryoffear/cl_dlls/GameUI.dll",
         "flags": [
           "/nologo",
@@ -4145,6 +4213,7 @@
         "libs": [
           "kernel32.lib",
           "user32.lib",
+          "winmm.lib",
           "wsock32.lib",
           "@vgui_controls.lib"
         ],
@@ -4240,6 +4309,7 @@
           "GameUI/OptionsSubSpray",
           "GameUI/RcServerBrowser",
           "GameUI/RcOptions",
+          "GameUI/RcTheme",
           "vgui2/controls/controls",
           "vgui2/controls/Button",
           "vgui2/controls/Label",
@@ -4608,6 +4678,10 @@
         {
           "name": "GameUI/RcOptions",
           "source": "src/gameui/RcOptions.cpp"
+        },
+        {
+          "name": "GameUI/RcTheme",
+          "source": "src/gameui/RcTheme.cpp"
         },
         {
           "name": "GameUI/ScriptObject",

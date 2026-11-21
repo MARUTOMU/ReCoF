@@ -553,7 +553,8 @@ void SV_ClientPrintf( char *fmt, ... )
 	va_list	argptr;
 	char	string[1024];
 
-	if ( host_client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( host_client->fakeclient || !host_client->netchan.message.maxsize )
 		return;
 
 	va_start( argptr, fmt );
@@ -605,7 +606,8 @@ void Host_ClientCommands( char *fmt, ... )
 	va_list	argptr;
 	char	string[1024];
 
-	if ( host_client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( host_client->fakeclient || !host_client->netchan.message.maxsize )
 		return;
 
 	va_start( argptr, fmt );

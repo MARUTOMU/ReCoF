@@ -232,7 +232,8 @@ void PF_sprint( char *s, int entnum )
 	}
 
 	client = &svs.clients[entnum - 1];
-	if ( client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( client->fakeclient || !client->netchan.message.maxsize )
 		return;
 
 	MSG_WriteChar( &client->netchan.message, svc_print );
@@ -257,7 +258,8 @@ void ClientPrintf( edict_t *pEdict, PRINT_TYPE ptype, const char *szMsg )
 	}
 
 	client = &svs.clients[entnum - 1];
-	if ( client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( client->fakeclient || !client->netchan.message.maxsize )
 		return;
 
 	switch ( ptype )
@@ -2005,6 +2007,9 @@ void PF_setview_I( const edict_t *clientent, const edict_t *viewent )
 		return;
 
 	client->pViewEntity = viewent;
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( !client->netchan.message.maxsize )
+		return;
 
 	MSG_WriteByte( &client->netchan.message, svc_setview );
 	MSG_WriteShort( &client->netchan.message, NUM_FOR_EDICT( viewent ) );
@@ -2020,7 +2025,8 @@ void PF_crosshairangle_I( const edict_t *clientent, float pitch, float yaw )
 		return;
 
 	client = &svs.clients[clientnum - 1];
-	if ( client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( client->fakeclient || !client->netchan.message.maxsize )
 		return;
 
 	if ( pitch > 180 )
@@ -2603,7 +2609,8 @@ void PF_FadeVolume( const edict_t *clientent, int fadePercent, int fadeOutSecond
 	}
 
 	client = &svs.clients[entnum - 1];
-	if ( client->fakeclient )
+	// ReCoF (B451): a slot whose client never connected in this process has no buffer (a saved co-op guest)
+	if ( client->fakeclient || !client->netchan.message.maxsize )
 		return;
 
 	MSG_WriteChar( &client->netchan.message, svc_soundfade );

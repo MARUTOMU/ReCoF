@@ -1974,7 +1974,10 @@ void CHUDControl::solve()
 	}
 
 	// co-op player list
-	if ( gEngfuncs.pfnGetLevelName() && strstr( gEngfuncs.pfnGetLevelName(), "cof_" ) )
+	// ReCoF (B438): and the chat lines, which went to the console only: on the police co-op's cof_ maps, and in story
+	// co-op too (the server's physinfo rcc 1, hl.dll rc_coop.cpp; charliee1w 373f57c7)
+	const char *pszRcCoop = gEngfuncs.PhysInfo_ValueForKey( "rcc" );
+	if ( ( gEngfuncs.pfnGetLevelName() && strstr( gEngfuncs.pfnGetLevelName(), "cof_" ) ) || ( pszRcCoop && pszRcCoop[0] == '1' ) )
 	{
 		if ( m_iDeathAlpha_guess < 255 )
 			m_iDeathAlpha_guess += 5;

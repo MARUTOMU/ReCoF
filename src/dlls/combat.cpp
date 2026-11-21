@@ -43,6 +43,7 @@ extern entvars_t *g_pevLastInflictor;
 
 extern int gmsgParticle;
 extern int gmsgBossBar;
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 
 
 bool fvisiblecheck;
@@ -549,7 +550,9 @@ Activity CBaseMonster :: GetDeathActivity ( void )
 			}
 		}
 
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		// ReCoF (B508): not in story co-op, whose boss bar ends as single player's: c_ending4b's Simon (justhealth)
+		// died and the bar went on full over the conclusion and the credits, a Book Simon's
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !RcCoop_Story() )
 		{
 			CBaseEntity *pBossEntity = UTIL_FindEntityByClassname( NULL, "monster_booksimon" );
 
@@ -1564,8 +1567,14 @@ CBaseEntity* CBaseMonster :: CheckTraceHullAttack( float flDist, int iDamage, in
 				TraceResult trace;
 				UTIL_TraceModel( vecStart, vecEnd, head_hull, ENT(pCast->pev), &trace );
 
-				if ( trace.pHit )
+				// ReCoF (B461): a player counts only when he is nearer than what the hull trace hit; retail took any
+				// player the swing reached, so monsters (and the Taller's stomp) hit players through walls
+				// (charliee1w 2558acaf)
+				if ( trace.pHit && trace.flFraction < tr.flFraction )
+				{
 					tr.pHit = trace.pHit;
+					tr.flFraction = trace.flFraction;
+				}
 			}
 		}
 	}

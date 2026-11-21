@@ -24,6 +24,8 @@
 #include "effects.h"
 #include "shake.h"
 
+bool RcCoop_TapeSave( CBasePlayer *pPlayer );	// ReCoF story co-op (rc_coop.cpp)
+
 extern int gmsgSaveLoad;
 
 extern void UTIL_ProMessage( CBaseEntity *pEntity, const char *pMessage, int colour, bool all );
@@ -192,6 +194,15 @@ void CTapeRecorder::TapeUse( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 				m_useTime = gpGlobals->time + 1;
 				return;
 			}
+		}
+
+		// ReCoF story co-op: the host saves the group's game at once (rc_coop.cpp); a guest's own game cannot save it
+		if ( RcCoop_TapeSave( pPlayer ) )
+		{
+			m_bTapeReminder = false;
+			pPlayer->m_bHasSaved = true;
+			m_useTime = gpGlobals->time + 2;
+			return;
 		}
 
 		if ( pev->message )

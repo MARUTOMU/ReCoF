@@ -341,6 +341,14 @@ CGameRules *InstallGameRules( void )
 	SERVER_COMMAND( "exec game.cfg\n" );
 	SERVER_EXECUTE( );
 
+	// ReCoF: story co-op, Simon's story for several players (rc_coop.cpp); single player never gets here
+	// read by name: on a listen server client.dll registers rc_coop first, so it can be set before hl.dll loads
+	if ( gpGlobals->maxClients > 1 && CVAR_GET_FLOAT( "rc_coop" ) )
+	{
+		g_teamplay = 0;
+		return new CHalfLifeStoryCoop;
+	}
+
 	if ( !gpGlobals->deathmatch )
 	{
 		// generic half-life
@@ -353,6 +361,35 @@ CGameRules *InstallGameRules( void )
 		g_teamplay = 0;
 		return new CHalfLifeMultiplay;
 	}
+}
+
+//=========================================================
+// ReCoF: retail never set the vote kick and lobby fields, so a new rules object (one per map) started with whatever
+// the heap held there; VoteKickThink then read a garbage victim id when the bytes made m_bInVoteKick true (a crash
+// in CHalfLifeMultiplay::Think on the first frame of a map)
+//=========================================================
+CGameRules::CGameRules()
+{
+	int i;
+
+	m_sVoteKickVictimID = NULL;
+	m_bInVoteKick = false;
+	m_flVoteKickTime = 0;
+	m_iVotesForKick = 0;
+	m_iVotesAgainstKick = 0;
+	pVoteKickVictimID = NULL;
+	for ( i = 0; i < 33; i++ )
+	{
+		pVoted[i] = NULL;
+		m_bReady[i] = false;
+	}
+	m_flNextDevDonatorCheckTime = 0;
+	m_flNextLobbyUpdateTime = 0;
+	m_bInLobby = false;
+	m_flNextLobbyCountDownTime = 0;
+	m_iLobbyCount = 0;
+	m_bStartingGameFromLobby = false;
+	m_flLobbyStartOverrideTime = 0;
 }
 
 //=========================================================

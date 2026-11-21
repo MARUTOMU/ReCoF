@@ -144,7 +144,7 @@ void CCoFStrangle::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 	if ( !pActivator )
 		return;
 
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
+	CBaseEntity *player = RcCoop_User( pActivator );	// ReCoF story co-op (B387): the one it caught, not the host
 	CBasePlayer *pPlayer = NULL;
 
 	if ( player )

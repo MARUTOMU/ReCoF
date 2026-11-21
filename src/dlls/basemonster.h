@@ -129,6 +129,8 @@ public:
 	
 	static	TYPEDESCRIPTION m_SaveData[];
 
+	float				m_flRcCoopScale;	// ReCoF story co-op (G16): the health scale given to this monster, 0 for none
+
 	void KeyValue( KeyValueData *pkvd );
 
 // monster use function

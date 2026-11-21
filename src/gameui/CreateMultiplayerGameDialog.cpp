@@ -303,8 +303,11 @@ void CCreateMultiplayerGameDialog::OnOK()
 //-----------------------------------------------------------------------------
 // Purpose: deletes the dialog when it is closed
 //-----------------------------------------------------------------------------
+void RcGameUI_DialogClosed( void );	// ReCoF (B397), GameUI_Interface.cpp
+
 void CCreateMultiplayerGameDialog::OnClose()
 {
 	MarkForDeletion();
 	BaseClass::OnClose();
+	RcGameUI_DialogClosed();	// ReCoF (B397)
 }

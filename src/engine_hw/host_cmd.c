@@ -28,6 +28,7 @@
 #include "hashpak.h"
 #include "sv_log.h"
 #include "pmove.h"
+#include "rc_coop.h"	// ReCoF: story co-op
 #include "cdll_int.h"
 #include "vgui_int.h"
 #include "eiface.h"
@@ -1572,6 +1573,9 @@ void Host_SaveAgeList( const char *pName, int count )
 	}
 }
 
+// ReCoF (B361): the physinfo key of Half-Life movement (rc_hlmovement, hl.dll), const so it goes to .rdata (B252)
+static const char rc_szHLMovementKey[] = "hlm";
+
 /*
 ==================
 Host_ValidSave
@@ -1583,7 +1587,11 @@ int Host_ValidSave( void )
 	if ( cmd_source != src_command )
 		return 0;
 
-	if ( !g_bSaveAllowed_guess )
+	// ReCoF (B361): in Half-Life movement (the player's physinfo "hlm", which pm_shared moves by) the game saves
+	// anywhere, as Half-Life does: save <name>, and the quick save. BunnymodXT finds this function by the test of
+	// cmd_source above, which stays as it was
+	// ReCoF: the story co-op host saves the party's game too (rc_coop.c)
+	if ( !g_bSaveAllowed_guess && !( sv.active && svs.clients && Q_atoi( Info_ValueForKey( svs.clients->physinfo, rc_szHLMovementKey ) ) ) && !RcCoop_Enabled() )
 	{
 		Con_Printf( "Use save points to save your progress.\n" );
 		return 0;
@@ -1595,7 +1603,7 @@ int Host_ValidSave( void )
 		return 0;
 	}
 
-	if ( svs.maxclients != 1 )
+	if ( svs.maxclients != 1 && !RcCoop_Enabled() )
 	{
 		Con_Printf( "Can't save multiplayer games.\n" );
 		return 0;
@@ -2095,6 +2103,7 @@ int Host_Load( const char *pName )
 	_snprintf( name, sizeof( name ), "map %s\n", gameHeader.mapName );
 	CL_Disconnect();
 	Host_Map( false, name, gameHeader.mapName, true );
+	RcCoop_Loaded();	// ReCoF: story co-op, each saved player waits for a client
 
 	return 1;
 }
@@ -2590,8 +2599,10 @@ int LoadGamestate( char *level, int createPlayers )
 			}
 			else if ( pSaveData->pTable[i].id < svs.maxclients + 1 )
 			{
+				// ReCoF (B493): a save made with fewer player slots than this server has (a single-player save on a
+				// server left with 4 slots by co-op) ends the load, not the game
 				if ( !( pSaveData->pTable[i].flags & FENTTABLE_PLAYER ) )
-					Sys_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
+					Host_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
 
 				pent = svs.clients[ pSaveData->pTable[i].id - 1 ].edict;
 				if ( createPlayers && pent )
@@ -2741,7 +2752,7 @@ int CreateEntityList( SAVERESTOREDATA *pSaveData, int levelMask )
 				if ( active )
 				{
 					if ( !( pSaveData->pTable[i].flags & FENTTABLE_PLAYER ) )
-						Sys_Error( "ENTITY IS NOT A PLAYER: %d\n", i );
+						Host_Error( "ENTITY IS NOT A PLAYER: %d\n", i );	// ReCoF (B493)
 
 					if ( svs.clients[ pSaveData->pTable[i].id - 1 ].active && pent )
 						EntityInit( pent, pSaveData->pTable[i].classname );
@@ -3105,7 +3116,8 @@ void Host_Changelevel2_f( void )
 		return;
 	}
 
-	if ( svs.maxclients > 1 )
+	// ReCoF: story co-op carries every player through the transition (rc_coop.c)
+	if ( svs.maxclients > 1 && !RcCoop_AllowChangelevel2( Cmd_Argv( 1 ) ) )
 	{
 		Con_Printf( "changelevel2 <levelname> : not for use with multiplayer games\n" );
 		return;
@@ -3163,6 +3175,7 @@ void Host_Changelevel2_f( void )
 	if ( newUnit && sv_newunit.value )
 		Host_ClearSaveDirectory();
 
+	RcCoop_Inactivate();	// ReCoF: story co-op, the carried clients wait for their spawn as new ones do
 	SV_ActivateServer( 0 );
 }
 
@@ -3475,6 +3488,9 @@ void Host_Kill_f( void )
 	gEntityInterface.pfnClientKill( sv_player );
 }
 
+// ReCoF: the three pause commands are in the story co-op section (rc_coop.c), where only the host may pause
+#pragma code_seg( ".rctext" )
+
 /*
 ==================
 Host_TogglePause_f
@@ -3489,7 +3505,7 @@ void Host_TogglePause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 	{
 		SV_ClientPrintf( "Pause not allowed.\n" );
 		return;
@@ -3524,7 +3540,7 @@ void Host_Pause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 		return;
 
 	sv.paused = true;
@@ -3551,7 +3567,7 @@ void Host_Unpause_f( void )
 		return;
 	}
 
-	if ( !pausable.value )
+	if ( !pausable.value || RcCoop_GuestPause() )
 		return;
 
 	sv.paused = false;
@@ -3560,6 +3576,7 @@ void Host_Unpause_f( void )
 	MSG_WriteByte( &sv.reliable_datagram, svc_setpause );
 	MSG_WriteByte( &sv.reliable_datagram, sv.paused );
 }
+#pragma code_seg()
 
 //===========================================================================
 

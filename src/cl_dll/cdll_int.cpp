@@ -31,6 +31,7 @@
 extern "C"
 {
 #include "pm_shared.h"
+#include "pm_defs.h"	// ReCoF (B417): HUD_PlayerMove reads the physents
 }
 
 #include <string.h>
@@ -39,6 +40,7 @@ extern "C"
 #include "interface.h"
 #include "mp3.h"
 #include "rc_prof.h"	// ReCoF
+#include "rc_bones.h"	// ReCoF (B339)
 #include "rc_client.h"	// ReCoF
 
 #define DLLEXPORT __declspec( dllexport )
@@ -146,6 +148,19 @@ char DLLEXPORT HUD_PlayerMoveTexture( char *name )
 
 void DLLEXPORT HUD_PlayerMove( struct playermove_s *ppmove, int server )
 {
+	// ReCoF (B417): in multiplayer the server makes players that touch each other non-solid (hl.dll player.cpp
+	// PostThink), so they pass through each other; the engine still gave the prediction the other players as
+	// solid boxes (cl_ents.c CL_SetSolidPlayers), and walking into a player stopped the predicted move until the
+	// server's answer came back, then the view jumped ahead. The prediction leaves the other players out
+	// ReCoF (B440): the server's movement holds (fuser3: a phone call, a fall, a reload, a yes/no, the van) were never
+	// predicted: the clientdata has no room for them (fuser3 is 10 bits at 1/128 in delta.lst), so a hold snapped a
+	// guest back. PostThink copies fuser3 into vuser4.x every frame and the clientdata carries it as a whole number
+	// (10 bits at 1), which every hold is
+	if ( !server )
+		ppmove->fuser3 = ppmove->vuser4[0];
+
+	// B500: whether the other players block the move is pm_shared's now (PM_Move, physinfo "rpc"), the same on
+	// the server and here
 	PM_Move( ppmove, server );
 }
 
@@ -174,8 +189,11 @@ so the HUD can reinitialize itself.
 ==========================
 */
 
+void RcSimonModel_Ensure( void );	// ReCoF (B414), rc_simonmodel.cpp
+
 int DLLEXPORT HUD_VidInit( void )
 {
+	RcSimonModel_Ensure();	// ReCoF (B414): Simon's player model, made once from the game's own files
 	gHUD.VidInit();
 
 	VGui_Startup();
@@ -270,12 +288,15 @@ Called by engine every frame that client .dll is loaded
 
 void DLLEXPORT HUD_Frame( double time )
 {
+	RcProf_PopIf( RCP_SERVER );	// ReCoF (B337): the local server's frame ends here (CL_CreateMove)
+	RcBones_NewFrame();	// ReCoF (B339): rc_threads, the entities of this game frame come next
 	RcProfScope prof( RCP_CLFRAME );	// ReCoF
 	RcCrash_Frame();	// ReCoF (B314): the hang watchdog's heartbeat
 	RcSmooth_GameFrame();	// ReCoF (B315): smooth frames count the game frames
 	RcDiscord_Frame();	// ReCoF (B316): Discord Rich Presence
 	RcPractice_Frame();	// ReCoF (B317): rc_novis
 	RcUserinfoFrame();	// ReCoF (B328): iron sights and subtitle language for servers
+	RcCoop_Frame();	// ReCoF co-op spike: Steam relay networking
 
 	RcVsyncFrame();	// ReCoF (B304)
 	RcSpeedrun_Frame();	// ReCoF (B310, B312): the run timer and the information panel

@@ -658,6 +658,9 @@ float DistanceTo_guess( vec3_t a, vec3_t b )
 // Cry of Fear: flashlights of the other players in multiplayer
 // (called from StudioCalcAttachments, the light starts at attachment 3 of the player model)
 //
+// ReCoF (B439): the players' lights are keyed -1000 - index: with -index, player 1's took the key of the local
+// flashlight (view.cpp -1) and player 2's of its reduced light (-2), so the host's phone light became a point light
+// at his chest and a guest's was taken over every frame (charliee1w 87c6f21e)
 void DrawPlayerFlashlights_guess( void )
 {
 	cl_entity_t *localplayer = gEngfuncs.GetLocalPlayer();
@@ -693,7 +696,7 @@ void DrawPlayerFlashlights_guess( void )
 			{
 				vec3_t end = forward * 32 + origin;
 				pmtrace_t *tr = gEngfuncs.PM_TraceLine(origin, end, PM_TRACELINE_PHYSENTSONLY, 1, -1);
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = tr->endpos;
 				dl->angles = ent->angles;
 				dl->radius = 60;
@@ -705,7 +708,7 @@ void DrawPlayerFlashlights_guess( void )
 			{
 				vec3_t end = forward * 4096 + origin;
 				pmtrace_t *tr = gEngfuncs.PM_TraceLine(origin, end, PM_TRACELINE_PHYSENTSONLY, 1, -1);
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = tr->endpos;
 				dl->angles = ent->angles;
 				dl->radius = 60;
@@ -730,7 +733,7 @@ void DrawPlayerFlashlights_guess( void )
 				if (localplayer == ent && !CL_IsThirdPerson())
 					lightorg = v_origin;
 
-				DynamicLight *dl = MY_AllocDlight(-i);
+				DynamicLight *dl = MY_AllocDlight(-1000 - i);	// ReCoF (B439): -i took view.cpp's -1 and -2
 				dl->origin = lightorg;
 				dl->angles = angles;
 				dl->radius = 700;
@@ -746,6 +749,33 @@ void DrawPlayerFlashlights_guess( void )
 		}
 		else
 			ent->curstate.body = 0;
+
+		// ReCoF (B481): another player's lantern (0x100, player.cpp) or lit flare and book laser (16) lit only for
+		// him: their light is his view model's (view.cpp). A light at his hand for everyone else (charliee1w 75c9b2e1)
+		if (ent != localplayer && (flags & 0x110) && ent->curstate.messagenum == localplayer->curstate.messagenum)
+		{
+			vec3_t forward;
+			vec3_t angles;
+			VectorCopy(ent->angles, angles);
+			angles[0] = 0;
+			gEngfuncs.pfnAngleVectors(angles, forward, NULL, NULL);
+			DynamicLight *dl = MY_AllocDlight(-1100 - i);
+			dl->origin = ent->origin + forward * 16 + Vector(0, 0, 8);
+			dl->angles = ent->angles;
+			if (flags & 0x100)
+			{
+				dl->radius = gEngfuncs.pfnRandomLong(-5, 5) + 220;
+				dl->color = Vector(0.4, 0.4, 0.4);
+			}
+			else
+			{
+				dl->radius = gEngfuncs.pfnRandomLong(-15, 15) + 220;
+				float flRed = gEngfuncs.pfnRandomFloat(0.65f, 1.65f);
+				float flGreen = gEngfuncs.pfnRandomFloat(0.1f, 0.25f);
+				dl->color = Vector(flRed, flGreen, 0.1f);
+			}
+			dl->die = gEngfuncs.GetClientTime() + 0.1;
+		}
 	}
 }
 
@@ -1794,6 +1824,12 @@ void CStudioModelRenderer::GL_DrawPoints ( )
 	bool bMultiplayer = false;
 	if (gEngfuncs.GetMaxClients() > 1)
 		bMultiplayer = true;
+
+	// ReCoF (B411): in the main campaign's story co-op (physinfo "rcs" 1, hl.dll rc_coop.cpp) the weapons have Simon's
+	// sleeves and hands, as in single player, not the police officer's
+	const char *pszRcSimon = gEngfuncs.PhysInfo_ValueForKey( "rcs" );
+	if (bMultiplayer && pszRcSimon && pszRcSimon[0] == '1')
+		bMultiplayer = false;
 
 	// Cry of Fear: no view model while the view is on the boat, the attach camera or the telescope
 	int isViewModel = (m_pCurrentEntity == gEngfuncs.GetViewModel()) ? TRUE : FALSE;

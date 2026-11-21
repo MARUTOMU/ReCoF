@@ -25,6 +25,7 @@
 #include "gl_dlight.h" // buz
 #include "particlemgr.h"
 #include "rc_prof.h"	// ReCoF
+#include "rc_bones.h"	// ReCoF (B339)
 
 #define DLLEXPORT __declspec( dllexport )
 
@@ -121,6 +122,25 @@ int DLLEXPORT HUD_AddEntity( int type, struct cl_entity_s *ent, const char *mode
 			return 0;	// don't draw the player we are following in eye
 
 	}
+
+	// ReCoF (B418): in multiplayer players pass through each other, and a level change can put them on one spot
+	// (story co-op: both arrive at c_start's landmark from c_nightmare): a view inside another player's model saw
+	// only its dark insides, a black box over the screen. A player whose body surrounds the view (16 units round
+	// the box, the model's arms and hood a little further) is not drawn
+	if ( type == ET_PLAYER && gEngfuncs.GetMaxClients() > 1 )
+	{
+		cl_entity_t *pLocal = gEngfuncs.GetLocalPlayer();
+		if ( pLocal && ent->index != pLocal->index )
+		{
+			float dx = ent->origin[0] - v_origin[0];
+			float dy = ent->origin[1] - v_origin[1];
+			float dz = v_origin[2] - ent->origin[2];
+			if ( dx * dx + dy * dy < 24 * 24 && dz > -40 && dz < 48 )
+				return 0;
+		}
+	}
+
+	RcBones_Add( ent );	// ReCoF (B339): rc_threads
 
 	return 1;
 }

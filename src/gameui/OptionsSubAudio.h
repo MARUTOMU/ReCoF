@@ -49,6 +49,7 @@ private:
 	CLabeledCommandComboBox		*m_pSoundQualityCombo;
 
 	CRcOptionRow				*m_pRcSamePitch;	// ReCoF: rc_omgbruh_sound
+	CRcOptionRow				*m_pRcMusicThread;	// B499: rc_music_thread
 };
 
 #endif // OPTIONS_SUB_AUDIO_H

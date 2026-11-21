@@ -44,6 +44,7 @@
 #include "shake.h"
 
 #include	"skill.h" // buz
+#include "rc_svprof.h"	// ReCoF (B337)
 
 //=========================================================
 // Declarations this file takes from headers that are not rebuilt yet:
@@ -1026,6 +1027,12 @@ void ClientCommand( edict_t *pEntity )
 
 	if ( FStrEq(pcmd, "VModEnable") ) //LRC - shut up about VModEnable...
 	{
+		// ReCoF (B426): in multiplayer the voice manager needs it (game_shared/voice_gamemgr.cpp): until a player's
+		// game answers its ReqState with VModEnable 1 he hears nobody, and the engine routed no voice at all, so in
+		// Cry of Fear's multiplayer only the radio click of one's own key was heard. Single player keeps retail's
+		// silence
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			g_pGameRules->ClientCommand( GetClassPtr( (CBasePlayer *)pev ), pcmd );
 		return;
 	}
 	else if ( FStrEq(pcmd, "hud_color") ) //LRC
@@ -1087,6 +1094,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "aitest" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		edict_t *pEdict = INDEXENT( 1 );
 		CBaseEntity *pEntity;
 
@@ -1187,6 +1197,13 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "unfreeze" ) )
 	{
+		// ReCoF (B446): client.dll sends these from its panels and at a viewport reset; in multiplayer a guest whose
+		// game signed on during a scene was let go and walked out of it (charliee1w 0ed05e2e). Not while a scene
+		// camera that takes control (spawnflag 4) holds him; the camera's end lets him go
+		CBasePlayer *pRcHeld = GetClassPtr( (CBasePlayer *)pev );
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && pRcHeld->m_hCurrentCamera != NULL && ( pRcHeld->m_hCurrentCamera->pev->spawnflags & 4 ) )
+			return;
+
 		// normal freeze
 		if ( atoi( CMD_ARGV(1) ) == 1024 )
 		{
@@ -1213,6 +1230,12 @@ void ClientCommand( edict_t *pEntity )
 			GetClassPtr((CBasePlayer *)pev)->EnableControl( TRUE );
 			GetClassPtr((CBasePlayer *)pev)->m_iUsingComputerOrPhone = 0;
 		}
+	}
+	else if ( FStrEq( pcmd, "rc_unstuck" ) )
+	{
+		// ReCoF (B465): story co-op's way out of a stuck spot (rc_coop.cpp)
+		extern void RcCoop_Unstuck( CBasePlayer *pPlayer );
+		RcCoop_Unstuck( GetClassPtr( (CBasePlayer *)pev ) );
 	}
 	else if ( FStrEq( pcmd, "closegame" ) )
 	{
@@ -1261,6 +1284,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "hinttoggle" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		if ( CVAR_GET_FLOAT( "sv_disablehints" ) == 0 )
 			CVAR_SET_FLOAT( "sv_disablehints", 1 );
 		else
@@ -1601,7 +1627,7 @@ void ClientCommand( edict_t *pEntity )
 		if ( pPlayer && !pPlayer->IsAlive() )
 			return;
 
-		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( pPlayer && pPlayer->m_flNextAdLibTime < gpGlobals->time && RcCoopPolice() )	// B411
 		{
 			int value = atoi( CMD_ARGV(1) );
 
@@ -1651,6 +1677,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "simonmode" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		if ( !m_iSimonMode )
 		{
 			if ( g_pGameRules )
@@ -1896,7 +1925,7 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "inventorydualwield" ) )
 	{
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && !RcPoliceMP() )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
@@ -1947,6 +1976,9 @@ void ClientCommand( edict_t *pEntity )
 	}
 	else if ( FStrEq( pcmd, "subtitleset" ) )
 	{
+		// ReCoF (B458): the host's own, not a guest's (they change the host's game)
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ENTINDEX( pEntity ) != 1 )
+			return;
 		int number = atoi( CMD_ARGV(1) );
 		CVAR_SET_FLOAT( "cof_subtitlelanguage", number );
 
@@ -2153,7 +2185,11 @@ void ClientCommand( edict_t *pEntity )
 			return;
 		}
 
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		// ReCoF (B458): in story co-op a player who has night vision turns it on with F as in single player (Simon has no
+		// torch to switch); the others keep the co-op torch
+		bool bRcNight = RcCoop_Story() && pPlayer && pPlayer->m_bHasNightVision && pPlayer->CheckingEndingOrUnlockables( 0x1000000, false, false );
+
+		if ( g_pGameRules && ( !g_pGameRules->IsMultiplayer() || bRcNight ) )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
@@ -2175,7 +2211,7 @@ void ClientCommand( edict_t *pEntity )
 			}
 		}
 
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !bRcNight )
 		{
 			CBasePlayer *pPlayer = GetClassPtr((CBasePlayer *)pev);
 
@@ -2521,6 +2557,7 @@ Called every frame before physics are run
 */
 void PlayerPreThink( edict_t *pEntity )
 {
+	RcSvScope rcsv( RCSV_PLAYER );	// ReCoF (B337): rc_svprof
 	entvars_t *pev = &pEntity->v;
 	CBasePlayer *pPlayer = (CBasePlayer *)GET_PRIVATE(pEntity);
 
@@ -2539,6 +2576,7 @@ Called every frame after physics are run
 */
 void PlayerPostThink( edict_t *pEntity )
 {
+	RcSvScope rcsv( RCSV_PLAYER );	// ReCoF (B337): rc_svprof
 	entvars_t *pev = &pEntity->v;
 	CBasePlayer *pPlayer = (CBasePlayer *)GET_PRIVATE(pEntity);
 
@@ -2575,6 +2613,8 @@ void ParmsChangeLevel( void )
 //
 void StartFrame( void )
 {
+	RcSvProf_Frame();	// ReCoF (B337): rc_svprof, before any scope is open
+	RcSvScope rcsv( RCSV_STARTFRAME );	// ReCoF (B337): rc_svprof
 	if ( g_pGameRules )
 		g_pGameRules->Think();
 
@@ -2792,7 +2832,7 @@ void ClientPrecache( void )
 	PRECACHE_MODEL( "sprites/scr_set.spr" );
 
 	// sprint breathing
-	if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	if ( g_pGameRules && !RcPoliceMP() )
 	{
 		if ( strstr( STRING( gpGlobals->mapname ), "doc_" ) )
 		{
@@ -2836,7 +2876,7 @@ void ClientPrecache( void )
 	PRECACHE_SOUND( "inventory/inventory_toggle.wav" );
 
 	// player voice
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 	{
 		for ( i = 0; i < ARRAYSIZE( pPoliceAdLibFollow ); i++ )
 			PRECACHE_SOUND( (char *)pPoliceAdLibFollow[i] );
@@ -3164,8 +3204,11 @@ static void RcTriggerColour( edict_t *ent, struct entity_state_s *state )
 	state->rendercolor.b = b;
 }
 
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+
 int AddToFullPack( struct entity_state_s *state, int e, edict_t *ent, edict_t *host, int hostflags, int player, unsigned char *pSet )
 {
+	RcSvScope rcsv( RCSV_FULLPACK );	// ReCoF (B337): rc_svprof
 	int					i;
 	bool				bShowTrigger = RcShowTrigger( ent );	// ReCoF (B317)
 
@@ -3188,7 +3231,10 @@ int AddToFullPack( struct entity_state_s *state, int e, edict_t *ent, edict_t *h
 
 	// Ignore if not the host and not touching a PVS/PAS leaf
 	// If pSet is NULL, then the test will always succeed and the entity will be added to the update
-	if ( ent != host && ent->v.renderfx != 70 && ent->v.renderfx != 137 && ent->v.renderfx != 85 ) // buz: always send 3d skybox ents
+	// ReCoF (B431): in story co-op the other players are always sent: a teammate's voice plays where his entity is
+	// (hw.dll rc_coop.c, B394) and stayed at the map's origin, silent, while he was outside the listener's PVS
+	if ( ent != host && ent->v.renderfx != 70 && ent->v.renderfx != 137 && ent->v.renderfx != 85 && // buz: always send 3d skybox ents
+		!( player && RcCoop_Story() ) )
 	{
 		if ( !ENGINE_CHECK_VISIBILITY( (const struct edict_s *)ent, pSet ) )
 		{
@@ -3825,6 +3871,8 @@ We're about to run this usercmd for the specified player.  We can set up groupin
 This is the time to examine the usercmd for anything extra.  This call happens even if think does not.
 =================
 */
+void RcCoop_PlayerCmd( CBasePlayer *pPlayer );	// ReCoF story co-op (rc_coop.cpp)
+
 void CmdStart( const edict_t *player, const struct usercmd_s *cmd, unsigned int random_seed )
 {
 //	ALERT(at_console, "got usercmd with lightlevel %f\n", cmd->viewangles[2]);
@@ -3834,6 +3882,8 @@ void CmdStart( const edict_t *player, const struct usercmd_s *cmd, unsigned int 
 
 	if( !pl )
 		return;
+
+	RcCoop_PlayerCmd( pl );	// ReCoF story co-op: this player's client runs (rc_coop.cpp)
 
 	pl->m_iNew16a_guess = cmd->is_donator;
 

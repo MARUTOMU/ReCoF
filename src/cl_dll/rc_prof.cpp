@@ -3,9 +3,11 @@
 // rc_prof 1 shows where the client spends each frame: the CPU time of each phase (rc_prof.h), averaged over
 // half a second. rc_prof 2 adds the GPU time of the same phases from timestamp queries (GL_ARB_timer_query),
 // read back a few frames later so the game never waits for the GPU. rc_prof_dump prints the numbers to the
-// console (with -condebug they also land in qconsole.log). Everything outside the client scopes, which
-// includes the engine, the server game logic of hl.dll, sound and the buffer swap, is "other";
-// host_speeds 1 splits that part.
+// console (with -condebug they also land in qconsole.log). "server" is the local server's whole frame (B337),
+// all of the game logic of hl.dll and the engine's physics for it, timed from the end of CL_CreateMove to
+// HUD_Frame, which the engine calls just before and just after SV_Frame; rc_svprof in hl.dll splits it.
+// Everything else outside the client scopes, which includes the engine, sound and the buffer swap, is
+// "other". rc_prof_log 1 prints a line with the numbers every half second, for test runs (B337).
 
 #include "hud.h"
 #include "cl_util.h"
@@ -38,19 +40,21 @@ struct RcGpuFrame_t
 
 static const char *s_szScopeName[RCP_COUNT] =
 {
-	"other", "view", "entities", "client frame", "world", "world 1st", "bump", "dlights", "world 2nd",
+	"other", "server", "view", "entities", "client frame", "world", "world 1st", "bump", "dlights", "world 2nd",
 	"specular", "brush ents", "decals", "sky", "models", "mdl vertices", "mdl lighting", "mdl drawing",
-	"transparent", "water", "post fx", "hud"
+	"mdl bones", "mdl studiolt", "bone jobs", "transparent", "particles", "water", "post fx", "hud"
 };
 
 // the scopes that issue GL work get their own GPU time; the GPU time of the others falls to "other"
 static const bool s_bGLScope[RCP_COUNT] =
 {
-	false, false, false, false, true, true, true, true, true,
-	true, true, true, true, true, false, false, false, true, true, true, true
+	false, false, false, false, false, true, true, true, true, true,
+	true, true, true, true, true, false, false, false,
+	false, false, false, true, true, true, true, true
 };
 
 static cvar_t		*rc_prof;
+static cvar_t		*rc_prof_log;			// a line every half second (B337)
 static int			s_iOn;					// rc_prof as read at the last frame boundary
 static double		s_flTickMs;				// milliseconds per performance counter tick
 static int			s_iStack[RC_STACK];
@@ -69,6 +73,7 @@ static int			s_iWinFrames, s_iWinGpuFrames, s_iWinCount[RCC_COUNT];
 
 static double		s_flShowCpu[RCP_COUNT], s_flShowGpu[RCP_COUNT];
 static double		s_flShowFrame, s_flShowGpuFrame, s_flShowWorst, s_flShowCount[RCC_COUNT];
+static double		s_flWinWorstCpu[RCP_COUNT], s_flShowWorstCpu[RCP_COUNT];	// the scopes of the worst frame (B338)
 static int			s_iShowGpuValid;
 
 static int						s_iGpuState;	// 0 not set up, 1 working, -1 not supported
@@ -115,7 +120,7 @@ static void RcGpuFollow( void )
 	int cur = RcCurrent();
 
 	// the parts of models are timed on the CPU only; the GPU keeps charging models, so they add no marks
-	if ( cur == RCP_MDL_VERTS || cur == RCP_MDL_LIGHT || cur == RCP_MDL_DRAW )
+	if ( cur == RCP_MDL_VERTS || cur == RCP_MDL_LIGHT || cur == RCP_MDL_DRAW || cur == RCP_MDL_BONES || cur == RCP_MDL_SLIGHT )
 		cur = RCP_MODELS;
 
 	int scope = s_bGLScope[cur] ? cur : RCP_OTHER;
@@ -157,6 +162,12 @@ void RcProf_Pop( void )
 	RcCharge();
 	s_iDepth--;
 	RcGpuFollow();
+}
+
+void RcProf_PopIf( int scope )
+{
+	if ( s_iOn && !s_iOverflow && RcCurrent() == scope && s_iDepth )
+		RcProf_Pop();
 }
 
 void RcProf_Count( int counter )
@@ -246,6 +257,941 @@ static void RcClearWindow( void )
 	s_iWinFrames = s_iWinGpuFrames = 0;
 }
 
+// rc_prof_log 1: the half second just shown, on one line of name=value pairs (B337)
+static void RcProfLogLine( void )
+{
+	char line[2048];
+	int len = sprintf( line, "rcp t=%.1f frame=%.3f fps=%.1f worst=%.2f models=%.1f monsters=%.1f gpumeshes=%.0f "
+		"psystems=%.0f particles=%.0f", gEngfuncs.GetClientTime(), s_flShowFrame, s_flShowFrame > 0 ? 1000.0 / s_flShowFrame : 0.0,
+		s_flShowWorst, s_flShowCount[RCC_MODELS], s_flShowCount[RCC_MONSTERS], s_flShowCount[RCC_GPUMESHES],
+		s_flShowCount[RCC_PSYSTEMS], s_flShowCount[RCC_PARTICLES] );
+
+	for ( int i = 0; i < RCP_COUNT && len < (int)sizeof( line ) - 40; i++ )
+	{
+		if ( s_flShowCpu[i] < 0.0005 )
+			continue;
+
+		line[len++] = ' ';
+		for ( const char *s = s_szScopeName[i]; *s; s++ )
+			line[len++] = ( *s == ' ' ) ? '_' : *s;
+		len += sprintf( line + len, "=%.3f", s_flShowCpu[i] );
+	}
+
+	// the scopes that took 0.5 ms or more in the worst frame, with w_ before their names (B338)
+	for ( int i = 0; i < RCP_COUNT && len < (int)sizeof( line ) - 40; i++ )
+	{
+		if ( s_flShowWorstCpu[i] < 0.5 )
+			continue;
+
+		len += sprintf( line + len, " w_" );
+		for ( const char *s = s_szScopeName[i]; *s; s++ )
+			line[len++] = ( *s == ' ' ) ? '_' : *s;
+		len += sprintf( line + len, "=%.2f", s_flShowWorstCpu[i] );
+	}
+
+	// rc_prof 2: the GPU frame and the GPU time of each scope, with g_ before its name
+	if ( s_iOn >= 2 && s_iGpuState == 1 && s_iShowGpuValid )
+	{
+		len += sprintf( line + len, " gpu=%.3f", s_flShowGpuFrame );
+
+		for ( int i = 0; i < RCP_COUNT && len < (int)sizeof( line ) - 40; i++ )
+		{
+			if ( s_flShowGpu[i] < 0.0005 )
+				continue;
+
+			len += sprintf( line + len, " g_" );
+			for ( const char *s = s_szScopeName[i]; *s; s++ )
+				line[len++] = ( *s == ' ' ) ? '_' : *s;
+			len += sprintf( line + len, "=%.3f", s_flShowGpu[i] );
+		}
+	}
+
+	strcpy( line + len, "\n" );
+	ConsolePrint( line );
+}
+
+
+//-----------------------------------------------------------------------------
+// rc_perflog 1 (B340): a performance log a player can send. It writes cryoffear/perflogs/perflog_<date>.txt: what
+// the computer is (processor, graphics card and driver, Windows, power plan, the game's settings), one line a
+// second (frame rate, the slowest 1% of frames, the main thread's busy share, disk reads, page faults, the
+// scopes of rc_prof and the GPU time), and a line for every stutter, a frame twice the recent average and
+// 10 ms or more above it: where its time went (the scopes), how much of it the main thread was running (the
+// rest it waited: the frame limiter, the driver, Windows), the disk reads and page faults in it, the map and the
+// place. It turns the scopes and the GPU times on while it runs (rc_prof 2) without the overlay.
+//-----------------------------------------------------------------------------
+#include "rc_version.h"
+#include <intrin.h>
+#include <stdarg.h>
+#include <time.h>
+
+typedef struct
+{
+	DWORD	cb;
+	DWORD	PageFaultCount;
+	SIZE_T	PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage;
+	SIZE_T	QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage, PagefileUsage, PeakPagefileUsage;
+} RcProcMem_t;	// PROCESS_MEMORY_COUNTERS
+typedef BOOL ( WINAPI *RcGetProcessMemoryInfo_t )( HANDLE, RcProcMem_t *, DWORD );
+typedef LONG ( WINAPI *RcRtlGetVersion_t )( OSVERSIONINFOW * );
+typedef BOOL ( WINAPI *RcQueryThreadCycleTime_t )( HANDLE, unsigned __int64 * );
+typedef DWORD ( WINAPI *RcPowerGetActiveScheme_t )( HKEY, GUID ** );
+typedef DWORD ( WINAPI *RcPowerReadFriendlyName_t )( HKEY, const GUID *, const GUID *, const GUID *, UCHAR *, DWORD * );
+typedef void ( __stdcall *RcSwapTimes_t )( double *, double *, int * );	// opengl32.dll (B347)
+
+#define RC_PERF_TIMES	4096	// frames a second kept for the slowest 1%
+
+static cvar_t					*rc_perflog;
+static FILE						*s_pPerf;
+static RcGetProcessMemoryInfo_t	s_pfnPerfMem;
+static RcQueryThreadCycleTime_t	s_pfnPerfCycles;
+static unsigned __int64			s_ullPerfTsc0, s_ullPerfCycles;
+static LONGLONG					s_llPerfQpc0;
+static ULONGLONG				s_ullPerfReads, s_ullPerfReadBytes;
+static DWORD					s_dwPerfFaults;
+static RcSwapTimes_t			s_pfnPerfSwap;		// B347
+
+// B366: how the frame limiter waited. Between two frames, hw.dll's Host_FilterTime says the next one is not due
+// and _Host_Frame calls RcSmooth_Frame; each such pass is counted here, with the longest time between two passes
+// (normally a Sleep( 1 ) of 1 to 2 ms). A player's beta.7 log had eleven frames of exactly 50 ms with the main
+// thread asleep in the limiter most of each: long gaps mean the sleeps overslept (the Windows timer, see below),
+// short ones with the engine's own frame time (host_frametime) at 50 ms mean the limiter itself waited that long
+typedef LONG ( __stdcall *RcNtQueryTimerResolution_t )( ULONG *, ULONG *, ULONG * );
+static RcNtQueryTimerResolution_t	s_pfnPerfTimerRes;
+static int					s_iLimitPasses;
+static LONGLONG				s_llLimitLast;		// the last pass, 0 before the first of a frame
+static double				s_flLimitLongest;	// ms
+static double				*s_pflHostFrameTime;	// hw.dll's host_frametime
+
+// the Windows timer's period now (ms), which Sleep( 1 ) waits at least; 0 if unknown
+static double RcPerfTimerMs( void )
+{
+	ULONG lMin, lMax, lCur;
+	if ( !s_pfnPerfTimerRes || s_pfnPerfTimerRes( &lMin, &lMax, &lCur ) != 0 )
+		return 0;
+	return lCur / 10000.0;
+}
+
+// B367: the server's own work in a stutter. While the log is open it sets rc_svprof 2, so hl.dll times its scopes
+// (rc_svprof.cpp: monster thinks, route building, local moves, ...) without wrapping the engine or printing, and a
+// STUTTER line whose server part took 4 ms or more adds what RcSvProf_FrameText gives for that server frame. A
+// player's beta.7 log had frames of 20 ms with the server taking 10 to 12 ms in monsters' walk moves (PF_walkmove,
+// SV_CheckBottom) on c_park3 and c_forest4, without saying which part of the AI asked for them
+typedef double ( *RcSvFrameText_t )( char *, int );
+
+static void RcPerfServerProfiler( bool bOn )
+{
+	cvar_t *pSv = gEngfuncs.pfnGetCvarPointer( "rc_svprof" );
+	if ( !pSv )
+		return;	// no game DLL loaded yet
+	if ( bOn && !pSv->value )
+		gEngfuncs.Cvar_SetValue( "rc_svprof", 2 );
+	else if ( !bOn && pSv->value == 2 )
+		gEngfuncs.Cvar_SetValue( "rc_svprof", 0 );
+}
+
+// rc_smooth.cpp RcSmooth_Frame, on each pass of the limiter
+void RcProf_LimiterPass( double *pHostFrameTime )
+{
+	if ( !s_pPerf )
+		return;
+
+	LARGE_INTEGER now;
+	QueryPerformanceCounter( &now );
+	if ( s_llLimitLast )
+	{
+		double gap = ( now.QuadPart - s_llLimitLast ) * s_flTickMs;
+		if ( gap > s_flLimitLongest )
+			s_flLimitLongest = gap;
+	}
+	s_llLimitLast = now.QuadPart;
+	s_iLimitPasses++;
+	s_pflHostFrameTime = pHostFrameTime;
+}
+static double					s_flPerfSwapTotal;	// the wrapper's ms of all swaps at the last frame
+static double					s_flPerfAvg;		// the recent frame time, which stutters are measured against
+static int						s_iPerfSkip;		// frames not judged after the log starts or the map changes
+static char						s_szPerfMap[64];
+
+// the second being collected
+static LONGLONG		s_llPerfSecStart;
+static int			s_iPerfFrames, s_iPerfHitches;
+static double		s_flPerfSum, s_flPerfWorst, s_flPerfBusy;
+static float		s_flPerfTimes[RC_PERF_TIMES];
+static double		s_flPerfCpu[RCP_COUNT];
+static double		s_flPerfCount[RCC_COUNT];	// B341
+static double		s_flPerfPause;				// ms of this second spent in times without HUD frames (B341)
+static double		s_flPerfSecSwap, s_flPerfSecSwapMax;	// B347: ms in buffer swaps this second, and the longest
+static int			s_iPerfSecAway;				// B347: frames this second with another program's window in front
+static ULONGLONG	s_ullPerfSecReads, s_ullPerfSecReadBytes;
+static DWORD		s_dwPerfSecFaults;
+
+//-----------------------------------------------------------------------------
+// B348: where a long frame waits. While the perf log is open, a thread of its own looks every 2 ms at how long the
+// frame has run; past 12 ms and 1.3 times the recent frame it holds the main thread still for a moment (SuspendThread),
+// copies its instruction pointer and the top 4 KB of its stack, and lets it go. Nothing else runs while it is held, so no
+// lock the main thread may own is touched. The frame's STUTTER line then names the place and the code addresses on
+// the stack (module+offset): a wait in the driver, the sound system or Windows shows as such.
+//-----------------------------------------------------------------------------
+#define RC_STALL_SLOTS		16
+#define RC_STALL_WORDS		1024	// 4 KB: a driver's wait sits deep under the game's code
+#define RC_STALL_PER_FRAME	6
+
+#define RC_STALL_TEXT		1024
+
+struct RcStallSample_t
+{
+	volatile LONG	seq;		// the frame it was taken in, written last
+	float			ms;			// how long the frame had run
+	char			text[RC_STALL_TEXT];	// B353: where the main thread was, named by the sampler
+};
+
+static RcStallSample_t		s_Stall[RC_STALL_SLOTS];
+static volatile LONG		s_lStallNext;
+static volatile LONG		s_lPerfFrameGen;		// twice the frames closed since the log opened, odd while the next start is written
+static LONGLONG				s_llPerfFrameStartQpc;	// when the frame now running began
+static volatile LONG		s_lStallQuit;
+static HANDLE				s_hStallThread, s_hStallMain;
+// B349: the sampler, at the highest priority, sleeps 2 ms at a time; when it wakes 8 ms or more late the system (a
+// driver's interrupt or DPC, or the BIOS) held the processors, and the main thread was most likely held with it. B350: the
+// late wake is timed from the Sleep call itself, as the sampler can wait long for the main thread to stop when that thread
+// is inside Windows or a driver (a suspend only lands where the kernel allows it), and that wait is not the system's
+static volatile LONG		s_lLateSeq = -1;		// the frame of the longest late wake below
+static volatile float		s_flLateMs;
+static volatile LONG		s_lLateCount;		// late wakes since the last second's line
+static volatile float		s_flLateMax;
+
+// B353: a sample is named by the sampler thread as soon as it is taken, and the main thread only prints the text when
+// the frame turns out a STUTTER. Naming it there meant asking Windows about up to 1024 stack words a sample
+// (VirtualQuery), up to six samples a stutter, and on slow computers that took 10 to 40 ms, as the query waits while a
+// driver's thread changes the process's memory: the time went into the next frame, which then stuttered as well. The
+// sampler keeps what Windows said of each region met in a sample, sorted by address, as most words fall in the same
+// hundred or so regions (the stack, the heaps, the modules' sections, the empty space between them)
+#define RC_STALL_REGIONS	256
+#define RC_STALL_NAMES		32
+
+struct RcStallRegion_t
+{
+	DWORD	base, end;
+	DWORD	module;		// the base of the image whose code it is, or 0
+};
+
+static RcStallRegion_t	s_StallRegion[RC_STALL_REGIONS];
+static int				s_iStallRegions;
+static DWORD			s_dwStallNameBase[RC_STALL_NAMES];
+static char				s_szStallName[RC_STALL_NAMES][32];
+static int				s_iStallNames;
+
+// the base of the module whose code holds an address, or 0, as rc_crash.cpp tests the candidates on a stack
+static DWORD RcStallModule( DWORD dwAddress )
+{
+	int lo = 0, hi = s_iStallRegions - 1;
+	while ( lo <= hi )
+	{
+		int mid = ( lo + hi ) / 2;
+		const RcStallRegion_t *r = &s_StallRegion[mid];
+		if ( dwAddress < r->base )
+			hi = mid - 1;
+		else if ( dwAddress > r->end - 1 )
+			lo = mid + 1;
+		else
+			return r->module;
+	}
+
+	MEMORY_BASIC_INFORMATION mbi;
+	if ( !VirtualQuery( (LPCVOID)dwAddress, &mbi, sizeof( mbi ) ) )
+		return 0;
+	DWORD module = 0;
+	if ( mbi.State == MEM_COMMIT && mbi.Type == MEM_IMAGE &&
+		( mbi.Protect & ( PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY ) ) )
+		module = (DWORD)mbi.AllocationBase;
+
+	// lo is where it goes; the regions Windows gives do not overlap
+	DWORD base = (DWORD)mbi.BaseAddress, end = base + (DWORD)mbi.RegionSize;
+	if ( s_iStallRegions < RC_STALL_REGIONS && end > base && dwAddress >= base && dwAddress < end )
+	{
+		memmove( &s_StallRegion[lo + 1], &s_StallRegion[lo], ( s_iStallRegions - lo ) * sizeof( s_StallRegion[0] ) );
+		s_StallRegion[lo].base = base;
+		s_StallRegion[lo].end = end;
+		s_StallRegion[lo].module = module;
+		s_iStallRegions++;
+	}
+	return module;
+}
+
+static void RcStallName( DWORD dwAddress, DWORD dwModule, char *pszOut, size_t size )
+{
+	const char *pszName = NULL;
+	for ( int i = 0; dwModule && i < s_iStallNames; i++ )
+	{
+		if ( s_dwStallNameBase[i] == dwModule )
+		{
+			pszName = s_szStallName[i];
+			break;
+		}
+	}
+
+	char szPath[MAX_PATH];
+	if ( dwModule && !pszName && GetModuleFileNameA( (HMODULE)dwModule, szPath, sizeof( szPath ) ) )
+	{
+		pszName = strrchr( szPath, '\\' );
+		pszName = pszName ? pszName + 1 : szPath;
+		if ( s_iStallNames < RC_STALL_NAMES )
+		{
+			s_dwStallNameBase[s_iStallNames] = dwModule;
+			strncpy( s_szStallName[s_iStallNames], pszName, sizeof( s_szStallName[0] ) - 1 );
+			s_szStallName[s_iStallNames][sizeof( s_szStallName[0] ) - 1] = 0;
+			s_iStallNames++;
+		}
+	}
+
+	if ( pszName )
+		_snprintf( pszOut, size, "%s+0x%X", pszName, dwAddress - dwModule );
+	else
+		_snprintf( pszOut, size, "0x%08X", dwAddress );
+	pszOut[size - 1] = 0;
+}
+
+static void RcStallAdd( char *pszOut, size_t size, const char *pszFormat, ... )
+{
+	size_t len = strlen( pszOut );
+	if ( len + 1 >= size )
+		return;
+	va_list args;
+	va_start( args, pszFormat );
+	_vsnprintf( pszOut + len, size - len - 1, pszFormat, args );
+	va_end( args );
+	pszOut[size - 1] = 0;
+}
+
+// the text of a sample: the instruction the main thread was at and the code addresses found on its stack
+static void RcStallDescribe( char *pszOut, size_t size, DWORD eip, const DWORD *stack, DWORD words, float stopMs )
+{
+	char name[64];
+
+	// modules can come and go between samples
+	s_iStallRegions = s_iStallNames = 0;
+	pszOut[0] = 0;
+
+	RcStallName( eip, RcStallModule( eip ), name, sizeof( name ) );
+	RcStallAdd( pszOut, size, "%s", name );
+	if ( stopMs >= 1.0f )	// B350
+		RcStallAdd( pszOut, size, " (stopped after %.0f ms, inside Windows or a driver)", (double)stopMs );
+	int found = 0;
+	DWORD last = eip;
+	for ( DWORD w = 0; w < words && found < 20; w++ )
+	{
+		if ( stack[w] == last )
+			continue;
+		DWORD module = RcStallModule( stack[w] );
+		if ( !module )
+			continue;
+		last = stack[w];
+		RcStallName( stack[w], module, name, sizeof( name ) );
+		RcStallAdd( pszOut, size, " < %s", name );
+		found++;
+	}
+}
+
+static DWORD WINAPI RcStallThread( LPVOID )
+{
+	LARGE_INTEGER freq;
+	QueryPerformanceFrequency( &freq );
+	double tickMs = 1000.0 / (double)freq.QuadPart;
+	LONG lastSeq = -1;
+	int taken = 0;
+	LONGLONG lastQpc = 0;
+	DWORD stack[RC_STALL_WORDS];
+
+	while ( !s_lStallQuit )
+	{
+		LARGE_INTEGER slept, woke;
+		QueryPerformanceCounter( &slept );
+		Sleep( 2 );
+		QueryPerformanceCounter( &woke );
+
+		double late = ( woke.QuadPart - slept.QuadPart ) * tickMs - 2.0;
+		if ( late >= 8.0 )
+		{
+			LONG frame = s_lPerfFrameGen / 2;
+			if ( s_lLateSeq != frame || late > s_flLateMs )
+			{
+				s_flLateMs = (float)late;
+				s_lLateSeq = frame;
+			}
+			InterlockedIncrement( &s_lLateCount );
+			if ( late > s_flLateMax )
+				s_flLateMax = (float)late;
+		}
+
+		// the 64-bit start is read between two equal even generations, so never half written
+		LONG gen = s_lPerfFrameGen;
+		if ( gen & 1 )
+			continue;
+		LONGLONG start = s_llPerfFrameStartQpc;
+		if ( gen != s_lPerfFrameGen )
+			continue;
+		LONG seq = gen / 2;
+		LARGE_INTEGER now;
+		QueryPerformanceCounter( &now );
+		double ms = ( now.QuadPart - start ) * tickMs;
+
+		if ( seq != lastSeq )
+		{
+			lastSeq = seq;
+			taken = 0;
+		}
+
+		// from early in a long frame, so a wait is caught while it lasts; only a frame that turns out a STUTTER is written
+		double limit = s_flPerfAvg * 1.3;
+		if ( limit < 12.0 )
+			limit = 12.0;
+		if ( ms < limit || taken >= RC_STALL_PER_FRAME || ( now.QuadPart - lastQpc ) * tickMs < 3.0 )
+			continue;
+
+		RcStallSample_t *s = &s_Stall[InterlockedIncrement( &s_lStallNext ) % RC_STALL_SLOTS];
+		InterlockedExchange( &s->seq, -1 );
+
+		CONTEXT context;
+		memset( &context, 0, sizeof( context ) );
+		context.ContextFlags = CONTEXT_CONTROL;
+		SIZE_T read = 0;
+		LARGE_INTEGER stopped;
+		stopped.QuadPart = now.QuadPart;
+		if ( SuspendThread( s_hStallMain ) != (DWORD)-1 )
+		{
+			// returns once the thread has really stopped
+			if ( GetThreadContext( s_hStallMain, &context ) )
+				ReadProcessMemory( GetCurrentProcess(), (LPCVOID)context.Esp, stack, sizeof( stack ), &read );
+			QueryPerformanceCounter( &stopped );
+			ResumeThread( s_hStallMain );
+		}
+
+		s->ms = (float)ms;
+		// B353: named here, with the main thread running again (Windows' loader is never asked while it is stopped)
+		RcStallDescribe( s->text, sizeof( s->text ), context.Eip, stack, (DWORD)( read / sizeof( DWORD ) ),
+			(float)( ( stopped.QuadPart - now.QuadPart ) * tickMs ) );
+		InterlockedExchange( &s->seq, seq );
+		taken++;
+		lastQpc = now.QuadPart;
+	}
+
+	return 0;
+}
+
+static void RcStallStart( void )
+{
+	if ( s_hStallThread )
+		return;
+
+	if ( !DuplicateHandle( GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &s_hStallMain, 0, FALSE,
+		DUPLICATE_SAME_ACCESS ) )
+		return;
+
+	for ( int i = 0; i < RC_STALL_SLOTS; i++ )
+		s_Stall[i].seq = -1;
+	s_lStallQuit = 0;
+	s_lLateSeq = -1;
+	s_flLateMs = s_flLateMax = 0;
+	s_lLateCount = 0;
+	s_hStallThread = CreateThread( NULL, 64 * 1024, RcStallThread, NULL, 0, NULL );
+	if ( s_hStallThread )
+		SetThreadPriority( s_hStallThread, THREAD_PRIORITY_HIGHEST );
+}
+
+static void RcStallStop( void )
+{
+	if ( s_hStallThread )
+	{
+		InterlockedExchange( &s_lStallQuit, 1 );
+		WaitForSingleObject( s_hStallThread, 1000 );
+		CloseHandle( s_hStallThread );
+		s_hStallThread = NULL;
+	}
+	if ( s_hStallMain )
+	{
+		CloseHandle( s_hStallMain );
+		s_hStallMain = NULL;
+	}
+}
+
+// the samples of the frame that just ended, under its STUTTER line; the others are let go
+static void RcStallWrite( LONG seq, bool bPrint )
+{
+	for ( int i = 0; i < RC_STALL_SLOTS; i++ )
+	{
+		RcStallSample_t *s = &s_Stall[i];
+		if ( s->seq != seq )
+			continue;
+
+		if ( bPrint )
+			fprintf( s_pPerf, "    at %.1f ms: %s\n", s->ms, s->text );	// B353: named by the sampler
+		InterlockedExchange( &s->seq, -1 );
+	}
+}
+
+static int RcPerfCompare( const void *a, const void *b )
+{
+	float x = *(const float *)a, y = *(const float *)b;
+	return ( x > y ) ? -1 : ( x < y ) ? 1 : 0;
+}
+
+static void RcPerfName( char *out, const char *name )
+{
+	for ( ; *name; name++ )
+		*out++ = ( *name == ' ' ) ? '_' : *name;
+	*out = 0;
+}
+
+static const char *RcPerfMap( void )
+{
+	const char *level = gEngfuncs.pfnGetLevelName();
+	return ( level && *level ) ? level : "(none)";
+}
+
+// the main thread's CPU time in the frame, from its cycle count and the time stamp counter's rate
+static double RcPerfBusyMs( LONGLONG qpcNow )
+{
+	unsigned __int64 cycles = 0;
+	if ( !s_pfnPerfCycles || !s_pfnPerfCycles( GetCurrentThread(), &cycles ) )
+		return 0.0;
+
+	double ms = ( qpcNow - s_llPerfQpc0 ) * s_flTickMs;
+	double tscPerMs = ms > 100.0 ? (double)( __rdtsc() - s_ullPerfTsc0 ) / ms : 0.0;
+	double busy = tscPerMs > 0 ? (double)( cycles - s_ullPerfCycles ) / tscPerMs : 0.0;
+
+	s_ullPerfCycles = cycles;
+	return busy;
+}
+
+static void RcPerfHeader( void )
+{
+	char text[256];
+	int regs[4];
+	char brand[49];
+	time_t now = time( NULL );
+	struct tm *lt = localtime( &now );
+
+	strftime( text, sizeof( text ), "%Y-%m-%d %H:%M:%S", lt );
+	fprintf( s_pPerf, "ReCoF %s performance log, %s\n", RECOF_VERSION, text );
+
+	memset( brand, 0, sizeof( brand ) );
+	__cpuid( regs, 0x80000000 );
+	if ( (unsigned int)regs[0] >= 0x80000004 )
+	{
+		__cpuid( (int *)( brand + 0 ), 0x80000002 );
+		__cpuid( (int *)( brand + 16 ), 0x80000003 );
+		__cpuid( (int *)( brand + 32 ), 0x80000004 );
+	}
+	int invariant = 0;
+	if ( (unsigned int)regs[0] >= 0x80000007 )
+	{
+		__cpuid( regs, 0x80000007 );
+		invariant = ( regs[3] >> 8 ) & 1;
+	}
+
+	SYSTEM_INFO si;
+	GetSystemInfo( &si );
+	DWORD_PTR process = 0, system = 0;
+	int affinity = 0;
+	if ( GetProcessAffinityMask( GetCurrentProcess(), &process, &system ) )
+		for ( ; process; process &= process - 1 )
+			affinity++;
+
+	const char *b = brand;
+	while ( *b == ' ' )
+		b++;
+	fprintf( s_pPerf, "cpu: %s, %d logical processors (%d for the game), invariant time stamp counter %s\n", *b ? b : "unknown",
+		(int)si.dwNumberOfProcessors, affinity, invariant ? "yes" : "no" );
+
+	// the clock the engine reads all the time: 10 MHz is Windows' own from the processor's counter, 14.3 MHz the
+	// HPET and 3.58 MHz the ACPI timer, which some boards and tuning guides leave on and which cost far more a read
+	LARGE_INTEGER freq, c0, c1, c;
+	QueryPerformanceFrequency( &freq );
+	QueryPerformanceCounter( &c0 );
+	for ( int i = 0; i < 10000; i++ )
+		QueryPerformanceCounter( &c );
+	QueryPerformanceCounter( &c1 );
+	fprintf( s_pPerf, "timer: %.6f MHz, %.0f ns a read\n", freq.QuadPart / 1e6,
+		( c1.QuadPart - c0.QuadPart ) * 1e9 / (double)freq.QuadPart / 10000.0 );
+
+	MEMORYSTATUSEX mem;
+	mem.dwLength = sizeof( mem );
+	if ( GlobalMemoryStatusEx( &mem ) )
+		fprintf( s_pPerf, "memory: %.1f GB, %.1f GB free\n", mem.ullTotalPhys / 1073741824.0, mem.ullAvailPhys / 1073741824.0 );
+
+	OSVERSIONINFOW os;
+	memset( &os, 0, sizeof( os ) );
+	os.dwOSVersionInfoSize = sizeof( os );
+	RcRtlGetVersion_t pfnVersion = (RcRtlGetVersion_t)GetProcAddress( GetModuleHandleA( "ntdll.dll" ), "RtlGetVersion" );
+	if ( pfnVersion && pfnVersion( &os ) == 0 )
+		fprintf( s_pPerf, "windows: %lu.%lu build %lu\n", os.dwMajorVersion, os.dwMinorVersion, os.dwBuildNumber );
+
+	HMODULE power = LoadLibraryA( "powrprof.dll" );
+	if ( power )
+	{
+		RcPowerGetActiveScheme_t pfnActive = (RcPowerGetActiveScheme_t)GetProcAddress( power, "PowerGetActiveScheme" );
+		RcPowerReadFriendlyName_t pfnName = (RcPowerReadFriendlyName_t)GetProcAddress( power, "PowerReadFriendlyName" );
+		GUID *scheme = NULL;
+		if ( pfnActive && pfnName && pfnActive( NULL, &scheme ) == 0 && scheme )
+		{
+			WCHAR name[128];
+			DWORD size = sizeof( name );
+			char ascii[128];
+			if ( pfnName( NULL, scheme, NULL, NULL, (UCHAR *)name, &size ) == 0 &&
+				 WideCharToMultiByte( CP_UTF8, 0, name, -1, ascii, sizeof( ascii ), NULL, NULL ) )
+				fprintf( s_pPerf, "power plan: %s\n", ascii );
+			LocalFree( scheme );
+		}
+		FreeLibrary( power );
+	}
+
+	const char *vendor = (const char *)glGetString( GL_VENDOR );
+	const char *renderer = (const char *)glGetString( GL_RENDERER );
+	const char *version = (const char *)glGetString( GL_VERSION );
+	fprintf( s_pPerf, "gpu: %s, %s, OpenGL %s\n", vendor ? vendor : "?", renderer ? renderer : "?", version ? version : "?" );
+	fprintf( s_pPerf, "screen: %d x %d\n", ScreenWidth, ScreenHeight );
+
+	// the command line without the path of the game, which may hold the Windows user name
+	const char *cmd = GetCommandLineA();
+	if ( *cmd == '"' )
+		cmd = strchr( cmd + 1, '"' ) ? strchr( cmd + 1, '"' ) + 1 : "";
+	else
+		cmd = strchr( cmd, ' ' ) ? strchr( cmd, ' ' ) : "";
+	fprintf( s_pPerf, "launch options:%s\n", cmd );
+
+	static const char *s_szCvars[] =
+	{
+		"fps_max", "developer", "gl_vsync", "rc_vsync", "rc_smoothframes", "rc_smoothframes_fps", "rc_threads",
+		"rc_gpumodels", "rc_worldbatch", "rc_lightshader", "rc_dlightcull", "rc_bmodelcull", "rc_worldsort", "rc_fxbatch", "rc_rawinput",
+		"gl_dynlight", "r_dynamic",
+		"cg_water", "gl_bump", "r_weather", "gl_renderer", "cl_himodels", NULL
+	};
+	fprintf( s_pPerf, "settings:" );
+	for ( int i = 0; s_szCvars[i]; i++ )
+	{
+		const char *value = gEngfuncs.pfnGetCvarString( (char *)s_szCvars[i] );
+		if ( value )
+			fprintf( s_pPerf, " %s=%s", s_szCvars[i], value );
+	}
+	fprintf( s_pPerf, "\n\n" );
+	fprintf( s_pPerf, "Each second: the frame rate, the average frame, the slowest 1%% and the slowest frame (ms), the main thread's "
+		"busy share, stutters, disk reads (operations/KB), page faults, then the CPU ms of each part of an average frame, "
+		"the GPU frame (from one frame to the next on the GPU, idle included) and the GPU ms of each part that took 0.05 ms "
+		"or more, and the models, monsters, particles and "
+		"particle systems of an average frame. STUTTER lines: one frame, its ms against the recent average, how many of "
+		"them the main thread was running, its disk reads and page faults, and the parts that took 0.5 ms or more in it. "
+		"Then the buffer swap (average and longest ms) and the share of frames another program's window was in front, "
+		"when the engine sleeps up to 20 ms a frame. System stalls: times the log's own highest-priority thread woke 8 ms "
+		"or more late, when drivers or the BIOS held the processors whatever the game did. Under a STUTTER line, each "
+		"\"at\" line is where the main thread was at that moment of the frame and the code under it; \"stopped after\" "
+		"means it was inside Windows or a driver and could only be looked at once it came out. "
+		"\"frame limiter\": the times the engine looked whether the next frame was due and found it was not, the "
+		"longest time between two looks (a sleep of 1 to 2 ms when the Windows timer runs at 1 ms), the engine's own "
+		"time for the frame and the Windows timer's period. \"server game code\": in a frame whose server part was long, "
+		"the parts of hl.dll that took 0.5 ms or more and how often they ran (rc_svprof). "
+		"PAUSE lines: a time of pictures without HUD frames (a menu, the inventory, a note, a cutscene or a load), left out "
+		"of the numbers.\n\n" );
+	fflush( s_pPerf );
+}
+
+static void RcPerfClose( void )
+{
+	if ( !s_pPerf )
+		return;
+
+	RcStallStop();	// B348
+	RcPerfServerProfiler( false );	// B367
+	fprintf( s_pPerf, "end of the log\n" );
+	fclose( s_pPerf );
+	s_pPerf = NULL;
+}
+
+static void RcPerfOpen( LONGLONG qpcNow )
+{
+	char dir[MAX_PATH], path[MAX_PATH], stamp[32];
+	time_t now = time( NULL );
+
+	_snprintf( dir, sizeof( dir ), "%s\\perflogs", gEngfuncs.pfnGetGameDirectory() );
+	dir[sizeof( dir ) - 1] = 0;
+	CreateDirectoryA( dir, NULL );
+	strftime( stamp, sizeof( stamp ), "%Y%m%d_%H%M%S", localtime( &now ) );
+	_snprintf( path, sizeof( path ), "%s\\perflog_%s.txt", dir, stamp );
+	path[sizeof( path ) - 1] = 0;
+
+	s_pPerf = fopen( path, "w" );
+	if ( !s_pPerf )
+	{
+		gEngfuncs.Con_Printf( "rc_perflog: could not write %s\n", path );
+		return;
+	}
+
+	if ( !s_pfnPerfMem )
+		s_pfnPerfMem = (RcGetProcessMemoryInfo_t)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "K32GetProcessMemoryInfo" );
+	if ( !s_pfnPerfCycles )
+		s_pfnPerfCycles = (RcQueryThreadCycleTime_t)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "QueryThreadCycleTime" );
+	if ( !s_pfnPerfSwap )
+		s_pfnPerfSwap = (RcSwapTimes_t)GetProcAddress( GetModuleHandleA( "opengl32.dll" ), "RcSwapTimes" );	// B347
+	if ( !s_pfnPerfTimerRes )
+		s_pfnPerfTimerRes = (RcNtQueryTimerResolution_t)GetProcAddress( GetModuleHandleA( "ntdll.dll" ), "NtQueryTimerResolution" );	// B366
+	s_flPerfSwapTotal = 0;
+	if ( s_pfnPerfSwap )
+	{
+		double last;
+		int swaps;
+		s_pfnPerfSwap( &last, &s_flPerfSwapTotal, &swaps );
+	}
+
+	RcPerfHeader();
+	gEngfuncs.Con_Printf( "rc_perflog: writing %s (rc_perflog 0 ends it)\n", path );
+	s_lPerfFrameGen = 0;
+	s_llPerfFrameStartQpc = qpcNow;
+	RcStallStart();	// B348
+
+	s_ullPerfTsc0 = __rdtsc();
+	s_llPerfQpc0 = qpcNow;
+	if ( s_pfnPerfCycles )
+		s_pfnPerfCycles( GetCurrentThread(), &s_ullPerfCycles );
+
+	IO_COUNTERS io;
+	if ( GetProcessIoCounters( GetCurrentProcess(), &io ) )
+	{
+		s_ullPerfReads = io.ReadOperationCount;
+		s_ullPerfReadBytes = io.ReadTransferCount;
+	}
+	RcProcMem_t mem;
+	mem.cb = sizeof( mem );
+	if ( s_pfnPerfMem && s_pfnPerfMem( GetCurrentProcess(), &mem, sizeof( mem ) ) )
+		s_dwPerfFaults = mem.PageFaultCount;
+
+	s_flPerfAvg = 0;
+	s_iPerfSkip = 30;
+	s_szPerfMap[0] = 0;
+	s_llPerfSecStart = qpcNow;
+	s_iPerfFrames = s_iPerfHitches = 0;
+	s_flPerfSum = s_flPerfWorst = s_flPerfBusy = 0;
+	memset( s_flPerfCpu, 0, sizeof( s_flPerfCpu ) );
+	memset( s_flPerfCount, 0, sizeof( s_flPerfCount ) );
+	s_flPerfPause = 0;
+	s_flPerfSecSwap = s_flPerfSecSwapMax = 0;
+	s_iPerfSecAway = 0;
+	s_ullPerfSecReads = s_ullPerfSecReadBytes = 0;
+	s_dwPerfSecFaults = 0;
+}
+
+static void RcPerfSecond( LONGLONG qpcNow )
+{
+	if ( !s_iPerfFrames )
+		return;
+
+	double secs = ( ( qpcNow - s_llPerfSecStart ) * s_flTickMs - s_flPerfPause ) / 1000.0;
+	double avg = s_flPerfSum / s_iPerfFrames;
+	int n = s_iPerfFrames < RC_PERF_TIMES ? s_iPerfFrames : RC_PERF_TIMES;
+	qsort( s_flPerfTimes, n, sizeof( float ), RcPerfCompare );
+	double low = s_flPerfTimes[n / 100];	// the slowest 1%: the frame at the 99th percentile
+
+	fprintf( s_pPerf, "%8.1f s %-16s %6.1f fps frame %6.2f 1%% %6.2f worst %6.2f busy %3.0f%% stutters %d reads %llu/%llu "
+		"faults %lu |", gEngfuncs.GetClientTime(), RcPerfMap(), s_iPerfFrames / ( secs > 0 ? secs : 1 ), avg, low,
+		s_flPerfWorst, 100.0 * s_flPerfBusy / ( s_flPerfSum > 0 ? s_flPerfSum : 1 ), s_iPerfHitches, s_ullPerfSecReads,
+		s_ullPerfSecReadBytes / 1024, s_dwPerfSecFaults );
+
+	char name[32];
+	for ( int i = 0; i < RCP_COUNT; i++ )
+	{
+		double ms = s_flPerfCpu[i] / s_iPerfFrames;
+		if ( ms < 0.01 )
+			continue;
+		RcPerfName( name, s_szScopeName[i] );
+		fprintf( s_pPerf, " %s %.2f", name, ms );
+	}
+	if ( s_iShowGpuValid )
+	{
+		fprintf( s_pPerf, " | gpu %.2f", s_flShowGpuFrame );
+		// B344: where the GPU time goes, from the last half second; a player whose game waits for the GPU shows which
+		// pass makes it wait
+		for ( int i = 0; i < RCP_COUNT; i++ )
+		{
+			if ( s_flShowGpu[i] < 0.05 )
+				continue;
+			RcPerfName( name, s_szScopeName[i] );
+			fprintf( s_pPerf, " %s %.2f", name, s_flShowGpu[i] );
+		}
+	}
+	fprintf( s_pPerf, " | models %.0f monsters %.0f particles %.0f psystems %.0f", s_flPerfCount[RCC_MODELS] / s_iPerfFrames,
+		s_flPerfCount[RCC_MONSTERS] / s_iPerfFrames, s_flPerfCount[RCC_PARTICLES] / s_iPerfFrames,
+		s_flPerfCount[RCC_PSYSTEMS] / s_iPerfFrames );	// B341
+	if ( s_pfnPerfSwap )
+		fprintf( s_pPerf, " | swap %.2f max %.2f", s_flPerfSecSwap / s_iPerfFrames, s_flPerfSecSwapMax );	// B347
+	LONG lates = InterlockedExchange( &s_lLateCount, 0 );	// B349
+	if ( lates )
+		fprintf( s_pPerf, " | system stalls %ld, longest %.0f ms", lates, (double)s_flLateMax );
+	s_flLateMax = 0;
+	if ( s_iPerfSecAway )
+		fprintf( s_pPerf, " | game window not in front %d%%", s_iPerfSecAway * 100 / s_iPerfFrames );
+	RcPerfServerProfiler( true );	// B367: again each second, as a map load can set it back
+	double timerMs = RcPerfTimerMs();	// B366: only when Sleep( 1 ) cannot wake within about 1 ms
+	if ( timerMs > 1.2 )
+		fprintf( s_pPerf, " | Windows timer %.1f ms", timerMs );
+	fprintf( s_pPerf, "\n" );
+	fflush( s_pPerf );
+
+	s_llPerfSecStart = qpcNow;
+	s_iPerfFrames = s_iPerfHitches = 0;
+	s_flPerfSum = s_flPerfWorst = s_flPerfBusy = 0;
+	memset( s_flPerfCpu, 0, sizeof( s_flPerfCpu ) );
+	memset( s_flPerfCount, 0, sizeof( s_flPerfCount ) );
+	s_flPerfPause = 0;
+	s_flPerfSecSwap = s_flPerfSecSwapMax = 0;
+	s_iPerfSecAway = 0;
+	s_ullPerfSecReads = s_ullPerfSecReadBytes = 0;
+	s_dwPerfSecFaults = 0;
+}
+
+// one frame (RcProf_Frame, before its scopes are cleared)
+static void RcPerfFrame( double frame, LONGLONG qpcNow )
+{
+	double busy = RcPerfBusyMs( qpcNow );
+
+	ULONGLONG reads = 0, readBytes = 0;
+	IO_COUNTERS io;
+	if ( GetProcessIoCounters( GetCurrentProcess(), &io ) )
+	{
+		reads = io.ReadOperationCount - s_ullPerfReads;
+		readBytes = io.ReadTransferCount - s_ullPerfReadBytes;
+		s_ullPerfReads = io.ReadOperationCount;
+		s_ullPerfReadBytes = io.ReadTransferCount;
+	}
+
+	DWORD faults = 0;
+	RcProcMem_t mem;
+	mem.cb = sizeof( mem );
+	if ( s_pfnPerfMem && s_pfnPerfMem( GetCurrentProcess(), &mem, sizeof( mem ) ) )
+	{
+		faults = mem.PageFaultCount - s_dwPerfFaults;
+		s_dwPerfFaults = mem.PageFaultCount;
+	}
+
+	// B347: the buffer swaps of this frame (opengl32.dll), and whether the game's window is the one in front: when it is
+	// not, the engine sleeps up to 20 ms a frame (CEngine::Frame), which a log would otherwise show as a slow game
+	double swap = 0;
+	if ( s_pfnPerfSwap )
+	{
+		double last, total;
+		int swaps;
+		s_pfnPerfSwap( &last, &total, &swaps );
+		swap = total - s_flPerfSwapTotal;
+		s_flPerfSwapTotal = total;
+	}
+	DWORD pid = 0;
+	HWND fg = GetForegroundWindow();
+	if ( fg )
+		GetWindowThreadProcessId( fg, &pid );
+	int away = pid != GetCurrentProcessId();
+
+	// a map change starts over: its loading is not a stutter of play
+	const char *map = RcPerfMap();
+	if ( strcmp( map, s_szPerfMap ) )
+	{
+		strncpy( s_szPerfMap, map, sizeof( s_szPerfMap ) - 1 );
+		s_szPerfMap[sizeof( s_szPerfMap ) - 1] = 0;
+		fprintf( s_pPerf, "%8.1f s map %s\n", gEngfuncs.GetClientTime(), s_szPerfMap );
+		s_iPerfSkip = 30;
+		s_flPerfAvg = 0;
+	}
+
+	// B341: a long time in which many pictures were drawn without a HUD frame (a menu, the inventory, a note, a
+	// cutscene or a saved game loading) is not one slow frame: it is written as a pause and left out of the second
+	if ( s_iCount[RCC_PICTURES] >= 10 && frame >= 500.0 )
+	{
+		fprintf( s_pPerf, "PAUSE   %8.3f s %s: %.0f ms without HUD frames, %d pictures (a menu, the inventory, a note, a "
+			"cutscene or a load), reads %llu/%llu KB\n", gEngfuncs.GetClientTime(), map, frame, s_iCount[RCC_PICTURES], reads,
+			readBytes / 1024 );
+		s_flPerfPause += frame;
+		s_iPerfSkip = 10;
+		return;
+	}
+
+	if ( s_iPerfFrames < RC_PERF_TIMES )
+		s_flPerfTimes[s_iPerfFrames] = (float)frame;
+	s_iPerfFrames++;
+	s_flPerfSum += frame;
+	s_flPerfBusy += busy < frame ? busy : frame;
+	if ( frame > s_flPerfWorst )
+		s_flPerfWorst = frame;
+	for ( int i = 0; i < RCP_COUNT; i++ )
+		s_flPerfCpu[i] += s_llCpu[i] * s_flTickMs;
+	for ( int c = 0; c < RCC_COUNT; c++ )
+		s_flPerfCount[c] += s_iCount[c];
+	s_ullPerfSecReads += reads;
+	s_ullPerfSecReadBytes += readBytes;
+	s_dwPerfSecFaults += faults;
+	s_flPerfSecSwap += swap;
+	if ( swap > s_flPerfSecSwapMax )
+		s_flPerfSecSwapMax = swap;
+	s_iPerfSecAway += away;
+
+	if ( s_iPerfSkip > 0 )
+	{
+		s_iPerfSkip--;
+		s_flPerfAvg = s_flPerfAvg > 0 ? s_flPerfAvg * 0.9 + frame * 0.1 : frame;
+		return;
+	}
+
+	if ( frame >= s_flPerfAvg * 2.0 && frame >= s_flPerfAvg + 10.0 )
+	{
+		s_iPerfHitches++;
+
+		// B349: whether the system held the processors during this frame
+		char sysText[96] = "";
+		if ( s_lLateSeq == s_lPerfFrameGen / 2 && s_flLateMs > 0 )
+			_snprintf( sysText, sizeof( sysText ), ", the system held the processors %.0f ms (drivers or the BIOS)", (double)s_flLateMs );
+		sysText[sizeof( sysText ) - 1] = 0;
+		cl_entity_t *player = gEngfuncs.GetLocalPlayer();
+		fprintf( s_pPerf, "STUTTER %8.3f s %s at %.0f %.0f %.0f: frame %.2f ms (average %.2f), main thread running %.2f, reads "
+			"%llu/%llu KB, faults %lu, swap %.2f ms%s%s |", gEngfuncs.GetClientTime(), map, player ? player->origin[0] : 0.0f,
+			player ? player->origin[1] : 0.0f, player ? player->origin[2] : 0.0f, frame, s_flPerfAvg, busy, reads,
+			readBytes / 1024, faults, swap, away ? ", the game window not in front" : "", sysText );
+
+		char name[32];
+		for ( int i = 0; i < RCP_COUNT; i++ )
+		{
+			double ms = s_llCpu[i] * s_flTickMs;
+			if ( ms < 0.5 )
+				continue;
+			RcPerfName( name, s_szScopeName[i] );
+			fprintf( s_pPerf, " %s %.2f", name, ms );
+		}
+		// B367: the server game code's scopes in this frame, when the server part was long
+		if ( s_llCpu[RCP_SERVER] * s_flTickMs >= 4.0 )
+		{
+			HMODULE hGame = GetModuleHandleA( "hl.dll" );
+			RcSvFrameText_t pfnText = hGame ? (RcSvFrameText_t)GetProcAddress( hGame, "RcSvProf_FrameText" ) : NULL;
+			char text[512];
+			double ms = pfnText ? pfnText( text, sizeof( text ) ) : 0;
+			if ( pfnText && text[0] )
+				fprintf( s_pPerf, " | server game code %.2f ms: %s", ms, text );
+		}
+		// B366: the frame limiter's wait in this frame
+		if ( s_iLimitPasses )
+			fprintf( s_pPerf, " | frame limiter %d passes, the longest %.1f ms apart, engine frame %.1f ms, Windows timer %.1f ms",
+				s_iLimitPasses, s_flLimitLongest, s_pflHostFrameTime ? *s_pflHostFrameTime * 1000.0 : 0.0, RcPerfTimerMs() );
+		fprintf( s_pPerf, "\n" );
+		RcStallWrite( s_lPerfFrameGen / 2, true );	// B348
+		fflush( s_pPerf );
+	}
+
+	// the recent average, which one slow frame moves only a little
+	s_flPerfAvg = s_flPerfAvg * 0.95 + ( frame < s_flPerfAvg * 3.0 ? frame : s_flPerfAvg * 3.0 ) * 0.05;
+}
+
+// B348: a quit that comes before the next frame (rc_perflog 0;quit) leaves the log open and its sampler running, and
+// the sampler's code goes away with client.dll: the log is closed here, from IN_Shutdown
+void RcProf_Shutdown( void )
+{
+	RcPerfClose();
+	RcStallStop();
+}
+
 //-----------------------------------------------------------------------------
 // the frame boundary, at the start of HUD_Redraw: closes the frame that ends here and opens the next
 //-----------------------------------------------------------------------------
@@ -266,8 +1212,25 @@ void RcProf_Frame( void )
 
 		s_flWinFrame += frame;
 		if ( frame > s_flWinWorst )
+		{
 			s_flWinWorst = frame;
+			for ( int i = 0; i < RCP_COUNT; i++ )
+				s_flWinWorstCpu[i] = s_llCpu[i] * s_flTickMs;
+		}
 		s_iWinFrames++;
+
+		if ( s_pPerf )
+			RcPerfFrame( frame, now.QuadPart );	// B340
+		s_iLimitPasses = 0;	// B366: the passes of the next frame
+		s_llLimitLast = 0;
+		s_flLimitLongest = 0;
+		if ( s_pPerf )
+		{
+			RcStallWrite( s_lPerfFrameGen / 2, false );	// B348: the next frame starts
+			InterlockedIncrement( &s_lPerfFrameGen );
+			s_llPerfFrameStartQpc = now.QuadPart;
+			InterlockedIncrement( &s_lPerfFrameGen );
+		}
 
 		if ( s_iOn >= 2 && s_iGpuState == 1 )
 		{
@@ -292,6 +1255,10 @@ void RcProf_Frame( void )
 				s_flShowCount[c] = (double)s_iWinCount[c] / s_iWinFrames;
 			s_flShowFrame = s_flWinFrame / s_iWinFrames;
 			s_flShowWorst = s_flWinWorst;
+			memcpy( s_flShowWorstCpu, s_flWinWorstCpu, sizeof( s_flShowWorstCpu ) );
+
+			if ( s_iOn && rc_prof_log && rc_prof_log->value )
+				RcProfLogLine();
 		}
 
 		s_iShowGpuValid = s_iWinGpuFrames > 0;
@@ -306,7 +1273,18 @@ void RcProf_Frame( void )
 		s_llWinStart = now.QuadPart;
 	}
 
+	if ( s_pPerf && ( now.QuadPart - s_llPerfSecStart ) * s_flTickMs >= 1000 )
+		RcPerfSecond( now.QuadPart );
+
+	int perf = rc_perflog && rc_perflog->value;
+	if ( perf && !s_pPerf )
+		RcPerfOpen( now.QuadPart );
+	else if ( !perf && s_pPerf )
+		RcPerfClose();
+
 	int on = rc_prof ? (int)rc_prof->value : 0;
+	if ( s_pPerf && on < 2 )
+		on = 2;	// B340: the log needs the scopes and the GPU times, without the overlay
 	if ( on != s_iOn )
 	{
 		s_iOn = on;
@@ -350,7 +1328,7 @@ static void RcDrawLine( int x, int y, const char *text )
 //-----------------------------------------------------------------------------
 void RcProf_Draw( void )
 {
-	if ( !s_iOn )
+	if ( !s_iOn || !rc_prof || !rc_prof->value )
 		return;
 
 	char text[128];
@@ -386,8 +1364,11 @@ void RcProf_Draw( void )
 		y += h;
 	}
 
-	sprintf( text, "models %.1f, dlights %.1f, world draws %.0f, gpu meshes %.0f", s_flShowCount[RCC_MODELS], s_flShowCount[RCC_DLIGHTS],
-		s_flShowCount[RCC_WORLDDRAWS], s_flShowCount[RCC_GPUMESHES] );
+	sprintf( text, "models %.1f (monsters %.1f), dlights %.1f, world draws %.0f, gpu meshes %.0f", s_flShowCount[RCC_MODELS],
+		s_flShowCount[RCC_MONSTERS], s_flShowCount[RCC_DLIGHTS], s_flShowCount[RCC_WORLDDRAWS], s_flShowCount[RCC_GPUMESHES] );
+	RcDrawLine( x, y, text );
+	y += h;
+	sprintf( text, "particles %.0f in %.0f systems", s_flShowCount[RCC_PARTICLES], s_flShowCount[RCC_PSYSTEMS] );	// B341
 	RcDrawLine( x, y, text );
 	y += h;
 
@@ -434,9 +1415,9 @@ static void RcProf_Dump( void )
 
 	int gpu = s_iOn >= 2 && s_iGpuState == 1 && s_iShowGpuValid;
 
-	sprintf( line, "rc_prof: frame %.2f ms (%.0f fps), worst %.2f ms, models %.1f, dlights %.1f, world draws %.0f, gpu meshes %.0f\n",
-		s_flShowFrame, s_flShowFrame > 0 ? 1000.0 / s_flShowFrame : 0.0, s_flShowWorst, s_flShowCount[RCC_MODELS], s_flShowCount[RCC_DLIGHTS],
-		s_flShowCount[RCC_WORLDDRAWS], s_flShowCount[RCC_GPUMESHES] );
+	sprintf( line, "rc_prof: frame %.2f ms (%.0f fps), worst %.2f ms, models %.1f (monsters %.1f), dlights %.1f, world draws %.0f, gpu meshes %.0f\n",
+		s_flShowFrame, s_flShowFrame > 0 ? 1000.0 / s_flShowFrame : 0.0, s_flShowWorst, s_flShowCount[RCC_MODELS], s_flShowCount[RCC_MONSTERS],
+		s_flShowCount[RCC_DLIGHTS], s_flShowCount[RCC_WORLDDRAWS], s_flShowCount[RCC_GPUMESHES] );
 	ConsolePrint( line );
 
 	if ( gpu )
@@ -462,5 +1443,7 @@ void RcProf_Init( void )
 	s_flTickMs = 1000.0 / (double)freq.QuadPart;
 
 	rc_prof = gEngfuncs.pfnRegisterVariable( "rc_prof", "0", 0 );
+	rc_prof_log = gEngfuncs.pfnRegisterVariable( "rc_prof_log", "0", 0 );
+	rc_perflog = gEngfuncs.pfnRegisterVariable( "rc_perflog", "0", 0 );	// B340
 	gEngfuncs.pfnAddCommand( "rc_prof_dump", RcProf_Dump );
 }

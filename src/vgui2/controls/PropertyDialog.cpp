@@ -92,31 +92,33 @@ void PropertyDialog::ResetAllData()
 //-----------------------------------------------------------------------------
 // Purpose: Lays out controls
 //-----------------------------------------------------------------------------
+int RcUiScaled( int value );	// ReCoF (B399), GameUI's RcTheme.cpp: lengths grow with the screen
+
 void PropertyDialog::PerformLayout()
 {
 	BaseClass::PerformLayout();
 
 	int x, y, wide, tall;
 	GetClientArea(x, y, wide, tall);
-	_propertySheet->SetBounds(x, y, wide, tall - 32);
+	_propertySheet->SetBounds(x, y, wide, tall - RcUiScaled(32));
 
 	// move the buttons to the bottom-right corner
-	int xpos = x + wide - 80;
-	int ypos = tall + y - 28;
+	int xpos = x + wide - RcUiScaled(80);
+	int ypos = tall + y - RcUiScaled(28);
 
 	if (_applyButton->IsVisible())
 	{
-		_applyButton->SetBounds(xpos, ypos, 72, 24);
-		xpos -= 80;
+		_applyButton->SetBounds(xpos, ypos, RcUiScaled(72), RcUiScaled(24));
+		xpos -= RcUiScaled(80);
 	}
 
 	if (_cancelButton->IsVisible())
 	{
-		_cancelButton->SetBounds(xpos, ypos, 72, 24);
-		xpos -= 80;
+		_cancelButton->SetBounds(xpos, ypos, RcUiScaled(72), RcUiScaled(24));
+		xpos -= RcUiScaled(80);
 	}
 
-	_okButton->SetBounds(xpos, ypos, 72, 24);
+	_okButton->SetBounds(xpos, ypos, RcUiScaled(72), RcUiScaled(24));
 
 	_propertySheet->InvalidateLayout(); // tabs may have changed size depending on title
 	Repaint();

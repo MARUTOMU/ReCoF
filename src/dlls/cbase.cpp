@@ -26,8 +26,21 @@
 #include	"weapons.h"
 #include	"studio.h"
 #include	"CoF_Dual_Weapon.h"
+#include "rc_svprof.h"	// ReCoF (B337)
 
 CDualWeaponRight gDualWeapon;
+
+// ReCoF (B467): dual wield's left hand per player slot (gDualWeapon was one for every player, so two players dual
+// wielding drove each other's timers and animations; charliee1w 335dea26)
+static CDualWeaponRight g_RcDualWeapons[33];
+
+CDualWeaponRight &RcDualFor( CBaseEntity *pPlayer )
+{
+	int i = pPlayer ? ENTINDEX( pPlayer->edict() ) : 0;
+	if ( i < 0 || i > 32 )
+		i = 0;
+	return g_RcDualWeapons[i];
+}
 
 void EntvarsKeyvalue( entvars_t *pev, KeyValueData *pkvd );
 
@@ -224,11 +237,18 @@ void DispatchKeyValue( edict_t *pentKeyvalue, KeyValueData *pkvd )
 BOOL gTouchDisabled = FALSE;
 void DispatchTouch( edict_t *pentTouched, edict_t *pentOther )
 {
+	RcSvScope rcsv( RCSV_TOUCH );	// ReCoF (B337): rc_svprof
 	if ( gTouchDisabled )
 		return;
 
 	CBaseEntity *pEntity = (CBaseEntity *)GET_PRIVATE(pentTouched);
 	CBaseEntity *pOther = (CBaseEntity *)GET_PRIVATE( pentOther );
+
+	// ReCoF (B472): story co-op's arrival hold: players touch no trigger until everyone is in (the engine touches
+	// again at their next move)
+	extern bool g_bRcHolding;
+	if ( g_bRcHolding && pEntity && pOther && pEntity->pev->solid == SOLID_TRIGGER && pOther->IsPlayer() )
+		return;
 
 	if ( pEntity && pOther && ! ((pEntity->pev->flags | pOther->pev->flags) & FL_KILLME) )
 		pEntity->Touch( pOther );
@@ -246,6 +266,7 @@ void DispatchUse( edict_t *pentUsed, edict_t *pentOther )
 
 void DispatchThink( edict_t *pent )
 {
+	RcSvScope rcsv( RCSV_THINK );	// ReCoF (B337): rc_svprof
 	CBaseEntity *pEntity = (CBaseEntity *)GET_PRIVATE(pent);
 
 	if (pEntity)
@@ -254,12 +275,23 @@ void DispatchThink( edict_t *pent )
 			ALERT( at_error, "Dormant entity %s is thinking!!\n", STRING(pEntity->pev->classname) );
 				
 		//if (pEntity->pev->classname) ALERT(at_console, "DispatchThink %s\n", STRING(pEntity->pev->targetname));
+
+		// ReCoF (B472): story co-op's arrival hold: thinks wait (scenes, triggers' timers, monsters) while a carried
+		// player still loads; players and moving brushes (a train past its corner) go on
+		extern bool g_bRcHolding;
+		if ( g_bRcHolding && pEntity->pev->movetype != MOVETYPE_PUSH && !pEntity->IsPlayer() )
+		{
+			pEntity->pev->nextthink = gpGlobals->time + 0.1;
+			return;
+		}
+
 		pEntity->Think();
 	}
 }
 
 void DispatchBlocked( edict_t *pentBlocked, edict_t *pentOther )
 {
+	RcSvScope rcsv( RCSV_TOUCH );	// ReCoF (B337): rc_svprof
 	CBaseEntity *pEntity = (CBaseEntity *)GET_PRIVATE( pentBlocked );
 	CBaseEntity *pOther = (CBaseEntity *)GET_PRIVATE( pentOther );
 

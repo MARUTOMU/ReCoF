@@ -1,12 +1,14 @@
 // ReCoF practice commands (B317): BunnymodXT's bxt_ch_* commands and bxt_set_angles for Cry of Fear, with rc_ in
 // place of bxt_: health, position, velocity and view angles. They are planning tools, so they need sv_cheats 1 as
 // BunnymodXT's do. The client sends a command it does not know to the server, and ClientCommand (client.cpp) hands
-// it here for the player who typed it. bxt_ch_set_armor is left out: Cry of Fear has no armor.
+// it here for the player who typed it. bxt_ch_set_armor is left out: Cry of Fear has no armor. rc_ch_give (B346) is
+// ReCoF's own, as Cry of Fear has no give command: tests and practice of a fight need the weapons.
 
 #include "extdll.h"
 #include "util.h"
 #include "cbase.h"
 #include "player.h"
+#include "gamerules.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -37,15 +39,103 @@ static Vector RcVelocityAlong( const Vector &angles, float flSpeed )
 	return gpGlobals->v_forward * flSpeed;
 }
 
+// ReCoF (B359): rc_cutscene_skip. Cry of Fear skips a camera scene when Enter is down (CTriggerCamera::FollowTarget,
+// single player, unless the camera has spawnflag 1024): it sends SkipScene, and client.dll runs the game at
+// host_framerate 2, two seconds a frame behind a black screen, until the view is back on the player (CHud::Redraw).
+// The server reads the key from the keyboard, so it cannot be bound to another; this command does the same for any
+// scene Enter skips, needing nothing. A scene the map keeps from being skipped (1024: 201 of the 458 cameras of the
+// maps, all of c_trainscene's and c_rumpel1's) is fast forwarded instead, with sv_cheats 1 as it is not in the
+// game: host_framerate 0.1, game frames of a tenth of a second as on a computer running at 10 fps (two second
+// frames are what such a scene is kept from), with no frame rate limit, until the camera lets the player go
+#define RC_CUTSCENE_SKIP_FRAME	0.1
+
+extern int gmsgSkipScene;
+bool g_bRcCutsceneSkip = false;	// the fast forward is on (sound.cpp CAmbientGeneric::ToggleUse)
+
+// ends the fast forward: the camera let the player go (CBasePlayer::PostThink), or a map or a save loads
+void RcCutsceneSkipStop( void )
+{
+	if ( !g_bRcCutsceneSkip )
+		return;
+
+	g_bRcCutsceneSkip = false;
+	CVAR_SET_FLOAT( "host_framerate", 0 );
+}
+
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
+void RcCoop_SkipScene( bool bSkippable );
+void RcCoop_SkipVote( CBasePlayer *pPlayer, bool bSkippable );
+
+static void RcCutsceneSkip( CBasePlayer *pPlayer )
+{
+	CBaseEntity *pCamera = pPlayer->m_hCurrentCamera;
+	const char *pszMap = STRING( gpGlobals->mapname );
+
+	// ReCoF story co-op: the host skips for the group (his game is the server); a guest's Enter is his vote (B390,
+	// rc_coop_skip_vote), as a guest alone would hurry the host's world
+	bool bGuest = RcCoop_Story() && ENTINDEX( pPlayer->edict() ) != 1;
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ( !RcCoop_Story() || ( bGuest && !CVAR_GET_FLOAT( "rc_coop_skip_vote" ) ) ) )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, RcCoop_Story() ? "In story co-op the host skips scenes\n" : "rc_cutscene_skip works in single player only\n" );
+		return;
+	}
+
+	// the menu's background map runs its cameras as the retail skip leaves them
+	if ( !pCamera || !pPlayer->IsInCutscene() || strstr( pszMap, "game_menu" ) || FStrEq( pszMap, "video_stress_test" ) )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "No camera scene to skip\n" );
+		return;
+	}
+
+	// story co-op: the host's skip is the group's (the camera's own Enter check, which reads the host's keyboard
+	// wherever he types, is single player only; in co-op his client sends this command for Enter in game)
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	{
+		bool bSkippable = FClassnameIs( pCamera->pev, "trigger_camera" ) && !( pCamera->pev->spawnflags & 1024 );
+		if ( !bSkippable && !CVAR_GET_FLOAT( "sv_cheats" ) )
+			ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "The map keeps this scene from being skipped; with sv_cheats 1, rc_cutscene_skip fast forwards it\n" );
+		else if ( bGuest )
+			RcCoop_SkipVote( pPlayer, bSkippable );
+		else
+			RcCoop_SkipScene( bSkippable );
+		return;
+	}
+
+	if ( g_bRcCutsceneSkip || CVAR_GET_FLOAT( "host_framerate" ) != 0 )
+		return;	// already skipping
+
+	if ( FClassnameIs( pCamera->pev, "trigger_camera" ) && !( pCamera->pev->spawnflags & 1024 ) )
+	{
+		MESSAGE_BEGIN( MSG_ONE, gmsgSkipScene, NULL, pPlayer->pev );
+		MESSAGE_END();
+		return;
+	}
+
+	if ( !CVAR_GET_FLOAT( "sv_cheats" ) )
+	{
+		ClientPrint( pPlayer->pev, HUD_PRINTCONSOLE, "The map keeps this scene from being skipped; with sv_cheats 1, rc_cutscene_skip fast forwards it\n" );
+		return;
+	}
+
+	g_bRcCutsceneSkip = true;
+	CVAR_SET_FLOAT( "host_framerate", RC_CUTSCENE_SKIP_FRAME );
+}
+
 // true when pcmd is one of these commands (run or refused), false to let ClientCommand go on
 bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 {
-	if ( strncmp( pcmd, "rc_ch_", 6 ) && strcmp( pcmd, "rc_set_angles" ) )
+	if ( strncmp( pcmd, "rc_ch_", 6 ) && strcmp( pcmd, "rc_set_angles" ) && strcmp( pcmd, "rc_cutscene_skip" ) )
 		return false;
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)&pEntity->v );
 	if ( !pPlayer )
 		return false;
+
+	if ( FStrEq( pcmd, "rc_cutscene_skip" ) )
+	{
+		RcCutsceneSkip( pPlayer );
+		return true;
+	}
 
 	int argc = CMD_ARGC();
 	entvars_t *pev = pPlayer->pev;
@@ -141,6 +231,84 @@ bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 		pev->angles = Vector( RcArg( 1 ), RcArg( 2 ), argc == 4 ? RcArg( 3 ) : 0 );
 		pev->v_angle = pev->angles;
 		pev->fixangle = TRUE;
+		return true;
+	}
+
+	// B501: rc_ch_fire <targetname> [on | off | toggle]: fires the entities of that name as a relay would, with this
+	// player as the one who set them off, to try a scene or a map event without walking to its trigger
+	if ( FStrEq( pcmd, "rc_ch_fire" ) )
+	{
+		if ( !RcCheatsOn( pPlayer ) )
+			return true;
+		if ( argc < 2 || argc > 3 )
+		{
+			RcUsage( pPlayer, "rc_ch_fire <targetname> [on | off | toggle]" );
+			return true;
+		}
+		USE_TYPE useType = USE_TOGGLE;
+		if ( argc == 3 )
+			useType = FStrEq( CMD_ARGV( 2 ), "on" ) ? USE_ON : FStrEq( CMD_ARGV( 2 ), "off" ) ? USE_OFF : USE_TOGGLE;
+		if ( FNullEnt( FIND_ENTITY_BY_TARGETNAME( NULL, CMD_ARGV( 1 ) ) ) )
+		{
+			ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_fire: nothing is named %s\n", CMD_ARGV( 1 ) ) );
+			return true;
+		}
+		FireTargets( CMD_ARGV( 1 ), pPlayer, pPlayer, useType, 0 );
+		ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_fire: fired %s\n", CMD_ARGV( 1 ) ) );
+		return true;
+	}
+
+	// B507: rc_ch_hurt <targetname> <damage>: this player deals that damage to the entities of that name, so a boss's
+	// death and what it sets off (with the boss as the one who set it off, as in play) can be tried at once
+	if ( FStrEq( pcmd, "rc_ch_hurt" ) )
+	{
+		if ( !RcCheatsOn( pPlayer ) )
+			return true;
+		if ( argc != 3 )
+		{
+			RcUsage( pPlayer, "rc_ch_hurt <targetname> <damage>" );
+			return true;
+		}
+		int hurt = 0;
+		edict_t *pEdict = NULL;
+		while ( !FNullEnt( pEdict = FIND_ENTITY_BY_TARGETNAME( pEdict, CMD_ARGV( 1 ) ) ) )
+		{
+			CBaseEntity *pEnt = CBaseEntity::Instance( pEdict );
+			if ( !pEnt || pEnt->pev->takedamage == DAMAGE_NO )
+				continue;
+			pEnt->TakeDamage( pev, pev, RcArg( 2 ), DMG_GENERIC );
+			hurt++;
+		}
+		ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_hurt: hurt %d entities named %s\n", hurt, CMD_ARGV( 1 ) ) );
+		return true;
+	}
+
+	// B346: a weapon, ammo or item given at the player's feet, as if picked up there; the unlockable weapons keep
+	// their own tests (GiveNamedItem)
+	if ( FStrEq( pcmd, "rc_ch_give" ) )
+	{
+		if ( !RcCheatsOn( pPlayer ) )
+			return true;
+		if ( argc != 2 && argc != 3 )
+		{
+			RcUsage( pPlayer, "rc_ch_give <weapon_, ammo_ or item_ name> [<count>]" );
+			return true;
+		}
+		const char *pszName = CMD_ARGV( 1 );
+		if ( strncmp( pszName, "weapon_", 7 ) && strncmp( pszName, "ammo_", 5 ) && strncmp( pszName, "item_", 5 ) )
+		{
+			RcUsage( pPlayer, "rc_ch_give <weapon_, ammo_ or item_ name> [<count>]" );
+			return true;
+		}
+		int iCount = argc == 3 ? atoi( CMD_ARGV( 2 ) ) : 1;
+		if ( iCount < 1 )
+			iCount = 1;
+		if ( iCount > 20 )
+			iCount = 20;
+		// the entity keeps the name as its classname, so it must outlive the command line
+		const char *pszKept = STRING( ALLOC_STRING( pszName ) );
+		for ( int i = 0; i < iCount; i++ )
+			pPlayer->GiveNamedItem( pszKept, false, true );
 		return true;
 	}
 

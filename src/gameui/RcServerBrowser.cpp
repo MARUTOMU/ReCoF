@@ -302,10 +302,13 @@ void CRcServerBrowserDialog::Activate()
 	StartRefresh();
 }
 
+void RcGameUI_DialogClosed( void );	// ReCoF (B397), GameUI_Interface.cpp
+
 void CRcServerBrowserDialog::OnClose()
 {
 	StopRefresh();
 	BaseClass::OnClose();
+	RcGameUI_DialogClosed();	// ReCoF (B397)
 }
 
 bool CRcServerBrowserDialog::IsLan( void )

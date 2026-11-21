@@ -23,6 +23,12 @@ extern "C"
 
 extern float	g_SND_VoiceOverdrive;
 
+// ReCoF story co-op (B394), rc_coop.c: the proximity voice
+int		RcVoice_Entity( int iChannel );
+int		RcVoice_EndEntity( int iChannel );
+float	RcVoice_Attn( int iChannel );
+void	RcVoice_Filter( int iChannel, short *pSamples, int nSamples );
+
 void	SND_ForceInitMouth( int entnum );
 void	SND_ForceCloseMouth( int entnum );
 void	SND_MoveMouth16( int entnum, short *pdata, int count );
@@ -78,6 +84,8 @@ int VoiceSE_GetSoundDataCallback(
 		VoiceSE_SFX *pChannel = &g_VoiceSE_SFX[i];
 		if ( pCache == &pChannel->m_SFXCache )
 		{
+			int iRcChannel = i;	// ReCoF (B394): i is used again below
+
 			// The voice data is half the sample rate of the sound engine,
 			// so ask for half the samples and double them.
 			int count = Voice_GetOutputData( i, pCopyBuf, maxOutDataSize, samplePos, sampleCount >> 1 );
@@ -99,6 +107,8 @@ int VoiceSE_GetSoundDataCallback(
 			}
 
 			pChannel->m_PrevUpsampleValue = pSamples[count2x - 1];
+
+			RcVoice_Filter( iRcChannel, pSamples, count2x );	// ReCoF (B394): a wall muffles a story co-op teammate
 
 			return count * 2;
 		}
@@ -176,12 +186,14 @@ void VoiceSE_StartChannel( int iChannel )
 	Q_memset( sfx, 0, sizeof( *sfx ) );
 	Q_strcpy( sfx->name, "?VoiceData" );
 
-	S_StartDynamicSound( cl.viewentity, VOICE_CHANNEL_BASE + iChannel, sfx, vec3_origin, 1.0, 1.0, 0, PITCH_NORM );
+	// ReCoF story co-op (B394): the speaker's own entity, heard from where he stands (retail: the listener's, flat)
+	int iEnt = RcVoice_Entity( iChannel );
+	S_StartDynamicSound( iEnt, VOICE_CHANNEL_BASE + iChannel, sfx, vec3_origin, 1.0, RcVoice_Attn( iChannel ), 0, PITCH_NORM );
 }
 
 void VoiceSE_EndChannel( int iChannel )
 {
-	S_StopSound( cl.viewentity, VOICE_CHANNEL_BASE + iChannel );
+	S_StopSound( RcVoice_EndEntity( iChannel ), VOICE_CHANNEL_BASE + iChannel );	// ReCoF (B394): where it was started
 }
 
 extern "C" sfxcache_t *VoiceSE_GetSFXCache( sfx_t *pSFX )

@@ -245,14 +245,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bDonateArmed_guess )
 		{
-			m_pDonate_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/donate_mo.tga" ) );
+			m_pDonate_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/donate_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bDonateArmed_guess = true;
 		}
 	}
 	else if ( m_bDonateArmed_guess )
 	{
-		m_pDonate_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/donate.tga" ) );
+		m_pDonate_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/donate.tga" ) );
 		m_bDonateArmed_guess = false;
 	}
 
@@ -260,14 +260,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bSoundtrack1Armed_guess )
 		{
-			m_pSoundtrack1_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/soundtrack1_mo.tga" ) );
+			m_pSoundtrack1_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/soundtrack1_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bSoundtrack1Armed_guess = true;
 		}
 	}
 	else if ( m_bSoundtrack1Armed_guess )
 	{
-		m_pSoundtrack1_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/soundtrack1.tga" ) );
+		m_pSoundtrack1_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/soundtrack1.tga" ) );
 		m_bSoundtrack1Armed_guess = false;
 	}
 
@@ -275,14 +275,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bSoundtrack2Armed_guess )
 		{
-			m_pSoundtrack2_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/soundtrack2_mo.tga" ) );
+			m_pSoundtrack2_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/soundtrack2_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bSoundtrack2Armed_guess = true;
 		}
 	}
 	else if ( m_bSoundtrack2Armed_guess )
 	{
-		m_pSoundtrack2_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/soundtrack2.tga" ) );
+		m_pSoundtrack2_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/soundtrack2.tga" ) );
 		m_bSoundtrack2Armed_guess = false;
 	}
 
@@ -290,14 +290,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bClothesArmed_guess )
 		{
-			m_pClothes_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/clothes_mo.tga" ) );
+			m_pClothes_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/clothes_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bClothesArmed_guess = true;
 		}
 	}
 	else if ( m_bClothesArmed_guess )
 	{
-		m_pClothes_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/clothes.tga" ) );
+		m_pClothes_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/clothes.tga" ) );
 		m_bClothesArmed_guess = false;
 	}
 
@@ -305,14 +305,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bAoMDCArmed_guess )
 		{
-			m_pAoMDC_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/aomdc_mo.tga" ) );
+			m_pAoMDC_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/aomdc_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bAoMDCArmed_guess = true;
 		}
 	}
 	else if ( m_bAoMDCArmed_guess )
 	{
-		m_pAoMDC_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/aomdc.tga" ) );
+		m_pAoMDC_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/aomdc.tga" ) );
 		m_bAoMDCArmed_guess = false;
 	}
 
@@ -320,14 +320,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bFacebookArmed_guess )
 		{
-			m_pFacebook_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/facebook_mo.tga" ) );
+			m_pFacebook_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/facebook_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bFacebookArmed_guess = true;
 		}
 	}
 	else if ( m_bFacebookArmed_guess )
 	{
-		m_pFacebook_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/facebook.tga" ) );
+		m_pFacebook_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/facebook.tga" ) );
 		m_bFacebookArmed_guess = false;
 	}
 
@@ -335,14 +335,14 @@ void CVGUIExtraMenu::solve()
 	{
 		if ( !m_bCancelArmed_guess )
 		{
-			m_pCancel_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/cancel_mo.tga" ) );
+			m_pCancel_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/cancel_mo.tga" ) );
 			gEngfuncs.pfnPlaySoundByName( "ui/3d_rollover.wav", 1 );
 			m_bCancelArmed_guess = true;
 		}
 	}
 	else if ( m_bCancelArmed_guess )
 	{
-		m_pCancel_guess->setImage( vgui_LoadTGA( "gfx/vgui/menu/cancel.tga" ) );
+		m_pCancel_guess->setImage( vgui_LoadTGACached( "gfx/vgui/menu/cancel.tga" ) );
 		m_bCancelArmed_guess = false;
 	}
 

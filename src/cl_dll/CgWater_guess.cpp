@@ -173,7 +173,9 @@ void CCgWater_guess::Init_guess( void )
 	m_pWaterFP_guess = g_CgContext_guess.AddProgram_guess( water, CGTYPE_FRAGMENT_guess );
 	m_pBlackFP_guess = g_CgContext_guess.AddProgram_guess( black, CGTYPE_FRAGMENT_guess );
 	m_pBlackVP_guess = g_CgContext_guess.AddProgram_guess( "black_vp.cg", CGTYPE_VERTEX_guess );
-	m_pBlackModelViewProj_guess = cgGetNamedParameter( m_pBlackVP_guess->program_guess, "ModelViewProj" );
+	// ReCoF (B504): a shader that could not be loaded is NULL, and retail read it anyway (a crash at the first map)
+	if ( m_pBlackVP_guess )
+		m_pBlackModelViewProj_guess = cgGetNamedParameter( m_pBlackVP_guess->program_guess, "ModelViewProj" );
 
 	if ( !m_pBlackFP_guess )
 		gEngfuncs.Con_Printf( "Error Loading Black Shader\n" );

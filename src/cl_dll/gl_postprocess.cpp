@@ -415,3 +415,159 @@ void InitPostEffects()
 	v_posteffects = gEngfuncs.pfnRegisterVariable( "gl_posteffects", "1", FCVAR_ARCHIVE );	// ReCoF (B306): the Advanced page sets it, so it is kept
 	v_grayscale = gEngfuncs.pfnRegisterVariable( "gl_grayscale", "0", 0 );
 }
+
+
+//===============
+// ReCoF (B308): the vignette
+//
+// Cry of Fear 1.0 to 1.55 darkened the four corners of the screen with gfx/vgui/vignette/vignette_tl, _tr, _bl and
+// _br.tga (256 x 256, black, 85% opaque in the corner and clear towards the middle): four VGUI image panels of the
+// HUD, always shown. 1.6a added the Vignette option (cl_vignette) and creates the panels hidden, but no code reads the
+// option or shows them, so the effect was gone and the option did nothing. rc_vignette 1 draws the four images again,
+// after the post effects and under the HUD, each corner scaled to the screen: 256 pixels at 768 lines, as 1.55 looked
+// at 1024 x 768. A VGUI image keeps its own size, so the panels covered less and less of a bigger screen.
+//===============
+extern cvar_t *rc_vignette;			// input.cpp
+extern int current_ext_texture_id;	// gl_texloader.cpp
+
+static GLuint s_uiRcVignette[4];	// top left, top right, bottom left, bottom right
+static int s_iRcVignetteState;		// 0 not loaded yet, 1 loaded, -1 an image could not be loaded
+
+// uploads an uncompressed 24 or 32 bit TGA as RGBA, rows top first (CreateTexture only takes 24 bit ones)
+static bool RcVignetteUpload( const char *name, GLuint id )
+{
+	int length = 0;
+	byte *file = (byte *)gEngfuncs.COM_LoadFile( (char *)name, 5, &length );
+	if ( !file )
+		return false;
+
+	bool ok = false;
+	if ( length >= 18 )
+	{
+		int idlen = file[0], type = file[2], bpp = file[16], desc = file[17];
+		int w = file[12] | ( file[13] << 8 ), h = file[14] | ( file[15] << 8 );
+		int bytes = bpp / 8;
+		if ( type == 2 && ( bpp == 24 || bpp == 32 ) && w > 0 && h > 0 && w <= 1024 && h <= 1024
+			&& 18 + idlen + w * h * bytes <= length )
+		{
+			byte *rgba = new byte[w * h * 4];
+			const byte *pixels = file + 18 + idlen;
+			for ( int y = 0; y < h; y++ )
+			{
+				// a TGA keeps its rows bottom first unless bit 5 of the descriptor says top first
+				const byte *in = pixels + ( ( desc & 0x20 ) ? y : h - 1 - y ) * w * bytes;
+				byte *out = rgba + y * w * 4;
+				for ( int x = 0; x < w; x++, in += bytes, out += 4 )
+				{
+					out[0] = in[2];
+					out[1] = in[1];
+					out[2] = in[0];
+					out[3] = bytes == 4 ? in[3] : 255;
+				}
+			}
+			gl.glBindTexture( GL_TEXTURE_2D, id );
+			gl.glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+			gl.glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+			gl.glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+			gl.glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+			gl.glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba );
+			delete[] rgba;
+			ok = true;
+		}
+	}
+	gEngfuncs.COM_FreeFile( file );
+	return ok;
+}
+
+void RcDrawVignette( void )
+{
+	if ( !rc_vignette || !rc_vignette->value || s_iRcVignetteState < 0 || !gl.IsGLAllowed() )
+		return;
+
+	int w = ScreenWidth, h = ScreenHeight;
+	int size = ( h * 256 + 384 ) / 768;
+	if ( size > w / 2 )
+		size = w / 2;
+	if ( size > h / 2 )
+		size = h / 2;
+	if ( size < 1 )
+		return;
+
+	// everything this changes is put back: the engine and the renderer keep their own record of the bound textures
+	GLint unit = GL_TEXTURE0_ARB, oldtexture = 0;
+	gl.glGetIntegerv( GL_ACTIVE_TEXTURE_ARB, &unit );
+	if ( unit != GL_TEXTURE0_ARB )
+		gl.glActiveTextureARB( GL_TEXTURE0_ARB );
+	gl.glGetIntegerv( GL_TEXTURE_BINDING_2D, &oldtexture );
+	gl.glPushAttrib( GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT | GL_TEXTURE_BIT | GL_TRANSFORM_BIT );
+
+	// loaded the first time, and again when the renderer was restarted (a new context has none of the textures)
+	if ( !s_iRcVignetteState || !glIsTexture( s_uiRcVignette[0] ) )
+	{
+		static const char *s_szNames[4] =
+		{
+			"gfx/vgui/vignette/vignette_tl.tga", "gfx/vgui/vignette/vignette_tr.tga",
+			"gfx/vgui/vignette/vignette_bl.tga", "gfx/vgui/vignette/vignette_br.tga"
+		};
+		s_iRcVignetteState = 1;
+		for ( int i = 0; i < 4; i++ )
+		{
+			if ( !s_uiRcVignette[i] )
+				s_uiRcVignette[i] = current_ext_texture_id++;
+			if ( !RcVignetteUpload( s_szNames[i], s_uiRcVignette[i] ) )
+			{
+				gEngfuncs.Con_Printf( "rc_vignette: cannot load %s\n", s_szNames[i] );
+				s_iRcVignetteState = -1;
+				break;
+			}
+		}
+	}
+
+	if ( s_iRcVignetteState > 0 )
+	{
+		gl.glMatrixMode( GL_PROJECTION );
+		gl.glPushMatrix();
+		gl.glLoadIdentity();
+		gl.glOrtho( 0, w, h, 0, -1, 1 );
+		gl.glMatrixMode( GL_MODELVIEW );
+		gl.glPushMatrix();
+		gl.glLoadIdentity();
+
+		gl.glDisable( GL_DEPTH_TEST );
+		gl.glDisable( GL_CULL_FACE );
+		gl.glDisable( GL_ALPHA_TEST );
+		gl.glDisable( GL_FOG );
+		gl.glEnable( GL_TEXTURE_2D );
+		gl.glEnable( GL_BLEND );
+		gl.glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+		gl.glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
+		gl.glColor4f( 1, 1, 1, 1 );
+
+		const int x[4] = { 0, w - size, 0, w - size };
+		const int y[4] = { 0, 0, h - size, h - size };
+		for ( int i = 0; i < 4; i++ )
+		{
+			gl.glBindTexture( GL_TEXTURE_2D, s_uiRcVignette[i] );
+			gl.glBegin( GL_QUADS );
+			gl.glTexCoord2f( 0, 0 );
+			gl.glVertex3f( x[i], y[i], 0 );
+			gl.glTexCoord2f( 1, 0 );
+			gl.glVertex3f( x[i] + size, y[i], 0 );
+			gl.glTexCoord2f( 1, 1 );
+			gl.glVertex3f( x[i] + size, y[i] + size, 0 );
+			gl.glTexCoord2f( 0, 1 );
+			gl.glVertex3f( x[i], y[i] + size, 0 );
+			gl.glEnd();
+		}
+
+		gl.glMatrixMode( GL_PROJECTION );
+		gl.glPopMatrix();
+		gl.glMatrixMode( GL_MODELVIEW );
+		gl.glPopMatrix();
+	}
+
+	gl.glPopAttrib();
+	gl.glBindTexture( GL_TEXTURE_2D, oldtexture );
+	if ( unit != GL_TEXTURE0_ARB )
+		gl.glActiveTextureARB( unit );
+}

@@ -34,6 +34,7 @@ extern "C"
 #include "HUDControl_guess.h"
 #include "RECBInventory_guess.h"
 #include "rc_client.h"
+#include "rc_prof.h"	// ReCoF (B337)
 #include "rc_version.h"
 #include "windows.h"
 
@@ -149,6 +150,7 @@ cvar_t	*cl_noiseeffect;
 cvar_t	*cl_noiseamount;
 cvar_t	*cl_subtitles;
 cvar_t	*cl_vignette;
+cvar_t	*rc_vignette;	// ReCoF (B308): draws the vignette (gl_postprocess.cpp RcDrawVignette)
 cvar_t	*cl_fovmultiplier;
 cvar_t	*cl_lazyweapon_force;
 cvar_t	*cl_weapon_idle_dampener;
@@ -469,8 +471,20 @@ HUD_Key_Event
 Return 1 to allow engine to process the key, otherwise, act on it as needed
 ============
 */
+bool IsViewEntityActive_guess( void );
+
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
+	// ReCoF story co-op: Enter skips a scene in single player (the server reads the keyboard); in co-op the host's
+	// client asks for it, for Enter in game only (the engine sends no chat or console key here), and the host's skip
+	// is the group's (hl.dll rc_cheats.cpp, rc_coop.cpp RcCoop_SkipScene)
+	if ( down && keynum == 13 && IsViewEntityActive_guess() )
+	{
+		const char *pszCoop = gEngfuncs.PhysInfo_ValueForKey( "rcc" );
+		if ( pszCoop && pszCoop[0] == '1' )
+			gEngfuncs.pfnClientCmd( "rc_cutscene_skip" );
+	}
+
 	if (gViewPort)
 		return gViewPort->KeyInput(down, keynum, pszCurrentBinding);
 	
@@ -1287,6 +1301,9 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 	}
 
 	cmd->is_donator = iDonator_guess;
+
+	// ReCoF (B337): rc_prof times the local server's frame, which the engine runs next, until HUD_Frame
+	RcProf_Push( RCP_SERVER );
 }
 
 /*
@@ -1522,6 +1539,9 @@ void InitInput (void)
 	cl_noiseeffect		= gEngfuncs.pfnRegisterVariable ( "cl_noiseeffect", "0", FCVAR_ARCHIVE );
 	cl_noiseamount		= gEngfuncs.pfnRegisterVariable ( "cl_noiseamount", "0.5", FCVAR_ARCHIVE );
 	cl_vignette			= gEngfuncs.pfnRegisterVariable ( "cl_vignette", "1", FCVAR_ARCHIVE );
+	// ReCoF (B308): cl_vignette is read by nothing, as in retail. 1.6a saved it as 1 in every config without it
+	// ever doing anything, so a new name decides whether the vignette shows, off by default
+	rc_vignette			= gEngfuncs.pfnRegisterVariable ( "rc_vignette", "0", FCVAR_ARCHIVE );
 	cl_fovmultiplier	= gEngfuncs.pfnRegisterVariable ( "cl_fovmultiplier", "1", FCVAR_ARCHIVE );
 
 	m_pitch			    = gEngfuncs.pfnRegisterVariable ( "m_pitch","0.022", FCVAR_ARCHIVE );

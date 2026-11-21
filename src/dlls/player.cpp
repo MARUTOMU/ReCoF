@@ -723,6 +723,7 @@ TYPEDESCRIPTION	CBasePlayer::m_playerSaveData[] =
 	DEFINE_FIELD( CBasePlayer, m_fLightlevel, FIELD_FLOAT ),
 
 	DEFINE_FIELD( CBasePlayer, b_GoingThroughADoor, FIELD_BOOLEAN ),
+	DEFINE_FIELD( CBasePlayer, m_bRcDoorHid, FIELD_BOOLEAN ),	// ReCoF (B430)
 	DEFINE_ARRAY( CBasePlayer, inventorySlot, FIELD_STRING, 7 ),
 	DEFINE_ARRAY( CBasePlayer, inventorySlotModels, FIELD_STRING, 7 ),
 	DEFINE_ARRAY( CBasePlayer, inventorySlotClassname, FIELD_STRING, 7 ),
@@ -780,6 +781,7 @@ TYPEDESCRIPTION	CBasePlayer::m_playerSaveData[] =
 	DEFINE_FIELD( CBasePlayer, m_vPreviousOrigin, FIELD_VECTOR ),
 	DEFINE_FIELD( CBasePlayer, m_flNextDistanceCheckTime, FIELD_TIME ),
 	DEFINE_ARRAY( CBasePlayer, playerstats, FIELD_CHARACTER, sizeof( statistics ) ),
+	DEFINE_ARRAY( CBasePlayer, m_szRcCoopSet, FIELD_CHARACTER, sizeof( ((CBasePlayer *)0)->m_szRcCoopSet ) ),	// ReCoF (B392)
 	DEFINE_FIELD( CBasePlayer, m_iGoodPoints, FIELD_INTEGER ),
 	DEFINE_FIELD( CBasePlayer, m_bBossHealthBar, FIELD_BOOLEAN ),
 	DEFINE_FIELD( CBasePlayer, m_sBossBarEmpty, FIELD_STRING ),
@@ -1386,7 +1388,7 @@ void CBasePlayer :: Pain( void )
 {
 	if ( pev->waterlevel < 3 )
 	{
-		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+		if ( RcCoopPolice() )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsPolice[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 		else if ( pev->vuser1.x )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pPainSoundsDoctor[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1414,7 +1416,7 @@ void CBasePlayer :: Pain( void )
 
 void CBasePlayer :: MorphineSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pMorphineInjectionSounds[ RANDOM_LONG( 0, 7 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1422,7 +1424,7 @@ void CBasePlayer :: MorphineSound( void )
 
 void CBasePlayer :: LowHealthSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsPolice[ RANDOM_LONG( 0, 3 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pLowHealthSoundsDoctor[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1432,7 +1434,7 @@ void CBasePlayer :: LowHealthSound( void )
 
 void CBasePlayer :: SwingSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcCoopPolice() )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsPolice[ RANDOM_LONG( 0, 5 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
 	else if ( pev->vuser1.x )
 		EMIT_SOUND_DYN( ENT(pev), CHAN_VOICE, pSwingSoundsDoctor[ RANDOM_LONG( 0, 9 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1442,7 +1444,7 @@ void CBasePlayer :: SwingSound( void )
 
 void CBasePlayer :: DeathSound( void )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcCoopPolice() )
 	{
 		if ( pev->waterlevel < 3 )
 			EMIT_SOUND_DYN( ENT(pev), CHAN_AUTO, pDeathSoundsPolice[ RANDOM_LONG( 0, 4 ) ], 1, ATTN_NORM, 0, PITCH_NORM );
@@ -1618,7 +1620,7 @@ int CBasePlayer :: TakeDamage( entvars_t *pevInflictor, entvars_t *pevAttacker, 
 		return 0;
 	}
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && ( pAttacker->pev->flags & FL_MONSTER ) && !g_iSurvivalMode )
+	if ( RcPoliceMP() && ( pAttacker->pev->flags & FL_MONSTER ) && !g_iSurvivalMode )
 	{
 		flDamage *= 1.2;
 
@@ -2084,6 +2086,10 @@ void CBasePlayer::PackDeadPlayerItems( void )
 
 void CBasePlayer::RemoveAllItems( BOOL removeSuit )
 {
+	m_pStoredNightVisionWeapon = NULL;	// ReCoF (B444)
+	m_pStoredActionItem = NULL;
+	m_pNextItem = NULL;
+
 	if (m_pActiveItem)
 	{
 		ResetAutoaim( );
@@ -2367,6 +2373,9 @@ void CBasePlayer::MultiplayerPlayerDeathThink( void )
 {
 	if ( pev->fuser3 == 3 && m_flGetupTime < gpGlobals->time )
 	{
+		extern void RcCoop_ReviveSpot( CBasePlayer *pPlayer );
+		RcCoop_ReviveSpot( this );	// ReCoF (B479): not stuck where he lay (rc_coop.cpp)
+
 		pev->deadflag = DEAD_NO;
 		pev->movetype = MOVETYPE_WALK;
 		ClearBits( pev->flags, FL_ONGROUND );
@@ -2524,7 +2533,9 @@ void CBasePlayer::MultiplayerKilled( entvars_t *pevAttacker, int iGib )
 			someonealive = true;
 	}
 
-	if ( !someonealive )
+	// ReCoF story co-op: no game over and map restart; every player comes back with his things after rc_coop_respawn_time
+	// (rc_coop.cpp, B373), at the level's start when nobody is left standing
+	if ( !someonealive && !( g_pGameRules && g_pGameRules->IsMultiplayer() && !RcPoliceMP() ) )
 	{
 		if ( survivalmode )
 		{
@@ -3292,6 +3303,41 @@ BOOL CBasePlayer::IsOnLadder( void )
 
 void CBasePlayer::WheelchairPlayerDeathThink( void )
 {
+	// ReCoF (B485): a dead chair keeps its rider at 1 hp, frozen and unarmed, and only single player opens the game
+	// over screen below: in story co-op he stayed so for good (charliee1w a74a4f26). Every player is let out of his
+	// chair and killed, so the team wipe starts the level again, as single player's game over does
+	if ( m_flDeadTime < gpGlobals->time && !m_bIssuedGameOver && RcCoop_Story() )
+	{
+		m_bIssuedGameOver = true;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s's wheelchair was destroyed, the group starts again\n", STRING( pev->netname ) ) );
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || !pEnt->IsPlayer() )
+				continue;
+			CBasePlayer *pPlr = (CBasePlayer *)pEnt;
+			pPlr->StopWheelchairMode();
+			if ( pPlr->m_pWheelchair )
+			{
+				// a dead chair lets nobody out (CWheelchair::Disembark): its rider's ride ends here
+				MESSAGE_BEGIN( MSG_ONE, gmsgWheelchair, NULL, pPlr->pev );
+					WRITE_SHORT( -1 );
+					WRITE_BYTE( 0 );
+				MESSAGE_END();
+				pPlr->m_pWheelchair = NULL;
+				pPlr->m_iHideHUD &= ~HIDEHUD_HEALTH;
+				g_engfuncs.pfnSetPhysicsKeyValue( pPlr->edict(), "chr", "1" );
+			}
+			pPlr->EnableControl( TRUE );
+			if ( pPlr->IsAlive() && pPlr->pev->fuser4 == 0 )
+			{
+				pPlr->pev->health = 0;
+				pPlr->Killed( VARS( INDEXENT( 0 ) ), GIB_NEVER );
+			}
+		}
+		return;
+	}
+
 	if ( m_flDeadTime < gpGlobals->time && !m_bIssuedGameOver )
 	{
 		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
@@ -3966,6 +4012,32 @@ void CBasePlayer::UpdateStatusBar()
 
 // ReCoF: set a physinfo key only when its value changes; pm_shared reads these keys on the server
 // and in client prediction, so both sides move the same way
+// ReCoF (B500): players collide with each other (rc_player_collide, read by name: on a listen server client.dll
+// registers it before hl.dll loads, and hl.dll's own registration then fails)
+static bool RcPlayersCollide( void )
+{
+	static cvar_t *s_pRcCollide;
+	if ( !s_pRcCollide )
+		s_pRcCollide = CVAR_GET_POINTER( "rc_player_collide" );
+	return s_pRcCollide && s_pRcCollide->value != 0;
+}
+
+// ReCoF (B500): one player is inside the other (a teleport, a spawn on one spot), not just touching: their boxes overlap
+// by more than a unit on every axis. Intersects uses the boxes the engine widened by a unit for touches, which
+// overlap whenever two players stand side by side
+static bool RcPlayersInterpenetrate( CBaseEntity *a, CBaseEntity *b )
+{
+	for ( int k = 0; k < 3; k++ )
+	{
+		float la = a->pev->origin[k] + a->pev->mins[k], lb = b->pev->origin[k] + b->pev->mins[k];
+		float ha = a->pev->origin[k] + a->pev->maxs[k], hb = b->pev->origin[k] + b->pev->maxs[k];
+		float lo = la > lb ? la : lb, hi = ha < hb ? ha : hb;
+		if ( hi - lo < 1.0f )
+			return false;
+	}
+	return true;
+}
+
 static void RcSetPhysicsKey( edict_t *pEdict, const char *key, const char *value )
 {
 	if ( strcmp( g_engfuncs.pfnInfoKeyValue( (char *)g_engfuncs.pfnGetPhysicsInfoString( pEdict ), (char *)key ), value ) )
@@ -4002,6 +4074,7 @@ void CBasePlayer::PreThink(void)
 
 	RcSetPhysicsKey( edict(), "nbh", rc_bhopcap.value ? "0" : "1" );	// ReCoF (B131)
 	RcSetPhysicsKey( edict(), "dkt", rc_ducktap.value ? "1" : "0" );	// ReCoF (B132)
+	RcSetPhysicsKey( edict(), "rpc", RcPlayersCollide() ? "1" : "0" );	// ReCoF (B500): pm_shared reads it
 
 	// ReCoF (rc_hlmovement): Half-Life 1 movement. The mode reaches pm_shared on both sides through physinfo
 	// "hlm"; Half-Life runs at sv_maxspeed 320 (Cry of Fear's autoexec.cfg sets 300), and sprint is off
@@ -4157,7 +4230,9 @@ void CBasePlayer::PreThink(void)
 		{
 			if ( pSolid )
 			{
-				if ( Intersects( pSolid ) && pSolid != this )
+				// ReCoF (B500): with rc_player_collide only a player inside a living one goes through, to get out;
+				// players that merely touch stay solid (retail: any touch, which made a bump pass through after it)
+				if ( pSolid != this && ( RcPlayersCollide() ? pSolid->IsAlive() && RcPlayersInterpenetrate( this, pSolid ) : Intersects( pSolid ) ) )
 					insideanyplayer = true;
 			}
 		}
@@ -4223,7 +4298,7 @@ void CBasePlayer::PreThink(void)
 				{
 					m_bLowHealth = true;
 
-					if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+					if ( g_pGameRules && !RcPoliceMP() )
 						g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "1" );
 				}
 
@@ -4246,7 +4321,7 @@ void CBasePlayer::PreThink(void)
 			{
 				m_bLowHealth = true;
 
-				if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+				if ( g_pGameRules && !RcPoliceMP() )
 					g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "1" );
 			}
 
@@ -4267,7 +4342,7 @@ void CBasePlayer::PreThink(void)
 	{
 		m_bLowHealth = false;
 
-		if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+		if ( g_pGameRules && !RcPoliceMP() )
 			g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "0" );
 	}
 
@@ -5304,8 +5379,15 @@ void ShiftMonsters( Vector origin )
 	}
 }
 
+extern bool g_bRcCutsceneSkip;	// ReCoF (B359): rc_cutscene_skip, rc_cheats.cpp
+void RcCutsceneSkipStop( void );
+
 void CBasePlayer::PostThink()
 {
+	// ReCoF (B359): the fast forward of rc_cutscene_skip ends when the camera lets the player go
+	if ( g_bRcCutsceneSkip && !IsInCutscene() )
+		RcCutsceneSkipStop();
+
 	if ( m_bInPhoneCall )
 	{
 		if ( m_iPhoneNumberState_guess )
@@ -5487,6 +5569,22 @@ void CBasePlayer::PostThink()
 			m_flNextCoopWaitingForCutsceneFadeTime = gpGlobals->time + 5;
 			UTIL_ProMessage( this, "Please wait until cutscene has finished.", 2, false );
 		}
+
+		// ReCoF (B448): let go once no model cutscene runs (one that ended for another reason, a save, a leaver)
+		bool bRcScene = false;
+		for ( int i = 1; i <= gpGlobals->maxClients && !bRcScene; i++ )
+		{
+			CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
+			bRcScene = plr && plr != this && plr->pDeathScene && plr->pDeathScene->pev->iuser3 == 0x4D44;
+		}
+		if ( !bRcScene )
+		{
+			m_bCoopWaitingForCutsceneToEnd = false;
+			EnableControl( TRUE );
+			m_iHideHUD &= ~( HIDEHUD_HEALTH | HIDEHUD_WEAPONS );
+			pev->flags &= ~FL_NOTARGET;
+			UTIL_ScreenFade( this, Vector( 0, 0, 0 ), 1, 0, 255, FFADE_IN );
+		}
 	}
 
 	if ( gpGlobals->time > m_flNextDistanceCheckTime )
@@ -5572,10 +5670,10 @@ void CBasePlayer::PostThink()
 			((CBasePlayerWeapon *)m_pActiveItem)->m_flTimeWeaponIdle = gpGlobals->time;
 			((CBasePlayerWeapon *)m_pActiveItem)->WeaponIdle();
 
-			gDualWeapon.m_flNextPrimaryAttack = gpGlobals->time;
-			gDualWeapon.m_flNextSecondaryAttack = gpGlobals->time;
-			gDualWeapon.m_flNextIdleTime = gpGlobals->time;
-			gDualWeapon.WeaponThink( this );
+			RcDualFor( this ).m_flNextPrimaryAttack = gpGlobals->time;
+			RcDualFor( this ).m_flNextSecondaryAttack = gpGlobals->time;
+			RcDualFor( this ).m_flNextIdleTime = gpGlobals->time;
+			RcDualFor( this ).WeaponThink( this );
 		}
 
 		// ReCoF (B289): doctor mode put the mask back on after every level change and load, also when the
@@ -5724,7 +5822,18 @@ void CBasePlayer::PostThink()
 	if ( b_GoingThroughADoor && g_pGameRules && g_pGameRules->IsMultiplayer() && IsAlive() )
 	{
 		if ( !( pev->effects & EF_NODRAW ) )
+		{
 			pev->effects |= EF_NODRAW;
+			m_bRcDoorHid = true;	// ReCoF (B430)
+		}
+	}
+	else if ( m_bRcDoorHid && !b_GoingThroughADoor )
+	{
+		// ReCoF (B430): the door's end (CoF_InterDoor.cpp) clears b_GoingThroughADoor but never the hide, so after
+		// his first door the others never saw this player again, and AddToFullPack stopped sending him (his voice
+		// lost its place with him)
+		m_bRcDoorHid = false;
+		pev->effects &= ~EF_NODRAW;
 	}
 
 	if ( pev->vuser4.x != pev->fuser3 )
@@ -6379,13 +6488,19 @@ void CBasePlayer::PostThink()
 		foot_splash = 0;
 	}
 
-	if ( m_iFlashlightFlags != m_iClientFlashlightFlags )
+	// ReCoF (B481): 0x100 tells the other players' clients that this one holds the lantern, whose light is his view
+	// model's alone (gl_studiomodel.cpp DrawPlayerFlashlights_guess draws it at his hand; charliee1w 75c9b2e1)
+	int iRcLightFlags = m_iFlashlightFlags;
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && IsAlive() && m_pActiveItem && FClassnameIs( m_pActiveItem->pev, "weapon_lantern" ) )
+		iRcLightFlags |= 0x100;
+
+	if ( iRcLightFlags != m_iClientFlashlightFlags )
 	{
-		m_iClientFlashlightFlags = m_iFlashlightFlags;
+		m_iClientFlashlightFlags = iRcLightFlags;
 
 		if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
 		{
-			pev->frags = m_iFlashlightFlags;
+			pev->frags = iRcLightFlags;
 
 			MESSAGE_BEGIN( MSG_ALL, gmsgScoreInfo );
 				WRITE_BYTE( ENTINDEX( edict() ) );
@@ -6459,7 +6574,34 @@ void CBasePlayer::PostThink()
 	if ( pevGround && ( pevGround->flags & FL_MONSTER ) && ( pev->flags & FL_ONGROUND ) )
 		pev->velocity = pev->velocity - gpGlobals->v_forward * CVAR_GET_FLOAT( "cof_monsterpushstrength" );
 
-	if ( m_gbIsInCutscene )
+	// ReCoF story co-op (B389): each player's scene is his own: the one global flipped between players in different
+	// states (one at a keypad's camera, another walking), so the one in a scene was seen and the others unseen. A
+	// player in a scene is unseen and leaves his iron sights as he enters it, and the global says whether any player
+	// is in a scene, which its readers (sounds, flares, bosses, stats) take as "a scene runs"
+	if ( RcCoop_Story() )
+	{
+		if ( IsInCutscene() )
+		{
+			if ( pev->renderamt != 0 )
+			{
+				if ( m_pActiveItem && ((CBasePlayerWeapon *)m_pActiveItem)->m_bIronSights )
+					m_pActiveItem->IronsightsFrom();
+				pev->renderamt = 0;
+			}
+		}
+		else if ( pev->renderamt != 255 )
+			pev->renderamt = 255;
+
+		bool bAny = false;
+		for ( int iRc = 1; iRc <= gpGlobals->maxClients && !bAny; iRc++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( iRc );
+			if ( pEnt && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && ( (CBasePlayer *)pEnt )->IsInCutscene() )
+				bAny = true;
+		}
+		m_gbIsInCutscene = bAny;
+	}
+	else if ( m_gbIsInCutscene )
 	{
 		if ( pev->renderamt != 0 )
 			pev->renderamt = 0;
@@ -6926,8 +7068,8 @@ void CBasePlayer::PostThink()
 	// do weapon stuff
 	ItemPostFrame( );
 
-	if ( gDualWeapon.HasDualWeapon( this ) )
-		gDualWeapon.WeaponThink( this );
+	if ( RcDualFor( this ).HasDualWeapon( this ) )
+		RcDualFor( this ).WeaponThink( this );
 
 	if ( FBitSet( pev->flags, FL_ONGROUND ) && pev->health > 0 && m_flFallVelocity > 175 && m_flFallVelocity < 350 )
 	{
@@ -6988,7 +7130,7 @@ void CBasePlayer::PostThink()
 
 	if (FBitSet(pev->flags, FL_ONGROUND))
 	{
-		if (m_flFallVelocity > 64 && g_pGameRules && !g_pGameRules->IsMultiplayer())
+		if (m_flFallVelocity > 64 && g_pGameRules && !RcPoliceMP())
 		{
 			CSoundEnt::InsertSound ( bits_SOUND_PLAYER, pev->origin, m_flFallVelocity, 0.2 );
 			// ALERT( at_console, "fall %f\n", m_flFallVelocity );
@@ -7260,6 +7402,8 @@ void CBasePlayer::Spawn( void )
 {
 	char CurrentPath[260];
 
+	RcCutsceneSkipStop();	// ReCoF (B359): a new map does not go on fast forwarding
+
 	GetCurrentPath( CurrentPath );
 
 	m_fFaggotTime = gpGlobals->time;
@@ -7394,7 +7538,7 @@ void CBasePlayer::Spawn( void )
 
 	m_fUnderwaterBreatheTime = gpGlobals->time;
 
-	lastquickslotpressed = 0;
+	m_iRcLastQuickSlot = 0;
 
 	heartbeat = false;
 
@@ -7416,7 +7560,7 @@ void CBasePlayer::Spawn( void )
 
 	SET_VIEW( edict(), edict() );
 
-	UTIL_ProMessage( this, " ", 2, true );
+	UTIL_ProMessage( this, " ", 2, false );	// ReCoF (B460): this player's strip; true blanked everyone's at each respawn
 
 	m_pPadlock = NULL;
 
@@ -7435,6 +7579,19 @@ void CBasePlayer::Spawn( void )
 	m_fTrippingTime = 0;
 	m_fFallingTime = 0;
 	m_iUsingComputerOrPhone = 0;
+	// ReCoF (B441): a respawn kept the holds the player died with (a phone call or its ring, a fall, a reload, the
+	// syringe heal): he came back unable to move or jump (charliee1w d3ab8125, cof-coop cd19547)
+	pev->fuser3 = 0;
+	pev->vuser4.x = 0;
+	m_bInPhoneCall = false;
+	m_bShouldFallFreeze = false;
+
+	// ReCoF (B484): the stay-black fall fade (effects.cpp CFade::Use) ends with the respawn
+	if ( m_bRcStayFaded )
+	{
+		m_bRcStayFaded = false;
+		UTIL_ScreenFade( this, g_vecZero, 0.5, 0, 255, FFADE_IN );
+	}
 
 	SetCorrectView();
 	SetCorrectMo();
@@ -7583,8 +7740,13 @@ void CBasePlayer :: Precache( void )
 }
 
 
+void RcCoop_SettingsSave( CBasePlayer *pPlayer );	// ReCoF story co-op (B392), rc_coop.cpp
+void RcCoop_SettingsLoad( CBasePlayer *pPlayer );
+
 int CBasePlayer::Save( CSave &save )
 {
+	RcCoop_SettingsSave( this );	// ReCoF (B392): the co-op settings go with the save
+
 	if ( !CBaseMonster::Save(save) )
 		return 0;
 
@@ -7606,10 +7768,14 @@ void CBasePlayer::RenewItems(void)
 
 int CBasePlayer::Restore( CRestore &restore )
 {
+	RcCutsceneSkipStop();	// ReCoF (B359): nor does a loaded game
+
 	if ( !CBaseMonster::Restore(restore) )
 		return 0;
 
 	int status = restore.ReadFields( "PLAYER", this, m_playerSaveData, ARRAYSIZE(m_playerSaveData) );
+
+	RcCoop_SettingsLoad( this );	// ReCoF (B392): a co-op save plays by the settings it was saved with
 
 	SAVERESTOREDATA *pSaveData = (SAVERESTOREDATA *)gpGlobals->pSaveData;
 	// landmark isn't present.
@@ -7656,7 +7822,7 @@ int CBasePlayer::Restore( CRestore &restore )
 		g_engfuncs.pfnSetPhysicsKeyValue( edict(), "slj", "0" );
 	}
 
-	if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	if ( g_pGameRules && !RcPoliceMP() )
 	{
 		if ( !m_bLowHealth )
 			g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", "0" );
@@ -8910,6 +9076,16 @@ int CBasePlayer::AddPlayerItem( CBasePlayerItem *pItem )
 
 int CBasePlayer::RemovePlayerItem( CBasePlayerItem *pItem )
 {
+	// ReCoF (B444): a weapon that leaves the player leaves his stored pointers too (the weapon night vision gives back,
+	// the one an action item put away, the next to switch to): deployed later from there it crashed the game
+	// (cof-coop cd19547, charliee1w 29bfa9e5)
+	if ( m_pStoredNightVisionWeapon == pItem )
+		m_pStoredNightVisionWeapon = NULL;
+	if ( m_pStoredActionItem == pItem )
+		m_pStoredActionItem = NULL;
+	if ( m_pNextItem == pItem )
+		m_pNextItem = NULL;
+
 	if (m_pActiveItem == pItem)
 	{
 		ResetAutoaim( );
@@ -9403,8 +9579,13 @@ void CBasePlayer :: UpdateClientData( void )
 						m_hCurrentCamera = plr->m_hCurrentCamera;
 						SET_VIEW( edict(), plr->m_hCurrentCamera->edict() );
 
-						plr->pev->flags |= FL_NOTARGET;
-						plr->pev->takedamage = DAMAGE_NO;
+						// ReCoF (B445): this player joins the scene: retail wrote the hold onto the other player
+						// (plr->pev, already held) and left this one free to walk and be hit; frozen too when the
+						// camera takes control (spawnflag 4), as the camera's end lets every player go (charliee1w 6446bb0f)
+						pev->flags |= FL_NOTARGET;
+						pev->takedamage = DAMAGE_NO;
+						if ( plr->m_hCurrentCamera->pev->spawnflags & 4 )
+							EnableControl( FALSE );
 
 						if ( plr->m_hCurrentCamera->pev->spawnflags & 16 )
 							m_iHideHUD |= HIDEHUD_HEALTH;
@@ -9492,6 +9673,14 @@ void CBasePlayer :: UpdateClientData( void )
 			{
 				FireTargets( "game_playerjoin", this, this, USE_TOGGLE, 0 );
 			}
+		}
+
+		// ReCoF (B473): the client clears its fog at every ResetHUD and InitHUD (hud_msg.cpp) and env_fog sends only
+		// when it changes, so a story co-op respawn had no fog until the next change (charliee1w a9a6d01c)
+		if ( RcCoop_Story() )
+		{
+			extern void RcFogResend( CBasePlayer *pPlayer );
+			RcFogResend( this );
 		}
 
 		if ( m_bBossHealthBar )
@@ -9596,7 +9785,7 @@ void CBasePlayer :: UpdateClientData( void )
 		{
 			MESSAGE_BEGIN( MSG_ONE, gmsgDualWield, NULL, pev );
 				WRITE_STRING( STRING( m_sDualWieldViewModel ) );
-				WRITE_BYTE( gDualWeapon.dualbody );
+				WRITE_BYTE( RcDualFor( this ).dualbody );
 				WRITE_BYTE( m_iDualWeaponLeftID );
 				WRITE_BYTE( m_iDualWeaponRightID );
 			MESSAGE_END();
@@ -11241,6 +11430,25 @@ void CInfoIntermission::Think ( void )
 LINK_ENTITY_TO_CLASS( info_intermission, CInfoIntermission );
 
 
+// ReCoF (B424): the physinfo keys pm_shared reads that Spawn and Restore set (Restore's own lines below are kept as
+// retail had them). The engine empties a client's physinfo when it signs on to a new level (sv_main.c
+// SV_InactivateClients, host.c at connect); the host's game is in the server and never signs on again, but a story
+// co-op guest's does, after his player was restored, so he came into each new level without them: jump height 0 (no
+// jump at all), no step times, no materials. rc_coop.cpp sets them again on the guest's first command there
+void CBasePlayer::RcRestorePhysinfo( void )
+{
+	char *pszMaterials = (char *)CVAR_GET_STRING( "sv_custommaterials" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "mtl", strlen( pszMaterials ) > 2 ? pszMaterials : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "hl", "1" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "slj", m_fLongJump ? "1" : "0" );
+	if ( g_pGameRules && !RcPoliceMP() )
+		g_engfuncs.pfnSetPhysicsKeyValue( edict(), "low", m_bLowHealth ? "1" : "0" );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "asd", CVAR_GET_STRING( "cof_walksteptime" ) );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "bsd", CVAR_GET_STRING( "cof_runsteptime" ) );
+	g_engfuncs.pfnSetPhysicsKeyValue( edict(), "csd", CVAR_GET_STRING( "cof_sprintsteptime" ) );
+	SetJumpHeight( m_iJumpHeight );
+}
+
 // buz: set jump height function
 void CBasePlayer::SetJumpHeight(int value)
 {
@@ -11336,6 +11544,8 @@ void CBasePlayer::ViewPunch( float p, float y, float r )
 }
 
 
+
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF story co-op (rc_coop.cpp)
 
 int CBasePlayer::InventoryAddCheck( CBaseEntity *pEntity )
 {
@@ -11982,7 +12192,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pDoor->m_sLockedBy ) ) )
 				{
 					if ( !( pDoor->pev->spawnflags & 1 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pDoor->UnlockDoor( this );
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
@@ -12024,9 +12238,13 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pButton->m_iszLockedBy ) ) )
 				{
 					if ( !( pButton->pev->spawnflags & 1024 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
-					pButton->UnlockDoor();
+					pButton->UnlockDoor( this );	// ReCoF (B387)
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
 					CloseInventory();
 					return;
@@ -12055,7 +12273,11 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pDoor->m_sLockedBy ) ) )
 				{
 					if ( !( pDoor->pev->spawnflags & 1 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
 					pDoor->UnlockDoor( this );
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
@@ -12097,9 +12319,13 @@ void CBasePlayer::InventoryUse( int slotnum )
 				if ( !strcmp( szCompare, STRING( pButton->m_iszLockedBy ) ) )
 				{
 					if ( !( pButton->pev->spawnflags & 1024 ) )
+					{
+						string_t iszUsed = inventorySlot[slotnum];
 						ClearOutSlot( slotnum, 0 );
+						RcCoop_KeyUsed( STRING( iszUsed ) );	// ReCoF story co-op: used up for the whole group
+					}
 
-					pButton->UnlockDoor();
+					pButton->UnlockDoor( this );	// ReCoF (B387)
 					EMIT_SOUND_DYN( ENT( pev ), CHAN_ITEM, "inventory/inventory_click.wav", 1, ATTN_NORM, 0, PITCH_NORM );
 					CloseInventory();
 					return;
@@ -13312,7 +13538,7 @@ void CBasePlayer::StaminaThink( void )
 
 		if ( pev->waterlevel < 3 && m_flOutOfBreathDisableTime < gpGlobals->time )
 		{
-			if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			if ( RcPoliceMP() )
 			{
 				if ( RANDOM_LONG( 0, 1 ) == 1 )
 					EMIT_SOUND( ENT( pev ), CHAN_VOICE, "player/police/player_out_of_breath1.wav", 1, 0.8 );
@@ -13430,7 +13656,7 @@ void CBasePlayer::BreatheThink( void )
 	{
 		if ( m_fStaminaBreatheCyle < gpGlobals->time )
 		{
-			if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+			if ( RcPoliceMP() )
 			{
 				switch ( RANDOM_LONG( 0, 8 ) )
 				{
@@ -13750,7 +13976,7 @@ void CBasePlayer::CheckQuickDualWield( char *quicksel, char *lastquicksel )
 	if ( !quicksel || !lastquicksel )
 		return;
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		return;
 
 	if ( !strncmp( quicksel, "weapon_", 7 ) && !strncmp( lastquicksel, "weapon_", 7 ) )
@@ -13851,12 +14077,13 @@ void CBasePlayer::QuickSelectItem( int number )
 	if ( pev->fuser3 == 10 )
 		return;
 
-	if ( m_flQuickSlotTimeDecay > gpGlobals->time && lastquickslotpressed != number && g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	// ReCoF (B460): story co-op dual wields from quick select as single player does (the police co-op does not)
+	if ( m_flQuickSlotTimeDecay > gpGlobals->time && m_iRcLastQuickSlot != number && g_pGameRules && !RcPoliceMP() )
 	{
 		switch ( number )
 		{
 		case 1:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel1, m_sQuickSel1 );
@@ -13870,7 +14097,7 @@ void CBasePlayer::QuickSelectItem( int number )
 			}
 			break;
 		case 2:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel2, m_sQuickSel1 );
@@ -13884,7 +14111,7 @@ void CBasePlayer::QuickSelectItem( int number )
 			}
 			break;
 		case 3:
-			switch ( lastquickslotpressed )
+			switch ( m_iRcLastQuickSlot )
 			{
 			case 1:
 				CheckQuickDualWield( m_sQuickSel3, m_sQuickSel1 );
@@ -13900,7 +14127,7 @@ void CBasePlayer::QuickSelectItem( int number )
 		}
 	}
 
-	lastquickslotpressed = number;
+	m_iRcLastQuickSlot = number;
 
 	m_flQuickSlotTimeDecay = gpGlobals->time + 0.25;
 
@@ -14496,7 +14723,7 @@ void CBasePlayer::SetDualWieldWeapon( int model )
 	{
 		MESSAGE_BEGIN( MSG_ONE, gmsgDualWield, NULL, pev );
 			WRITE_STRING( STRING( m_sDualWieldViewModel ) );
-			WRITE_BYTE( gDualWeapon.dualbody );
+			WRITE_BYTE( RcDualFor( this ).dualbody );
 			WRITE_BYTE( m_iDualWeaponLeftID );
 			WRITE_BYTE( m_iDualWeaponRightID );
 		MESSAGE_END();
@@ -15039,7 +15266,7 @@ void CBasePlayer::StopWheelchairMode( void )
 
 void CBasePlayer::ShowHint( int hint, bool showanyway )
 {
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
+	if ( RcPoliceMP() )
 		return;
 
 	int i;
@@ -15273,6 +15500,8 @@ void CBasePlayer::MultiplayerTouch( CBaseEntity *pOther )
 
 	if ( pOther->IsPlayer() )
 	{
+		if ( RcPlayersCollide() )
+			return;	// ReCoF (B500): players stay solid to each other
 		pev->solid = SOLID_NOT;
 		pOther->pev->solid = SOLID_NOT;
 	}
@@ -16531,6 +16760,9 @@ bool strstrtolower( char *path, char *convert )
 
 int CBasePlayer::IsDonator( void )
 {
+	if ( rc_dominicanpapi.value )
+		return 1;
+
 	if ( g_pGameRules && g_pGameRules->IsMultiplayer() )
 	{
 		if ( m_iNew16a_guess != 0 && m_iNew16a_guess != 3 && m_iNew16a_guess != 4 )

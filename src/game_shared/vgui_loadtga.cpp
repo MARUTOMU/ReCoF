@@ -71,10 +71,44 @@ vgui::BitmapTGA* vgui_LoadTGA(char const *pFilename)
 		return NULL;
 	
 	stream.m_ReadPos = 0;
-	vgui::BitmapTGA *pRet = new vgui::BitmapTGA(&stream, true);
+	vgui::BitmapTGA *pRet = new CRcTGA(&stream, true);
 	gEngfuncs.COM_FreeFile(stream.m_pData);
 	
 	return pRet;
+}
+
+// ReCoF (B393): a TGA file already in memory (the main menu's Story Co-op label, client.dll rc_coopmenu.cpp)
+vgui::BitmapTGA* vgui_LoadTGAFromMemory(unsigned char *pData, int len)
+{
+	MemoryInputStream stream;
+
+	stream.m_pData = pData;
+	stream.m_DataLen = len;
+	stream.m_ReadPos = 0;
+	return new CRcTGA(&stream, true);
+}
+
+// ReCoF (B397): the picture menus' hover pictures, each loaded once (retail loaded one at every hover and never freed
+// the one it replaced)
+vgui::BitmapTGA* vgui_LoadTGACached(char const *pFilename)
+{
+	static char s_szName[64][64];
+	static vgui::BitmapTGA *s_pImage[64];
+	static int s_nImages;
+	int i;
+
+	for ( i = 0; i < s_nImages; i++ )
+	{
+		if ( !stricmp( s_szName[i], pFilename ) )
+			return s_pImage[i];
+	}
+	vgui::BitmapTGA *pImage = vgui_LoadTGA( pFilename );
+	if ( pImage && s_nImages < 64 && strlen( pFilename ) < 64 )
+	{
+		strcpy( s_szName[s_nImages], pFilename );
+		s_pImage[s_nImages++] = pImage;
+	}
+	return pImage;
 }
 
 vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename)
@@ -86,7 +120,7 @@ vgui::BitmapTGA* vgui_LoadTGANoInvertAlpha(char const *pFilename)
 		return NULL;
 	
 	stream.m_ReadPos = 0;
-	vgui::BitmapTGA *pRet = new vgui::BitmapTGA(&stream, false);
+	vgui::BitmapTGA *pRet = new CRcTGA(&stream, false);
 	gEngfuncs.COM_FreeFile(stream.m_pData);
 	
 	return pRet;

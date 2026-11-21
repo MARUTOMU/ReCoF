@@ -5,6 +5,7 @@
 
 #ifndef _GAMEMENU_H
 #define _GAMEMENU_H
+#include "rc_vgui1.h"	// ReCoF (B401): CRcImagePanel
 using namespace vgui;
 
 #define MAX_CAMPAIGNS_guess	256
@@ -82,29 +83,29 @@ public:
 	ColorButton	*m_pQuitButton_guess;	// 0xc6d8
 	ColorButton	*m_pCancelButton_guess;		// 0xc6dc, closes the campaign list
 	Image	*m_pLogoImage_guess;			// 0xc6e0, gfx/vgui/menu_logo.tga
-	ImagePanel	*m_pLogo_guess;				// 0xc6e4
+	CRcImagePanel	*m_pLogo_guess;				// 0xc6e4
 	Image	*m_pLogoTSImage_guess;			// 0xc6e8, gfx/vgui/menu_logo_ts.tga
-	ImagePanel	*m_pLogoTS_guess;			// 0xc6ec
+	CRcImagePanel	*m_pLogoTS_guess;			// 0xc6ec
 	Image	*m_pNewGameImage_guess;		// 0xc6f0, gfx/vgui/menu/newgame.tga
-	ImagePanel	*m_pNewGame_guess;		// 0xc6f4
+	CRcImagePanel	*m_pNewGame_guess;		// 0xc6f4
 	Image	*m_pLoadGameImage_guess;		// 0xc6f8, gfx/vgui/menu/loadgame.tga
-	ImagePanel	*m_pLoadGame_guess;		// 0xc6fc
+	CRcImagePanel	*m_pLoadGame_guess;		// 0xc6fc
 	Image	*m_pCustomImage_guess;		// 0xc700, gfx/vgui/menu/customc.tga
-	ImagePanel	*m_pCustom_guess;		// 0xc704
+	CRcImagePanel	*m_pCustom_guess;		// 0xc704
 	Image	*m_pJoinServerImage_guess;		// 0xc708, gfx/vgui/menu/jserver.tga
-	ImagePanel	*m_pJoinServer_guess;		// 0xc70c
+	CRcImagePanel	*m_pJoinServer_guess;		// 0xc70c
 	Image	*m_pOptionsImage_guess;		// 0xc710, gfx/vgui/menu/options.tga
-	ImagePanel	*m_pOptions_guess;		// 0xc714
+	CRcImagePanel	*m_pOptions_guess;		// 0xc714
 	Image	*m_pLanguageImage_guess;		// 0xc718, gfx/vgui/menu/language.tga
-	ImagePanel	*m_pLanguage_guess;		// 0xc71c
+	CRcImagePanel	*m_pLanguage_guess;		// 0xc71c
 	Image	*m_pUnlockablesImage_guess;		// 0xc720, gfx/vgui/menu/unlockables.tga
-	ImagePanel	*m_pUnlockables_guess;		// 0xc724
+	CRcImagePanel	*m_pUnlockables_guess;		// 0xc724
 	Image	*m_pExtrasImage_guess;		// 0xc728, gfx/vgui/menu/extras.tga
-	ImagePanel	*m_pExtras_guess;		// 0xc72c
+	CRcImagePanel	*m_pExtras_guess;		// 0xc72c
 	Image	*m_pHostServerImage_guess;		// 0xc730, gfx/vgui/menu/hserver.tga
-	ImagePanel	*m_pHostServer_guess;		// 0xc734
+	CRcImagePanel	*m_pHostServer_guess;		// 0xc734
 	Image	*m_pQuitImage_guess;		// 0xc738, gfx/vgui/menu/quit.tga
-	ImagePanel	*m_pQuit_guess;		// 0xc73c
+	CRcImagePanel	*m_pQuit_guess;		// 0xc73c
 	int		m_iUnknownC740_guess;			// 0xc740, never used in 1.6a
 	int		m_iUnknownC744_guess;			// 0xc744, never used in 1.6a
 };

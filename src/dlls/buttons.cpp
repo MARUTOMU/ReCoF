@@ -868,10 +868,10 @@ void CBaseButton::Spawn( )
 	}
 }
 
-void CBaseButton::UnlockDoor( void )
+void CBaseButton::UnlockDoor( CBaseEntity *pUser )
 {
 	CBaseEntity *pPlayer = NULL;
-	pPlayer = UTIL_FirstPlayer_rc();
+	pPlayer = RcCoop_User( pUser );	// ReCoF story co-op (B387): the one who used the item
 
 	if ( !pPlayer )
 		return;

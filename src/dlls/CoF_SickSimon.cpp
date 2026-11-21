@@ -41,6 +41,7 @@ extern float m_fMusicManagerFadeTime;
 extern int gmsgSimonMode;
 extern int gmsgGreyFade;
 extern int gmsgBossBar;
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 extern int gmsgTimerPlus;
 extern int gmsgCustomDLight;
 extern int gmsgMuzzleflash;
@@ -317,7 +318,7 @@ void CBookSimon :: Spawn()
 		}
 	}
 
-	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !alreadyaboss )
+	if ( g_pGameRules && g_pGameRules->IsMultiplayer() && !alreadyaboss && !RcCoop_Story() )	// ReCoF (B508): the map's bar, as single player
 	{
 		m_bIsBoss = true;
 
@@ -586,6 +587,18 @@ void CBookSimon :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 			CBaseEntity *player = UTIL_FirstPlayer_rc();
 
+			// ReCoF story co-op (B388): every player gets the boss bar (its health updates already reach everyone
+			// who has it)
+			int iRcLast = RcCoop_Story() ? gpGlobals->maxClients : 1;
+			for ( int iRc = 1; iRc <= iRcLast; iRc++ )
+			{
+			if ( RcCoop_Story() )
+			{
+				player = UTIL_PlayerByIndex( iRc );
+				if ( player && player->pev->fuser4 != 0 )
+					player = NULL;
+			}
+
 			if ( player && player->IsPlayer() )
 			{
 				CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)player->pev );
@@ -608,6 +621,7 @@ void CBookSimon :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 					MESSAGE_END();
 				}
 			}
+			}	// ReCoF (B388): each player in story co-op
 		}
 
 		switch ( m_iWeapon )
@@ -808,6 +822,25 @@ void CBookSimon :: MonsterThink( void )
 
 	if ( pev->frags != 0 && m_iAimState == 1 )
 	{
+		// ReCoF story co-op (B389): he shoots at a player in a wheelchair; when his target has none (or left), the
+		// nearest player who has one
+		if ( RcCoop_Story() && ( !pPlayer || pPlayer->pev->fuser4 != 0 || !pPlayer->m_pWheelchair ) )
+		{
+			float flBest = 1e9;
+			for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+			{
+				CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+				if ( !pEnt || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !pEnt->IsAlive() || !( (CBasePlayer *)pEnt )->m_pWheelchair )
+					continue;
+				float fl = ( pEnt->pev->origin - pev->origin ).Length();
+				if ( fl < flBest )
+				{
+					flBest = fl;
+					pPlayer = (CBasePlayer *)pEnt;
+				}
+			}
+		}
+
 		if ( !pPlayer )
 		{
 			CBaseEntity *player = UTIL_FirstPlayer_rc();

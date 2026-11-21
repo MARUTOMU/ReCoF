@@ -482,7 +482,7 @@ void CGlock::PrimaryAttack( void )
 
 	m_pPlayer->ViewPunch( RANDOM_LONG( -2, 2 ), 1, 1 );
 
-	if ( g_pGameRules && !g_pGameRules->IsMultiplayer() )
+	if ( g_pGameRules && !RcPoliceMP() )	// ReCoF (B460): story co-op drops the brass as single player
 	{
 		Vector vecShellVelocity = gpGlobals->v_right * 220 + gpGlobals->v_up * 200 + gpGlobals->v_forward * 40;
 		Vector vecShellOrigin = pev->origin + pev->view_ofs + gpGlobals->v_forward * 80 + gpGlobals->v_right * 20;

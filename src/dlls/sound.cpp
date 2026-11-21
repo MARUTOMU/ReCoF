@@ -625,13 +625,16 @@ void CAmbientGeneric :: InitModulationParms(void)
 // a looping sound, never mark it as active.
 //
 extern bool m_gbIsInCutscene;
+extern bool g_bRcCutsceneSkip;	// ReCoF (B359): rc_cutscene_skip, rc_cheats.cpp
 
 void CAmbientGeneric :: ToggleUse ( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	char* szSoundFile = (char*) STRING(pev->message);
 	float fraction;
 
-	if ( m_gbIsInCutscene && CVAR_GET_FLOAT( "host_framerate" ) != 0 )
+	// ReCoF (B359): the retail skip drops the sounds a scene turns on and off; the fast forward of a scene the map
+	// keeps from being skipped keeps them, so a sound the scene starts for what comes after it still plays
+	if ( m_gbIsInCutscene && CVAR_GET_FLOAT( "host_framerate" ) != 0 && !g_bRcCutsceneSkip )
 		return;
 
 	if ( useType != USE_TOGGLE )

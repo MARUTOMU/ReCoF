@@ -10,6 +10,7 @@
 #include "info.h"
 #include "host.h"
 #include "client.h"
+#include "rc_coop.h"	// ReCoF story co-op
 #include "delta.h"
 #include "server.h"
 #include "gl_model.h"
@@ -3909,7 +3910,7 @@ void CL_Init( void )
 	Cmd_AddCommand( "connect", CL_Connect_f );
 	Cmd_AddCommand( "fullserverinfo", CL_FullServerinfo_f );
 	Cmd_AddCommand( "retry", CL_Retry_f );
-	Cmd_AddCommand( "disconnect", CL_Disconnect_f );
+	Cmd_AddCommand( "disconnect", RcCoop_Disconnect_f );	// ReCoF: CL_Disconnect_f, marking a disconnect the user asked for
 	Cmd_AddCommand( "record", CL_Record_f );
 	Cmd_AddCommand( "stop", CL_Stop_f );
 	Cmd_AddCommand( "playdemo", CL_PlayDemo_f );

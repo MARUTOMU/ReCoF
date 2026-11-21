@@ -233,6 +233,11 @@ void CCamera::PrimaryAttack( void )
 			{
 				if ( pEntity && FClassnameIs( pEntity->pev, "camera_spot_trigger" ) )
 				{
+					if ( RcCoop_Story() )
+					{
+						extern void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator );
+						RcCoop_MapEvent( pEntity, m_pPlayer );	// ReCoF (B490): a correct photo gathers the group
+					}
 					FireTargets( STRING( pEntity->pev->target ), m_pPlayer, m_pPlayer, USE_TOGGLE, 0 );
 				}
 				else if ( !pEntity->IsPlayer() )

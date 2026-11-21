@@ -26,6 +26,8 @@ extern cvar_t	teamplay;
 extern cvar_t	fraglimit;
 extern cvar_t	timelimit;
 extern cvar_t	friendlyfire;
+extern cvar_t	rc_coop;	// ReCoF story co-op (rc_coop.cpp)
+void RcCoop_Init( void );
 extern cvar_t	falldamage;
 extern cvar_t	weaponstay;
 extern cvar_t	forcerespawn;
@@ -38,10 +40,12 @@ extern cvar_t	defaultteam;
 extern cvar_t	allowmonsters;
 
 // Engine Cvars
+extern cvar_t	rc_dominicanpapi;
 extern cvar_t	rc_retail_gameplay;	// ReCoF: 1 restores the retail behavior of the balance fixes
 extern cvar_t	rc_bhopcap;			// ReCoF: 0 removes the bunny hop speed cap
 extern cvar_t	rc_ducktap;			// ReCoF: 1 brings back the Half-Life ducktap
 extern cvar_t	rc_infinite_stamina;	// ReCoF: 1 gives infinite stamina
+extern cvar_t	rc_player_collide;	// ReCoF (B500)
 extern cvar_t	rc_hlmovement;		// ReCoF: 1 gives Half-Life 1 movement
 extern cvar_t	rc_door_skip;		// ReCoF: 1 skips the fade of the inter_door doors
 extern cvar_t	rc_disable_changelevel;	// ReCoF (B317): 1 keeps level changes from starting

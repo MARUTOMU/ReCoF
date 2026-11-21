@@ -24,11 +24,13 @@ using namespace vgui;
 //-----------------------------------------------------------------------------
 // Purpose: Basic help dialog
 //-----------------------------------------------------------------------------
+int RcUiScaled( int value );	// ReCoF (B399), RcTheme.cpp
+
 COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, "OptionsDialog" )
 {
 	// ReCoF (B332): seven tabs, each with a second row of tabs, and every ReCoF option in them; retail had seven
 	// pages in a 512 x 406 window, with Cry of Fear's own options in one long Advanced list
-	SetBounds( 0, 0, 660, 500 );
+	SetBounds( 0, 0, RcUiScaled( 660 ), RcUiScaled( 500 ) );	// ReCoF (B399): grown with the screen
 	SetSizeable( false );
 
 	g_pTaskbar->AddTask( GetVPanel() );
@@ -38,44 +40,52 @@ COptionsDialog::COptionsDialog( vgui::Panel *parent ) : PropertyDialog( parent, 
 	CRcOptionsSheet *sheet;
 
 	sheet = new CRcOptionsSheet( this, "GameSheet" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_general", "Point at an option to see what it does." ), "General" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_gameplay", "Point at an option to see what it does." ), "Gameplay" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "game_movement", "Point at an option to see what it does." ), "Movement" );
+	sheet->SetProportional( true );	// ReCoF (B399)
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_general", "" ), "General" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_gameplay", "" ), "Gameplay" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "game_movement", "" ), "Movement" );
 	AddPage( sheet, "Game" );
 
 	sheet = new CRcOptionsSheet( this, "ControlsSheet" );
+	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new COptionsSubKeyboard( sheet ), "#GameUI_Keyboard" );
 	sheet->AddPage( new COptionsSubMouse( sheet ), "#GameUI_Mouse" );
 	AddPage( sheet, "Controls" );
 
 	sheet = new CRcOptionsSheet( this, "GraphicsSheet" );
+	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new COptionsSubVideo( sheet ), "Display" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_effects", "Point at an option to see what it does." ), "Effects" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_quality", "Point at an option to see what it does." ), "Quality" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_performance", "Point at an option to see what it does." ), "Performance" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_weapon", "Point at an option to see what it does." ), "Weapon view" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_effects", "" ), "Effects" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_quality", "" ), "Quality" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_performance", "" ), "Performance" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "gfx_weapon", "" ), "Weapon view" );
 	AddPage( sheet, "Graphics" );
 
 	sheet = new CRcOptionsSheet( this, "HudSheet" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_crosshair", "Point at an option to see what it does." ), "Crosshair" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_info", "Point at an option to see what it does." ), "Info panel" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "hud_speedrun", "Point at an option to see what it does." ), "Speedrun" );
+	sheet->SetProportional( true );	// ReCoF (B399)
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_crosshair", "" ), "Crosshair" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_info", "" ), "Info panel" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "hud_speedrun", "" ), "Speedrun" );
 	AddPage( sheet, "HUD" );
 
 	sheet = new CRcOptionsSheet( this, "AudioSheet" );
+	sheet->SetProportional( true );	// ReCoF (B399)
 	sheet->AddPage( new COptionsSubAudio( sheet ), "Sound" );
 	sheet->AddPage( new COptionsSubVoice( sheet ), "#GameUI_Voice" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "audio_voice", "" ), "Talking" );	// ReCoF (B422)
 	AddPage( sheet, "Audio" );
 
 	sheet = new CRcOptionsSheet( this, "MultiplayerSheet" );
-	sheet->AddPage( new CRcOptionsPage( sheet, "mp_player", "Point at an option to see what it does." ), "Player" );
+	sheet->SetProportional( true );	// ReCoF (B399)
+	sheet->AddPage( new CRcOptionsPage( sheet, "mp_player", "" ), "Player" );
 	sheet->AddPage( new COptionsSubSpray( sheet ), "Spray" );
+	sheet->AddPage( new CRcOptionsPage( sheet, "mp_coop", "" ), "Co-op" );	// ReCoF (B400)
 	AddPage( sheet, "Multiplayer" );
 
 	AddPage( new CRcAboutPage( this ), "ReCoF" );
 
 	SetApplyButtonVisible( true );
-	GetPropertySheet()->SetTabWidth( 84 );
+	GetPropertySheet()->SetTabWidth( RcUiScaled( 84 ) );
 }
 
 //-----------------------------------------------------------------------------
@@ -130,8 +140,11 @@ void COptionsDialog::Run()
 //-----------------------------------------------------------------------------
 // Purpose: Called when the GameUI is hidden
 //-----------------------------------------------------------------------------
+void RcGameUI_DialogClosed( void );	// ReCoF (B397), GameUI_Interface.cpp
+
 void COptionsDialog::OnClose()
 {
 	BaseClass::OnClose();
 	MarkForDeletion();
+	RcGameUI_DialogClosed();	// ReCoF (B397): back to the picture menu it was opened from
 }

@@ -165,6 +165,7 @@ public:
 	string_t m_sCvarNo;
 	int m_cvarvalue;
 	int m_cvarvalueno;
+	int m_iRcHeld;	// ReCoF (B457): the players ryesno holds, by index bit
 };
 
 class CCoFDocument : public CBaseEntity
@@ -335,6 +336,8 @@ extern int m_iMusicManagerLoops;
 extern float m_fMusicManagerFadeTime;
 extern const char *GetClassnameForId[];
 bool showobjective;
+
+bool RcCoop_Story( void );	// ReCoF story co-op (rc_coop.cpp)
 extern int g_iSurvivalMode;
 extern int m_iSimonMode;
 extern bool m_gbIsInCutscene;
@@ -2234,7 +2237,7 @@ void CEnvModel::Think( void )
 
 	if ( pev->spawnflags & 8 )
 	{
-		CBaseEntity *pent = UTIL_FirstPlayer_rc();
+		CBaseEntity *pent = RcCoop_NearestPlayer( this, false );	// ReCoF story co-op (B389): the nearest player
 
 		if ( pent && !m_gbIsInCutscene )
 		{
@@ -3275,7 +3278,13 @@ void CFade::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType
 	if ( pev->spawnflags & SF_FADE_PERMANENT )	//LRC
 		fadeFlags |= FFADE_STAYOUT;				//LRC
 
-	if ( pev->spawnflags & SF_FADE_ONLYONE )
+	// ReCoF (B484): c_roofs and c_roofs2's fadefall (stay black, the game's only two) blacked out every story co-op
+	// player for good when one fell (UNIk0z 8c71181); it fades the one who fell, and his respawn lifts it (player.cpp)
+	bool bRcSolo = RcCoop_Story() && ( pev->spawnflags & SF_FADE_PERMANENT ) && pActivator && pActivator->IsPlayer();
+	if ( bRcSolo )
+		( (CBasePlayer *)pActivator )->m_bRcStayFaded = true;
+
+	if ( ( pev->spawnflags & SF_FADE_ONLYONE ) || bRcSolo )
 	{
 		if ( pActivator->IsNetClient() )
 		{
@@ -5010,6 +5019,29 @@ void CEnvFog :: SendData ( Vector col, int iFadeTime, int iStartDist, int iEndDi
 
 LINK_ENTITY_TO_CLASS( env_fog, CEnvFog );
 
+// ReCoF (B456): the active fog to one player (rc_coop.cpp RcCoopResendState, his first command on a level): env_fog
+// sends only when it changes, so a guest still loading when it turned on, or a player joining later, had none
+// (charliee1w a9a6d01c)
+void RcFogResend( CBasePlayer *pPlayer )
+{
+	CBaseEntity *pEnt = NULL;
+	while ( ( pEnt = UTIL_FindEntityByClassname( pEnt, "env_fog" ) ) != NULL )
+	{
+		if ( !( pEnt->pev->spawnflags & SF_FOG_ACTIVE ) )
+			continue;
+		CEnvFog *pFog = (CEnvFog *)pEnt;
+		MESSAGE_BEGIN( MSG_ONE, gmsgSetFog, NULL, pPlayer->pev );
+			WRITE_BYTE( pFog->pev->rendercolor.x );
+			WRITE_BYTE( pFog->pev->rendercolor.y );
+			WRITE_BYTE( pFog->pev->rendercolor.z );
+			WRITE_SHORT( 0 );
+			WRITE_SHORT( pFog->m_iStartDist );
+			WRITE_SHORT( pFog->m_iEndDist );
+		MESSAGE_END();
+		return;
+	}
+}
+
 //=========================================================
 // LRC - env_sky, an unreal tournament-style sky effect
 //=========================================================
@@ -5243,10 +5275,46 @@ void CRainModify::KeyValue( KeyValueData *pkvd )
 	}
 }
 
+// ReCoF story co-op: the same settings rain_modify gives the single player, for one player
+static void RcRainApply( CRainModify *pRain, CBasePlayer *pPlayer )
+{
+	if ( pRain->fadeTime )
+	{
+		pPlayer->Rain_ideal_dripsPerSecond = pRain->Rain_Drips;
+		pPlayer->Rain_ideal_randX = pRain->Rain_randX;
+		pPlayer->Rain_ideal_randY = pRain->Rain_randY;
+		pPlayer->Rain_ideal_windX = pRain->Rain_windX;
+		pPlayer->Rain_ideal_windY = pRain->Rain_windY;
+		pPlayer->Rain_endFade = gpGlobals->time + pRain->fadeTime;
+		pPlayer->Rain_nextFadeUpdate = gpGlobals->time + 1;
+	}
+	else
+	{
+		pPlayer->Rain_dripsPerSecond = pRain->Rain_Drips;
+		pPlayer->Rain_randX = pRain->Rain_randX;
+		pPlayer->Rain_randY = pRain->Rain_randY;
+		pPlayer->Rain_windX = pRain->Rain_windX;
+		pPlayer->Rain_windY = pRain->Rain_windY;
+		pPlayer->Rain_needsUpdate = 1;
+	}
+}
+
 void CRainModify::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if (pev->spawnflags & 1)
 		return; // constant
+
+	// ReCoF story co-op: the change reaches every player (multiplayer otherwise keeps only static rain)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				RcRainApply( this, (CBasePlayer *)pEnt );
+		}
+		return;
+	}
 
 	if (gpGlobals->deathmatch)
 	{
@@ -5580,7 +5648,8 @@ public:
 	
 	void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 	{
-		CBaseEntity *pEnt = UTIL_FirstPlayerInstance_rc();
+		// ReCoF story co-op (B387): the player who set it off
+		CBaseEntity *pEnt = ( pActivator && pActivator->IsPlayer() ) ? RcCoop_User( pActivator ) : UTIL_FirstPlayerInstance_rc();
 		if (pEnt && pEnt->IsPlayer())
 		{
 			USE_TYPE send = USE_TOGGLE;
@@ -5810,6 +5879,18 @@ void CCofBlur::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useT
 	{
 		pPlayer->m_iBlurActive = 0;
 	}
+
+	// ReCoF story co-op (B436): the blur is the group's: the on and the off can come from different players, and
+	// one kept the blur for good (c_nightmare into c_start, charliee1w f92451c0); every player takes the new value
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() && pEnt != pPlayer )
+				( (CBasePlayer *)pEnt )->m_iBlurActive = pPlayer->m_iBlurActive;
+		}
+	}
 }
 
 //=========================================================
@@ -5949,10 +6030,32 @@ void CCofClearItems::Spawn( void )
 	pev->movetype = MOVETYPE_NONE;
 }
 
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF (B475): rc_coop.cpp
+void RcCoop_KeysForget( void );
+
 void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if ( !pActivator->IsPlayer() )
 		return;
+
+	// ReCoF story co-op (B420): a weapon the map takes from "the player" (c_start's opening scene takes c_nightmare's
+	// camera) goes from every player, as B404 gives such weapons to every player (cof_giveitems below); clearing the
+	// whole inventory (flag 1) and inventory items stay with the one who set it off
+	// B454: and a clear of everything (flag 1, Chapter 6's bag loss) empties every player's
+	static bool s_bRcAll = false;
+	bool bRcClearAll = ( pev->spawnflags & 1 ) && !( pev->spawnflags & 2 );
+	if ( RcCoop_Story() && !s_bRcAll && ( bRcClearAll || ( pev->message && strstr( STRING( pev->message ), "weapon_" ) ) ) )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 && pEnt->IsAlive() &&
+				( bRcClearAll || ( (CBasePlayer *)pEnt )->HasNamedPlayerItem( STRING( pev->message ) ) ) )
+				Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
 
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
@@ -6075,6 +6178,9 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 			else
 			{
 				pPlayer->ClearOutSlotNamed( pev->message, 0 );
+				// ReCoF (B475): a group key the map takes is gone for the group, or the key sync gave it back
+				if ( RcCoop_Story() )
+					RcCoop_KeyUsed( STRING( pev->message ) );
 			}
 		}
 	}
@@ -6083,6 +6189,7 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 	{
 		pPlayer->ClearOutSlot( 1, 1 );
 		pPlayer->RemoveAllItems( FALSE );
+		RcCoop_KeysForget();	// ReCoF (B475)
 
 
 		pPlayer->SetDualWieldWeapon( 0 );
@@ -6116,6 +6223,7 @@ void CCofClearItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 			{
 				plr->ClearOutSlot( 1, 1 );
 				plr->RemoveAllItems( FALSE );
+				RcCoop_KeysForget();	// ReCoF (B475)
 
 
 				plr->SetDualWieldWeapon( 0 );
@@ -6527,6 +6635,7 @@ class CCofGiveItems : public CBaseEntity
 public:
 	virtual void Spawn( void );
 	virtual void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
+	void GiveTo( CBasePlayer *pPlayer );	// ReCoF (B404): the gift to one player, as Use gave it
 };
 
 LINK_ENTITY_TO_CLASS( cof_giveitems, CCofGiveItems );
@@ -6552,6 +6661,27 @@ void CCofGiveItems::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 	if ( !pPlayer )
 		return;
 
+	GiveTo( pPlayer );
+
+	// ReCoF story co-op (B404): a weapon the map gives "the player" (c_nightmare's camera) goes to every player in the
+	// game who has none yet; an inventory item (flag 1) stays with the one who set it off, the group's keys come by
+	// themselves (rc_coop.cpp G9)
+	if ( RcCoop_Story() && !( pev->spawnflags & 1 ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || pEnt == pPlayer || !pEnt->IsPlayer() || pEnt->pev->fuser4 != 0 || !pEnt->IsAlive() )
+				continue;
+			CBasePlayer *pOther = (CBasePlayer *)pEnt;
+			if ( !pOther->HasNamedPlayerItem( STRING( pev->message ) ) )
+				GiveTo( pOther );
+		}
+	}
+}
+
+void CCofGiveItems::GiveTo( CBasePlayer *pPlayer )
+{
 	pPlayer->m_bSilentGive = false;
 
 	if ( pev->spawnflags & 1 )
@@ -6841,7 +6971,7 @@ void CCofKeypad4::Spawn( void )
 
 void CCofKeypad4::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
+	CBaseEntity *player = RcCoop_User( pActivator );	// ReCoF story co-op (B387): the keypad of the one who pressed
 
 	if ( player )
 	{
@@ -7067,6 +7197,20 @@ void CCofLogo::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useT
 	if ( !pActivator->IsPlayer() )
 		return;
 
+	// ReCoF story co-op (B454): the intro logos on every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofLogo::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer )
@@ -7119,6 +7263,8 @@ public:
 };
 
 LINK_ENTITY_TO_CLASS( cof_teleport, CCofTeleport );
+
+void RcCoop_TeleportFollow( CBasePlayer *pMoved, CBaseEntity *pCaller );	// ReCoF story co-op (rc_coop.cpp)
 
 void CCofTeleport::Spawn( void )
 {
@@ -7186,6 +7332,9 @@ void CCofTeleport::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 			pPlayer->pev->fixangle = TRUE;
 
 			pPlayer->b_GoingThroughADoor = false;
+
+			// ReCoF story co-op: the group goes along (rc_coop.cpp)
+			RcCoop_TeleportFollow( pPlayer, pCaller );
 		}
 		else if ( pev->message )
 		{
@@ -7448,6 +7597,20 @@ void CCofShowHint::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 	if ( !pActivator->IsPlayer() )
 		return;
 
+	// ReCoF story co-op (B454): a hint on every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofShowHint::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer && pev->message )
@@ -7461,6 +7624,8 @@ void CCofShowHint::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 // cof_yesno
 //=========================================================
 LINK_ENTITY_TO_CLASS( cof_yesno, CCofYesNo );
+
+void RcCoop_KeyUsed( const char *pszItem );	// ReCoF story co-op (rc_coop.cpp)
 
 TYPEDESCRIPTION	CCofYesNo::m_SaveData[] =
 {
@@ -7545,7 +7710,17 @@ void CCofYesNo::YesActivate( CBaseEntity *pActivator )
 			GetClassPtr( (CBasePlayer *)pActivator->pev )->pev->fuser3 = 0;
 	}
 
-
+	// ReCoF (B457): every player this question holds is let go, not only the one who answered
+	if ( !strcmp( STRING(pev->targetname), "ryesno" ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients && i < 32; i++ )
+		{
+			CBaseEntity *pHeld = UTIL_PlayerByIndex( i );
+			if ( ( m_iRcHeld & ( 1 << i ) ) && pHeld && pHeld->IsPlayer() && pHeld->pev->fuser3 == 1 )
+				pHeld->pev->fuser3 = 0;
+		}
+		m_iRcHeld = 0;
+	}
 
 
 
@@ -7568,6 +7743,7 @@ void CCofYesNo::YesActivate( CBaseEntity *pActivator )
 				if ( m_sItem )
 				{
 					pPlayer->HasItemInSlot( (char *)STRING(m_sItem), true );
+					RcCoop_KeyUsed( STRING(m_sItem) );	// ReCoF story co-op: used up for the whole group
 				}
 			}
 		}
@@ -7591,6 +7767,18 @@ void CCofYesNo::NoActivate( CBaseEntity *pActivator )
 	{
 		if ( !strcmp( STRING(pev->targetname), "ryesno" ) )
 			GetClassPtr( (CBasePlayer *)pActivator->pev )->pev->fuser3 = 0;
+	}
+
+	// ReCoF (B457): every player this question holds is let go, not only the one who answered
+	if ( !strcmp( STRING(pev->targetname), "ryesno" ) )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients && i < 32; i++ )
+		{
+			CBaseEntity *pHeld = UTIL_PlayerByIndex( i );
+			if ( ( m_iRcHeld & ( 1 << i ) ) && pHeld && pHeld->IsPlayer() && pHeld->pev->fuser3 == 1 )
+				pHeld->pev->fuser3 = 0;
+		}
+		m_iRcHeld = 0;
 	}
 
 	if ( m_sCvarNo )
@@ -7624,6 +7812,9 @@ void CCofYesNo::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE use
 			pPlayer->pev->velocity.x = 0;
 			pPlayer->pev->velocity.y = 0;
 			pPlayer->pev->fuser3 = 1;
+			int iRc = ENTINDEX( pPlayer->edict() );
+			if ( iRc > 0 && iRc < 32 )
+				m_iRcHeld |= 1 << iRc;	// ReCoF (B457)
 		}
 
 		if ( m_sWeapon || m_sItem )
@@ -8592,9 +8783,9 @@ void CCofPhoneDisable::Spawn( void )
 	pev->movetype = MOVETYPE_NONE;
 }
 
-void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+// ReCoF story co-op: the phone disable for one player (the code that was Use)
+static void RcPhoneDisableFor( CBaseEntity *player )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )
 	{
@@ -8647,6 +8838,23 @@ void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_T
 			}
 		}
 	}
+}
+
+void CCofPhoneDisable::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+{
+	// ReCoF story co-op: every player's phone
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				RcPhoneDisableFor( pEnt );
+		}
+		return;
+	}
+
+	RcPhoneDisableFor( UTIL_FirstPlayer_rc() );
 }
 
 //=========================================================
@@ -9034,6 +9242,20 @@ void CCofMaxHealthChange::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, US
 	if ( !pActivator->IsPlayer() )
 		return;
 
+	// ReCoF story co-op (B454): the Doctor's shot lowers every player's, not only the one who set it off
+	static bool s_bRcAll = false;
+	if ( RcCoop_Story() && !s_bRcAll )
+	{
+		s_bRcAll = true;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt != pActivator && pEnt->IsPlayer() && pEnt->pev->fuser4 == 0 )
+				CCofMaxHealthChange::Use( pEnt, pCaller, useType, value );
+		}
+		s_bRcAll = false;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer )
@@ -9264,14 +9486,26 @@ void CCoFKillPlayer::Spawn( void )
 	pev->v_angle = g_vecZero;
 }
 
+bool g_bRcKeepArmed = false;	// ReCoF (B453): read by triggers.cpp CTriggerMultiple::ActivateMultiTrigger
+
 void CCoFKillPlayer::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
 	if ( !pActivator )
 		return;
 
+	// ReCoF story co-op (B453): from a trigger the player touched (a death floor) only he dies, and the trigger stays
+	// armed for the next one; retail killed the whole group for one fall and the trigger_once was gone. From a scene
+	// (the endings) every player dies as in retail
+	bool bRcSolo = RcCoop_Story() && pActivator->IsPlayer() && pCaller && !strncmp( STRING( pCaller->pev->classname ), "trigger_", 8 );
+	if ( bRcSolo )
+		g_bRcKeepArmed = true;
+
 	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
 	{
 		CBasePlayer *plr = (CBasePlayer *)UTIL_PlayerByIndex( i );
+
+		if ( plr && bRcSolo && plr != pActivator )
+			continue;
 
 		if ( plr )
 		{
@@ -9359,6 +9593,10 @@ void CCoFDoctorWeaponTrigger::Use( CBaseEntity *pActivator, CBaseEntity *pCaller
 	{
 		int value = GetClassPtr( (CBasePlayer *)pPlayer->pev )->m_iDoctorWeapon;
 
+		// ReCoF story co-op (B387): the weapon is the group's choice (cof_doctorweaponset writes the first player); the
+		// targets go to the one who set this off
+		pPlayer = RcCoop_User( pActivator );
+
 		if ( value == 1 )
 		{
 			if ( pev->target )
@@ -9397,7 +9635,7 @@ void CCoFLookAt::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE us
 	if ( !pActivator )
 		return;
 
-	CBaseEntity *pPlayer = UTIL_FirstPlayer_rc();
+	CBaseEntity *pPlayer = RcCoop_User( pActivator );	// ReCoF story co-op (B387): the view of the one who set it off
 
 	if ( pPlayer )
 	{
@@ -9786,6 +10024,7 @@ void CCoFMDLCutscene::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TY
 
 				if ( plr->pDeathScene )
 				{
+					plr->pDeathScene->pev->iuser3 = 0x4D44;	// ReCoF (B448): a model cutscene's (multiplay_gamerules.cpp PlayerSpawn)
 					if ( pev->euser1 )
 						plr->pDeathScene->pev->euser1 = pev->euser1;
 
@@ -9842,6 +10081,7 @@ void CCoFMDLCutscene::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TY
 
 			if ( pPlayer->pDeathScene )
 			{
+				pPlayer->pDeathScene->pev->iuser3 = 0x4D44;	// ReCoF (B448)
 				if ( pev->euser1 )
 					pPlayer->pDeathScene->pev->euser1 = pev->euser1;
 
@@ -9911,6 +10151,10 @@ void CCoFMDLCutscene::StartNextAnimation( void )
 
 					if ( plr )
 					{
+						// ReCoF (B447): removed before the pointer is cleared; retail cleared it first and removed NULL,
+						// so every scene left one camera_model per player (charliee1w bd88a646)
+						if ( plr->pDeathScene )
+							UTIL_Remove( plr->pDeathScene );
 						plr->pDeathScene = NULL;
 						plr->m_pAttachedCamera = NULL;
 						plr->m_bCoopWaitingForCutsceneToEnd = false;
@@ -9950,6 +10194,8 @@ void CCoFMDLCutscene::StartNextAnimation( void )
 			}
 			else
 			{
+				if ( pPlayer->pDeathScene )
+					UTIL_Remove( pPlayer->pDeathScene );	// ReCoF (B447)
 				pPlayer->pDeathScene = NULL;
 				pPlayer->m_pAttachedCamera = NULL;
 				pPlayer->m_bCoopWaitingForCutsceneToEnd = false;
@@ -10132,6 +10378,16 @@ void CCoFEntityRestore::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 	if ( !pActivator )
 		return;
 
+	// ReCoF (B489): c_college1 and c_college1dark record the items left on the floor into the activator's list and
+	// recreate them from the user's: in story co-op another player's way back found an empty list and the items were
+	// gone (the research's map census). The group's list is kept on the host's player (slot 1, carried with him)
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pRcHost = UTIL_PlayerByIndex( 1 );
+		if ( pRcHost && pRcHost->IsPlayer() )
+			pActivator = pRcHost;
+	}
+
 	CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)pActivator->pev );
 
 	if ( pPlayer )
@@ -10299,6 +10555,31 @@ void CCofCodeNote::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
+	// ReCoF story co-op (B388): every player gets the note, with the code of the one who set it off (the group's code
+	// reaches the others only once a second, G10)
+	int iRcLast = 1;
+	if ( RcCoop_Story() )
+	{
+		CBaseEntity *pUser = RcCoop_User( pActivator );
+		int iCode = pUser ? ( (CBasePlayer *)pUser )->m_iKeypadNumber : 0;
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				( (CBasePlayer *)pEnt )->m_iKeypadNumber = iCode;
+		}
+		iRcLast = gpGlobals->maxClients;
+	}
+
+	for ( int iRc = 1; iRc <= iRcLast; iRc++ )
+	{
+	if ( RcCoop_Story() )
+	{
+		player = UTIL_PlayerByIndex( iRc );
+		if ( player && ( !player->IsPlayer() || player->pev->fuser4 != 0 ) )
+			player = NULL;
+	}
+
 	if ( player )
 	{
 		CBasePlayer *pPlayer = GetClassPtr( (CBasePlayer *)player->pev );
@@ -10343,6 +10624,7 @@ void CCofCodeNote::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE 
 			}
 		}
 	}
+	}	// ReCoF (B388): each player in story co-op
 }
 
 //=========================================================
@@ -10616,6 +10898,47 @@ void CCoFWheelchairMode::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE
 				UTIL_SetOrigin( pPlayer->m_pWheelchair, pOrigin->pev->origin );
 				pPlayer->m_pWheelchair->pev->angles = pev->angles;
 				pPlayer->m_pWheelchair->pev->fixangle = TRUE;
+			}
+		}
+
+		// ReCoF (B486): story co-op seats every present player, each in his own chair side by side 48 units apart
+		// beside the activator's (only the one who set it off rode, the others walked; cof-coop)
+		if ( RcCoop_Story() && pPlayer->m_pWheelchair )
+		{
+			CBaseEntity *pMine = pPlayer->m_pWheelchair;
+			Vector vecBase = pMine->pev->origin;
+			UTIL_MakeVectors( Vector( 0, pMine->pev->angles.y, 0 ) );
+			Vector vecRight = gpGlobals->v_right;
+			int iUsed = 0;
+			for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+			{
+				CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+				if ( !pEnt || pEnt == pPlayer || !pEnt->IsPlayer() || !pEnt->IsAlive() || pEnt->pev->fuser4 != 0 )
+					continue;
+				CBasePlayer *pOther = (CBasePlayer *)pEnt;
+				if ( pOther->m_pWheelchair )
+					continue;
+				pOther->StartWheelchairMode();
+				if ( !pOther->m_pWheelchair )
+					continue;
+				// the first free place of +48, -48, +96, -96, +144, -144 along the activator's right
+				for ( int k = 0; k < 6; k++ )
+				{
+					if ( iUsed & ( 1 << k ) )
+						continue;
+					float flSide = 48.0f * ( k / 2 + 1 ) * ( ( k & 1 ) ? -1.0f : 1.0f );
+					Vector vecSpot = vecBase + vecRight * flSide;
+					TraceResult tr;
+					UTIL_TraceHull( vecSpot + Vector( 0, 0, 36 ), vecSpot + Vector( 0, 0, 36 ), ignore_monsters, human_hull, pOther->edict(), &tr );
+					if ( tr.fStartSolid || tr.fAllSolid )
+						continue;
+					iUsed |= 1 << k;
+					UTIL_SetOrigin( pOther->m_pWheelchair, vecSpot );
+					pOther->m_pWheelchair->pev->angles = pMine->pev->angles;
+					pOther->m_pWheelchair->pev->fixangle = TRUE;
+					break;
+				}
+				g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s is in a wheelchair too\n", STRING( pOther->pev->netname ) ) );
 			}
 		}
 	}
@@ -11716,6 +12039,16 @@ void CCoFGreyFade::Spawn( void )
 
 void CCoFGreyFade::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
+	// ReCoF story co-op: every player's screen
+	if ( RcCoop_Story() )
+	{
+		MESSAGE_BEGIN( MSG_ALL, gmsgGreyFade );
+			WRITE_BYTE( pev->iuser1 );
+			WRITE_BYTE( pev->iuser2 );
+		MESSAGE_END();
+		return;
+	}
+
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )
@@ -11753,6 +12086,19 @@ void CCoFStopWheelchair::Spawn( void )
 
 void CCoFStopWheelchair::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
+	// ReCoF story co-op (B388): every player leaves his chair (cof_wheelchairmode seats the one who set it off;
+	// StopWheelchairMode does nothing without a chair)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( pEnt && pEnt->IsPlayer() )
+				( (CBasePlayer *)pEnt )->StopWheelchairMode();
+		}
+		return;
+	}
+
 	CBaseEntity *player = UTIL_FirstPlayer_rc();
 
 	if ( player )
@@ -11831,7 +12177,7 @@ void CCoFClothesMenu::SendInitMessage( CBasePlayer *player )
 
 void CCoFClothesMenu::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
 {
-	CBaseEntity *player = UTIL_FirstPlayer_rc();
+	CBaseEntity *player = RcCoop_User( pActivator );	// ReCoF story co-op (B387)
 
 	if ( player )
 	{
@@ -12328,6 +12674,21 @@ void CCoFObjective::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 
 			pPlayer->m_sObjectiveText = pev->message;
 			showobjective = true;
+		}
+	}
+
+	// ReCoF story co-op: every player gets the objective (the popup flag goes with the first who updates)
+	if ( RcCoop_Story() )
+	{
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+			if ( !pEnt || !pEnt->IsPlayer() || pEnt == player )
+				continue;
+			CBasePlayer *pOther = (CBasePlayer *)pEnt;
+			if ( pev->target )
+				pOther->m_sCustomObjectives = pev->target;
+			pOther->m_sObjectiveText = pev->message;
 		}
 	}
 }
@@ -13018,6 +13379,10 @@ void CCoFSimpleText::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYP
 
 
 	if ( pev->spawnflags & 1 )
+		all = true;
+
+	// ReCoF story co-op: every player reads it
+	if ( RcCoop_Story() )
 		all = true;
 
 	CBaseEntity *player = UTIL_FirstPlayer_rc();

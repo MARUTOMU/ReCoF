@@ -318,6 +318,9 @@ public:
 	bool m_bThreeSlots;
 	int m_iUsingComputerOrPhone;
 	bool b_GoingThroughADoor;
+	bool m_bRcDoorHid;	// ReCoF (B430): the door hid this player (EF_NODRAW), so its end shows him again
+	bool m_bRcStayFaded;	// ReCoF (B484): a stay-black env_fade blacked out this player alone; his respawn lifts it
+	int m_iRcLastQuickSlot;	// ReCoF (B460): quick select's last slot, per player (was the global lastquickslotpressed)
 	int m_iFlashlight;
 	int m_iClientFlashlight;
 	int m_ClientDrawBars;
@@ -456,6 +459,8 @@ public:
 	int m_iRcRoomType;
 	int RcRoomType( void );
 	void RcSetRoomType( int type );
+	// ReCoF story co-op (B392): the host's co-op settings when this player was saved (rc_coop.cpp RcCoop_SettingsSave)
+	char m_szRcCoopSet[48];
 	int InventoryIsFull( void );
 	void KeypadNumberCheck( int number );
 	void ViewKnock( float Amount );
@@ -542,6 +547,7 @@ public:
 	// buz: jumping height
 	int		m_iJumpHeight; // in percents, 0 - 100
 	void	SetJumpHeight( int value );
+	void	RcRestorePhysinfo( void );	// ReCoF (B424): the movement keys Spawn and Restore set, again
 
 	// buz: real lightlevel (from 0 to 1)
 	float	m_fLightlevel;

@@ -97,6 +97,8 @@ static float PM_TimeToDuck( void )
 // ladder face that the Half-Life ladder code climbs. It has no brush model to trace, so its shape travels in
 // physent fields both sides fill: origin is the centre, angles[1] the yaw the climber faces, controller[0] and
 // [1] the half depth and half width, controller[2] and [3] the half height (low and high byte)
+#define RC_LADDER_COLUMN	8	// the climber's column is this far before the box's near side
+
 static int PM_IsRcLadder( physent_t *pe )
 {
 	return pe->skin == CONTENTS_LADDER && ( !pe->model || (modtype_t)pmove->PM_GetModelType( pe->model ) == mod_studio );
@@ -111,16 +113,22 @@ static void PM_RcLadderAxes( physent_t *pe, vec3_t forward, vec3_t right )
 	AngleVectors( angles, forward, right, NULL );
 }
 
-// does the player's hull overlap the box (CRcHLLadder::Holds on the server is the same test)
+// does the player's hull overlap the box (CRcHLLadder::Holds on the server is the same test). On the climber's
+// side it counts only the last unit before their column (B358): a Half-Life climber is barely inside the ladder,
+// so the first frame of a jump takes them off it. With the whole hull, 8 units of it were inside the box, a
+// jump needed three frames at 100 fps to leave, and one of a single frame (a wheel jump, a quick tap) left the
+// climber on the ladder, pulled back to the column
 static int PM_InRcLadder( physent_t *pe )
 {
 	vec3_t forward, right, delta;
 	float halfheight = pe->controller[2] | ( pe->controller[3] << 8 );
+	float depth;
 
 	PM_RcLadderAxes( pe, forward, right );
 	VectorSubtract( pmove->origin, pe->origin, delta );
 
-	if ( fabs( DotProduct( delta, forward ) ) >= pe->controller[0] + pmove->player_maxs[pmove->usehull][0] )
+	depth = DotProduct( delta, forward );
+	if ( depth <= -( pe->controller[0] + RC_LADDER_COLUMN + 1 ) || depth >= pe->controller[0] + pmove->player_maxs[pmove->usehull][0] )
 		return 0;
 
 	if ( fabs( DotProduct( delta, right ) ) >= pe->controller[1] + pmove->player_maxs[pmove->usehull][1] )
@@ -141,7 +149,7 @@ static void PM_RcLadderHold( physent_t *pe )
 		return;
 
 	PM_RcLadderAxes( pe, forward, right );
-	VectorMA( pe->origin, -( pe->controller[0] + 8 ), forward, column );
+	VectorMA( pe->origin, -( pe->controller[0] + RC_LADDER_COLUMN ), forward, column );
 	VectorSubtract( column, pmove->origin, delta );
 
 	move = DotProduct( delta, forward ) / pmove->frametime;
@@ -4087,6 +4095,23 @@ void PM_Move ( struct playermove_s *ppmove, int server )
 	assert( pm_shared_initialized );
 
 	pmove = ppmove;
+
+	// ReCoF (B500): in multiplayer the other players block this move only when the server says players collide
+	// (physinfo "rpc" 1, rc_player_collide); otherwise they are left out, on the server and in the prediction alike
+	// (B417 left them out of the prediction only, so a bump stopped a player on the server and not on his screen)
+	if ( pmove->multiplayer && atoi( pmove->PM_Info_ValueForKey( pmove->physinfo, "rpc" ) ) == 0 )
+	{
+		int i, kept = 0;
+		for ( i = 0; i < pmove->numphysent; i++ )
+		{
+			if ( pmove->physents[i].player )
+				continue;
+			if ( kept != i )
+				pmove->physents[kept] = pmove->physents[i];
+			kept++;
+		}
+		pmove->numphysent = kept;
+	}
 
 //	ppmove->Con_Printf("clientmaxspeed: %f\n", ppmove->clientmaxspeed);
 	

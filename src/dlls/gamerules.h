@@ -62,6 +62,7 @@ enum
 class CGameRules
 {
 public:
+	CGameRules();	// ReCoF: clears the vote kick and lobby fields below, which retail never set
 	bool IsMapperMode_guess( void );	// CoF 1.6a: dynamic_cast to CHalfLifeRules, its byte at +0xDC
 
 	virtual void RefreshSkillData( void );// fill skill data struct with proper values
@@ -388,4 +389,56 @@ protected:
 	void SendMOTDToClient( edict_t *client );
 };
 
+// ReCoF story co-op (rc_coop.cpp): the multiplayer rules without deathmatch, for Simon's story with 2 to 4 players
+class CHalfLifeStoryCoop : public CHalfLifeMultiplay
+{
+public:
+	virtual BOOL IsDeathmatch( void );
+	virtual BOOL IsCoOp( void );
+	virtual int PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget );
+	virtual BOOL FPlayerCanTakeDamage( CBasePlayer *pPlayer, CBaseEntity *pAttacker );
+	virtual edict_t *GetPlayerSpawnSpot( CBasePlayer *pPlayer );
+	virtual void Think( void );
+	virtual void PlayerThink( CBasePlayer *pPlayer );
+	virtual void PlayerSpawn( CBasePlayer *pPlayer );
+	virtual void ClientUserInfoChanged( CBasePlayer *pPlayer, char *infobuffer );	// B414: Simon's model
+	virtual void ClientDisconnected( edict_t *pClient );	// B470: the slot's state starts again
+	virtual BOOL FShouldSwitchWeapon( CBasePlayer *pPlayer, CBasePlayerItem *pWeapon );	// B494: single player's
+
+	CHalfLifeStoryCoop();
+	float m_flSeen[33];	// when each player's client last ran a command: 0 while it loads the level
+	bool m_bProtected[33];	// G3: made untouchable while loading
+	float m_flOldTakeDamage[33];
+	bool m_bArmed[33];	// G2: has been outside every level exit since the level began
+	float m_flOverlap[33];	// B403: since when this player has stood inside a teammate, 0 when he does not
+	// G12: what a player had when he died, given back when he respawns
+	bool m_bAutosaved;	// G13: this level's autosave is done
+	float m_flLevelStart;	// G13: the first Think of this level
+	bool m_bWasAlive[33];
+	bool m_bRestore[33];
+	int m_iSnapItems[33];
+	string_t m_iszSnapItem[33][24];
+	int m_rgSnapAmmo[33][MAX_AMMO_SLOTS];
+	int m_iSnapClip[33][24];	// B478: each weapon's clip (-1 for none)
+	string_t m_iszSnapQuick[33][4];	// B478: the quick slots 1 to 3 by class name
+	// B474: the exit that went on this level (its entity index) and when, so a second one in the same moment waits
+	int m_iExitGone;
+	float m_flExitGone;
+	float m_flHidden[33];	// B477: since when this living player has been hidden outside a scene, 0 when he is not
+	Vector m_vecRcFollow[33];	// B503: where a group teleport went while this player was in a door or on a ladder
+	float m_flRcFollow[33];		// B503: until when he follows it once he is out, 0 for none
+	// B472: the arrival hold (rc_coop.cpp RcCoopHold)
+	bool m_bHoldDone;
+	float m_flHoldStart;
+	float m_flHoldMsg;	// B495: the next "Waiting for the others to load" line
+	bool m_bHeld[33];
+	void RcCoopHold( void );
+};
+
 extern DLL_GLOBAL CGameRules*	g_pGameRules;
+
+// ReCoF story co-op (rc_coop.cpp): true in Cry of Fear's own multiplayer, false in single player and in story co-op;
+// the multiplayer branches that make Simon a police officer (voices, no hints, no dual wield, monster damage) ask
+// it, so story co-op keeps Simon's single-player behaviour
+bool RcPoliceMP( void );
+bool RcCoopPolice( void );	// B411: the police voice and arms, also in story co-op outside the main campaign

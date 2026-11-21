@@ -62,6 +62,23 @@ vgui2::DHANDLE<CLoadingDialog> g_hLoadingDialog;
 
 CGameUI *g_pGameUI = NULL;
 
+void RcTheme_Install( void );	// ReCoF (B398), RcTheme.cpp
+
+// ReCoF (B397): Cry of Fear's picture menu (client.dll) opens Options, the server list and Host Server through
+// OpenDialog_guess, right after the engine activated the GameUI for it; when that dialog closes the GameUI goes away
+// again, as it was not up before (it stayed behind the picture menu, the 2D text menu over the 3D one)
+static bool s_bRcActivatedNow;	// ActivateGameUI showed the GameUI in this frame
+static bool s_bRcHideWithDialog;	// the open dialog came from outside the GameUI
+
+void RcGameUI_DialogClosed( void )
+{
+	if ( !s_bRcHideWithDialog )
+		return;
+	s_bRcHideWithDialog = false;
+	if ( g_pGameUI )
+		g_pGameUI->HideGameUI();
+}
+
 // the platform mutexes
 static WHANDLE g_hMutex_guess = NULL;
 static WHANDLE g_hWaitMutex_guess = NULL;
@@ -129,6 +146,7 @@ void CGameUI::Initialize( CreateInterfaceFn *factories, int count )
 
 	// load and initialize vgui
 	vgui2::VGuiControls_Init("GameUI", m_FactoryList, count);
+	RcTheme_Install();	// ReCoF (B398): the theme and its font (RcTheme.cpp)
 
 	// load localization file
 	vgui2::localize()->AddFile(vgui2::filesystem(), "resource/gameui_%language%.txt");
@@ -301,8 +319,11 @@ void CGameUI::Start(struct cl_enginefuncs_s *engineFuncs, int interfaceVersion, 
 
 	staticPanel->SetBackgroundRenderState(CBasePanel::BACKGROUND_DESKTOPIMAGE);
 
-	// start the startup music
-	engine->pfnClientCmd("mp3 loop media/gamestartup.mp3\n");
+	// ReCoF (B496): Valve's GameUI started the menu music here in the engine's MP3 player ("mp3 loop
+	// media/gamestartup.mp3"). Cry of Fear's own menu (client.dll CGameMenu::setVisible) plays the same theme
+	// through irrKlang at the player's music volume, so at every launch the engine's copy played for half a second
+	// at the engine's default MP3Volume (its volume is set before config.cfg is read), was cut, and the theme
+	// started again from the beginning
 }
 
 //-----------------------------------------------------------------------------
@@ -327,6 +348,8 @@ void CGameUI::ValidateCDKey(bool force, bool inConnect)
 //-----------------------------------------------------------------------------
 void CGameUI::OpenDialog_guess(int dialog)
 {
+	s_bRcHideWithDialog = s_bRcActivatedNow;	// ReCoF (B397)
+
 	switch (dialog)
 	{
 	case 0:
@@ -385,6 +408,7 @@ int CGameUI::ActivateGameUI()
 		return 1;
 
 	m_bActivatedUI = true;
+	s_bRcActivatedNow = true;	// ReCoF (B397)
 
 	// pause the server in case it is pausable
 	staticPanel->SetVisible(true);
@@ -446,6 +470,8 @@ int CGameUI::HasExclusiveInput()
 //-----------------------------------------------------------------------------
 void CGameUI::RunFrame()
 {
+	s_bRcActivatedNow = false;	// ReCoF (B397)
+
 	// resize the background panel to the screen size
 	int wide, tall;
 	vgui2::surface()->GetScreenSize(wide, tall);

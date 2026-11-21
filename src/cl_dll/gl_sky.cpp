@@ -14,6 +14,19 @@
 #include "studio_util.h"
 #include "r_studioint.h"
 #include "ref_params.h"
+#include "pm_defs.h"
+#include "pm_movevars.h"	// ReCoF story co-op: the host's sky name in the movevars
+
+extern "C" playermove_t *pmove;	// pm_shared.c
+
+// ReCoF story co-op: the server marks its players with physinfo "rcc" 1 (hl.dll rc_coop.cpp); they see the map's
+// own sky, as in single player, and take its name from the movevars the server sends, as the guest's own sv_skyname
+// is not the host's
+static int RcStoryCoopSky( void )
+{
+	const char *v = gEngfuncs.PhysInfo_ValueForKey( "rcc" );
+	return v && v[0] == '1';
+}
 
 #include "pm_defs.h"
 #include "pmtrace.h"
@@ -148,8 +161,8 @@ void InitSky()
 
 void CheckSky()
 {
-	// Cry of Fear: multiplayer games always use the black sky
-	if (gEngfuncs.GetMaxClients() > 1)
+	// Cry of Fear: multiplayer games always use the black sky (ReCoF: not in story co-op)
+	if (gEngfuncs.GetMaxClients() > 1 && !RcStoryCoopSky())
 	{
 		if (!sky_base_texturenum)
 		{
@@ -197,6 +210,8 @@ void CheckSky()
 	}
 
 	const char *skyname = CVAR_GET_STRING("sv_skyname");
+	if (gEngfuncs.GetMaxClients() > 1 && pmove && pmove->movevars && pmove->movevars->skyName[0])
+		skyname = pmove->movevars->skyName;	// ReCoF story co-op: the host's
 	if (!skyname)
 	{
 		ConLog("Sky error: cant get sv_skyname value\n");

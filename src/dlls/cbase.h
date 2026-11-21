@@ -865,7 +865,7 @@ public:
 	string_t m_iszUnLockedMessage;
 	string_t m_iszChangeLevelName;
 	int m_ProperTarget;
-	void UnlockDoor( void );
+	void UnlockDoor( CBaseEntity *pUser = NULL );	// ReCoF (B387): the player who used the item
 
 	void ButtonActivate( );
 	void SparkSoundCache( void );

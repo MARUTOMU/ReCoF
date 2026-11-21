@@ -17,6 +17,7 @@
 #include "GameStudioModelRenderer.h"
 #include "particlemgr.h"
 #include "rc_client.h"	// ReCoF
+#include "rc_prof.h"	// ReCoF
 
 extern engine_studio_api_t IEngineStudio;
 extern CGameStudioModelRenderer g_StudioRenderer;
@@ -26,6 +27,48 @@ extern vec3_t vecCameraAngles_guess;
 extern cl_entity_t *pAttachCamEnt_guess;
 
 int iParticleFadeTime_guess = 3; // seconds a fading system lives on
+
+// ReCoF (B362): the bounce trace of a particle leaves out the monsters it cannot reach. A point trace (hull 2) goes
+// against the hitboxes of every studio model in the physics list, and the engine builds them for each one before
+// it looks at where the trace goes (_PM_PlayerTrace, PM_HullForStudioModel, R_StudioHull: a bone setup per model,
+// with a cache of 16 that a crowd overflows). Every bouncing particle traces each frame, so on c_doc_city ten
+// particle systems and 85 monsters made runs of frames of 25 to 38 ms in the particles alone (a player's
+// performance log, Ryzen 9 5900X). A model whose box, grown by 128 units for limbs that reach out of it, the
+// move does not touch cannot be hit, so leaving it out changes no bounce. PM_TraceLineEx is PM_TraceLine with a
+// filter, in the same engine struct
+extern "C" playermove_t *pmove;		// pm_shared.c: the engine's movement struct, set by HUD_PlayerMoveInit
+
+#define RC_BOUNCE_REACH	128	// how far out of its box a model's hitboxes may reach
+
+static float s_flRcBounceMins[3], s_flRcBounceMaxs[3];	// the box of the move being traced
+
+static int RcBounceIgnore( physent_t *pe )
+{
+	if ( pe->model || !pe->studiomodel )
+		return 0;	// the world, brush entities and boxes cost nothing much: always traced
+
+	for ( int i = 0; i < 3; i++ )
+	{
+		if ( s_flRcBounceMins[i] > pe->origin[i] + pe->maxs[i] + RC_BOUNCE_REACH || s_flRcBounceMaxs[i] < pe->origin[i] + pe->mins[i] - RC_BOUNCE_REACH )
+			return 1;
+	}
+
+	return 0;
+}
+
+static pmtrace_t *RcBounceTrace( float *start, float *end )
+{
+	if ( !pmove || !pmove->PM_TraceLineEx )
+		return gEngfuncs.PM_TraceLine( start, end, PM_TRACELINE_PHYSENTSONLY, 2 /*point hull*/, -1 );
+
+	for ( int i = 0; i < 3; i++ )
+	{
+		s_flRcBounceMins[i] = min( start[i], end[i] );
+		s_flRcBounceMaxs[i] = max( start[i], end[i] );
+	}
+
+	return pmove->PM_TraceLineEx( start, end, PM_TRACELINE_PHYSENTSONLY, 2 /*point hull*/, RcBounceIgnore );
+}
 
 
 //
@@ -37,6 +80,17 @@ int iParticleFadeTime_guess = 3; // seconds a fading system lives on
 cl_entity_t *UTIL_GetClientEntityWithServerIndex( int sv_index )
 {
 	cl_entity_t *e;
+
+	// ReCoF (B342): the server gives every entity its own index as colormap (client.cpp AddToFullPack), so the
+	// entity at sv_index is the one the search below finds first whenever it carries that colormap. Retail ran the
+	// search every picture for every particle system, through the entities up to sv_index or, for an entity gone
+	// from the packets, all of them; the search is left for the cases the direct look does not settle
+	if ( sv_index > 0 )
+	{
+		e = gEngfuncs.GetEntityByIndex( sv_index );
+		if ( e && e->model && e->curstate.colormap == sv_index )
+			return e;
+	}
 
 	for (int ic=1;ic<MAX_EDICTS;ic++)
 	{
@@ -959,7 +1013,7 @@ bool ParticleSystem::UpdateParticle(particle *part, float frametime)
 		{
 			vec3_t vecTarget;
 			VectorMA(part->origin, frametime, part->velocity, vecTarget);
-			pmtrace_t *tr = gEngfuncs.PM_TraceLine( part->origin, vecTarget, PM_TRACELINE_PHYSENTSONLY, 2 /*point hull*/, -1 );
+			pmtrace_t *tr = RcBounceTrace( part->origin, vecTarget );	// ReCoF (B362)
 			if (tr->fraction < 1)
 			{
 				part->origin = tr->endpos;
@@ -1167,6 +1221,7 @@ void ParticleSystem::DrawParticle(particle *part, vec3_t &right, vec3_t &up)
 		if (m_iState_guess == 1)
 			flAlpha = pDraw->m_fAlpha - flFade * 5;
 
+		RcProf_Count( RCC_PARTICLES );	// ReCoF (B341)
 		gEngfuncs.pTriAPI->RenderMode(pDraw->pType->m_iRenderMode);
 		gEngfuncs.pTriAPI->Color4f( pDraw->m_fRed, pDraw->m_fGreen, pDraw->m_fBlue, max( 0, flAlpha ) );
 		gEngfuncs.pTriAPI->Begin( TRI_QUADS );
