@@ -67,9 +67,10 @@ int IN_RcMouseLooks( void );		// inputw32.cpp
 #define RC_SMOOTH_LEAST		0.0005		// the least a picture is taken to need
 #define RC_SMOOTH_DECAY		0.98		// per game frame: the slowest recent picture is half forgotten in a third of a second
 #define RC_SMOOTH_LATE_DECAY	0.99	// per game frame: the margin a late picture added is half forgotten in 0.7 s
-#define RC_SMOOTH_ROOM		0.5			// one picture more each game frame only when this much more than it would fit (B336)
+#define RC_SMOOTH_ROOM		0.25		// one picture more each game frame only when this much more than it would fit (B336, B509)
 #define RC_SMOOTH_ROOM_FRAMES	25		// for this many game frames in a row, at first
-#define RC_SMOOTH_ROOM_MAX	800		// doubled up to this when the count drops within a second of going up
+#define RC_SMOOTH_ROOM_MAX	200		// doubled up to this when the count drops within a second of going up (B509: was 800)
+#define RC_SMOOTH_MISS_FRAMES	3		// the count drops after this many game frames in a row where it does not fit (B509)
 #define RC_SMOOTH_ROOM_RESET	5.0		// and back to RC_SMOOTH_ROOM_FRAMES after this many seconds without a drop
 
 static cvar_t	*rc_smoothframes;
@@ -98,6 +99,7 @@ static int		s_iSlot;				// the next picture of this game frame, 1 to s_iSlots
 static int		s_iSlots = RC_SMOOTH_MAX;	// the pictures each game frame gets now, evenly spaced (RcSmoothPlan)
 static int		s_iRoomFrames;			// game frames in a row with room for one more
 static int		s_iRoomWait = RC_SMOOTH_ROOM_FRAMES;	// the game frames with room it takes to go up
+static int		s_iMissFrames;			// game frames in a row where the pictures planned did not fit (B509)
 static double	s_flPlanUp;				// when the count last went up
 static double	s_flPlanDown;			// and down
 
@@ -264,8 +266,16 @@ static void RcSmoothPlan( int n, double flFrame, double now )
 	if ( s_iRoomWait > RC_SMOOTH_ROOM_FRAMES && now - s_flPlanDown > RC_SMOOTH_ROOM_RESET && now >= s_flPlanDown )
 		s_iRoomWait = RC_SMOOTH_ROOM_FRAMES;
 
-	if ( fit < s_iSlots )
+	// B509: one slow game frame only loses the pictures that have no time left (RcSmooth_Frame); the count drops after
+	// RC_SMOOTH_MISS_FRAMES in a row. At 120 to 200 Hz a game frame gets one picture, and a single slow frame dropped it
+	// to none for seconds (the rise needs room for 25 frames in a row, and waited up to 8 s after a quick drop)
+	if ( fit < s_iSlots && ++s_iMissFrames < RC_SMOOTH_MISS_FRAMES )
 	{
+		s_iRoomFrames = 0;
+	}
+	else if ( fit < s_iSlots )
+	{
+		s_iMissFrames = 0;
 		s_iSlots = (int)fit;
 		s_iRoomFrames = 0;
 		s_Stats.iPlanChanges++;
@@ -276,6 +286,7 @@ static void RcSmoothPlan( int n, double flFrame, double now )
 	}
 	else if ( s_iSlots < n && fit >= s_iSlots + 1 + RC_SMOOTH_ROOM )
 	{
+		s_iMissFrames = 0;
 		if ( ++s_iRoomFrames >= s_iRoomWait )
 		{
 			s_iSlots++;
@@ -287,6 +298,7 @@ static void RcSmoothPlan( int n, double flFrame, double now )
 	else
 	{
 		s_iRoomFrames = 0;
+		s_iMissFrames = 0;
 	}
 }
 
