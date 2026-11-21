@@ -174,6 +174,11 @@ void CFuncWallToggle :: Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_
 				RcCoop_MapEvent( this, pActivator );	// ReCoF (B483): a wall that goes up between the players
 			}
 			TurnOn();
+			if ( RcCoop_Story() )
+			{
+				extern void RcCoop_WallUp( CBaseEntity *pWall, CBaseEntity *pActivator );
+				RcCoop_WallUp( this, pActivator );	// ReCoF (B505): not with a teammate inside it
+			}
 		}
 	}
 }

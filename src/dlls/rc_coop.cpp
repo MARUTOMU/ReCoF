@@ -1549,6 +1549,38 @@ void RcCoop_MapEvent( CBaseEntity *pEnt, CBaseEntity *pActivator )
 	}
 }
 
+// B505: a func_wall_toggle went up where a teammate stood (the single player map put it where the one player could
+// not be: c_subway2st3's trainblock, 167 x 2406 units around its own trigger): a player inside its brush is moved
+// to the nearest free spot instead of staying stuck in it. Not the one who set it off: the map put it on him (the
+// trainblock holds him on the tracks for the train)
+void RcCoop_WallUp( CBaseEntity *pWall, CBaseEntity *pActivator )
+{
+	if ( !RcCoopRules() || !pWall || FStringNull( pWall->pev->model ) )
+		return;
+	for ( int i = 1; i <= gpGlobals->maxClients && i <= 32; i++ )
+	{
+		CBaseEntity *pEnt = UTIL_PlayerByIndex( i );
+		if ( !RcCoopPresent( pEnt ) || !pEnt->IsAlive() || pEnt == pActivator )
+			continue;
+		if ( pEnt->pev->absmax.x < pWall->pev->absmin.x || pEnt->pev->absmin.x > pWall->pev->absmax.x ||
+			pEnt->pev->absmax.y < pWall->pev->absmin.y || pEnt->pev->absmin.y > pWall->pev->absmax.y ||
+			pEnt->pev->absmax.z < pWall->pev->absmin.z || pEnt->pev->absmin.z > pWall->pev->absmax.z )
+			continue;
+		TraceResult tr;
+		int hull = ( pEnt->pev->flags & FL_DUCKING ) ? 3 : 1;
+		g_engfuncs.pfnTraceModel( pEnt->pev->origin, pEnt->pev->origin, hull, pWall->edict(), &tr );
+		if ( !tr.fStartSolid && !tr.fAllSolid )
+			continue;
+		Vector vecSpot = RcCoopAnyFreeSpot( pEnt->pev->origin, pEnt->edict() );
+		if ( vecSpot == pEnt->pev->origin )
+			continue;
+		UTIL_SetOrigin( pEnt, vecSpot );
+		( (CBasePlayer *)pEnt )->m_vPreviousOrigin = vecSpot;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s was inside %s when it went up, moved to a free spot\n",
+			STRING( pEnt->pev->netname ), FStringNull( pWall->pev->targetname ) ? STRING( pWall->pev->model ) : STRING( pWall->pev->targetname ) ) );
+	}
+}
+
 // B479: a revived player stood up where he lay: in a corner, a vent or against a wall his standing box was stuck in
 // the world (Lambda 9347dc7). When his box does not fit there he stands on the nearest free spot (multiplayer)
 void RcCoop_ReviveSpot( CBasePlayer *pPlayer )
