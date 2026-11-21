@@ -234,8 +234,6 @@ bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 		return true;
 	}
 
-	// B346: a weapon, ammo or item given at the player's feet, as if picked up there; the unlockable weapons keep
-	// their own tests (GiveNamedItem)
 	// B501: rc_ch_fire <targetname> [on | off | toggle]: fires the entities of that name as a relay would, with this
 	// player as the one who set them off, to try a scene or a map event without walking to its trigger
 	if ( FStrEq( pcmd, "rc_ch_fire" ) )
@@ -260,6 +258,33 @@ bool RcCheatCommand( edict_t *pEntity, const char *pcmd )
 		return true;
 	}
 
+	// B507: rc_ch_hurt <targetname> <damage>: this player deals that damage to the entities of that name, so a boss's
+	// death and what it sets off (with the boss as the one who set it off, as in play) can be tried at once
+	if ( FStrEq( pcmd, "rc_ch_hurt" ) )
+	{
+		if ( !RcCheatsOn( pPlayer ) )
+			return true;
+		if ( argc != 3 )
+		{
+			RcUsage( pPlayer, "rc_ch_hurt <targetname> <damage>" );
+			return true;
+		}
+		int hurt = 0;
+		edict_t *pEdict = NULL;
+		while ( !FNullEnt( pEdict = FIND_ENTITY_BY_TARGETNAME( pEdict, CMD_ARGV( 1 ) ) ) )
+		{
+			CBaseEntity *pEnt = CBaseEntity::Instance( pEdict );
+			if ( !pEnt || pEnt->pev->takedamage == DAMAGE_NO )
+				continue;
+			pEnt->TakeDamage( pev, pev, RcArg( 2 ), DMG_GENERIC );
+			hurt++;
+		}
+		ClientPrint( pev, HUD_PRINTCONSOLE, UTIL_VarArgs( "rc_ch_hurt: hurt %d entities named %s\n", hurt, CMD_ARGV( 1 ) ) );
+		return true;
+	}
+
+	// B346: a weapon, ammo or item given at the player's feet, as if picked up there; the unlockable weapons keep
+	// their own tests (GiveNamedItem)
 	if ( FStrEq( pcmd, "rc_ch_give" ) )
 	{
 		if ( !RcCheatsOn( pPlayer ) )
