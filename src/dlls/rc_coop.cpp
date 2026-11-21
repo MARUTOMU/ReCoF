@@ -423,6 +423,16 @@ static void RcCoopResendState( CBasePlayer *pPlayer )
 		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s came in mid-door, the door is over\n", STRING( pPlayer->pev->netname ) ) );
 	}
 	// B476: nor can a phone call (cof_phonecall stays on its level): one carried mid-call kept fuser3 5 (no walking
+	// B506: nor can a scene: a teammate walked into an exit while this player watched one, and he kept its black bars
+	// and hidden health on every level after (m_DrawBars, HIDEHUD_HEALTH), as the scene's end never came. Not when a
+	// scene of this level already holds his view
+	if ( ( pPlayer->m_DrawBars || ( pPlayer->m_iHideHUD & HIDEHUD_HEALTH ) ) && !pPlayer->IsInCutscene() && !pPlayer->m_bInPhoneCall &&
+		pPlayer->m_iUsingComputerOrPhone != 3 )
+	{
+		pPlayer->m_DrawBars = 0;
+		pPlayer->m_iHideHUD &= ~HIDEHUD_HEALTH;
+		g_engfuncs.pfnServerPrint( UTIL_VarArgs( "ReCoF co-op: %s came in mid-scene, its bars and hidden health are over\n", STRING( pPlayer->pev->netname ) ) );
+	}
 	// or jumping), the bars, the hidden health and the call lock (charliee1w 3f4ff32c). Not when a call of this level
 	// goes on (a save loaded mid-call)
 	if ( pPlayer->m_bInPhoneCall || pPlayer->pev->fuser3 == 5 || pPlayer->m_iUsingComputerOrPhone == 3 )
