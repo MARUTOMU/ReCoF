@@ -4012,6 +4012,32 @@ void CBasePlayer::UpdateStatusBar()
 
 // ReCoF: set a physinfo key only when its value changes; pm_shared reads these keys on the server
 // and in client prediction, so both sides move the same way
+// ReCoF (B500): players collide with each other (rc_player_collide, read by name: on a listen server client.dll
+// registers it before hl.dll loads, and hl.dll's own registration then fails)
+static bool RcPlayersCollide( void )
+{
+	static cvar_t *s_pRcCollide;
+	if ( !s_pRcCollide )
+		s_pRcCollide = CVAR_GET_POINTER( "rc_player_collide" );
+	return s_pRcCollide && s_pRcCollide->value != 0;
+}
+
+// ReCoF (B500): one player is inside the other (a teleport, a spawn on one spot), not just touching: their boxes overlap
+// by more than a unit on every axis. Intersects uses the boxes the engine widened by a unit for touches, which
+// overlap whenever two players stand side by side
+static bool RcPlayersInterpenetrate( CBaseEntity *a, CBaseEntity *b )
+{
+	for ( int k = 0; k < 3; k++ )
+	{
+		float la = a->pev->origin[k] + a->pev->mins[k], lb = b->pev->origin[k] + b->pev->mins[k];
+		float ha = a->pev->origin[k] + a->pev->maxs[k], hb = b->pev->origin[k] + b->pev->maxs[k];
+		float lo = la > lb ? la : lb, hi = ha < hb ? ha : hb;
+		if ( hi - lo < 1.0f )
+			return false;
+	}
+	return true;
+}
+
 static void RcSetPhysicsKey( edict_t *pEdict, const char *key, const char *value )
 {
 	if ( strcmp( g_engfuncs.pfnInfoKeyValue( (char *)g_engfuncs.pfnGetPhysicsInfoString( pEdict ), (char *)key ), value ) )
@@ -4048,6 +4074,7 @@ void CBasePlayer::PreThink(void)
 
 	RcSetPhysicsKey( edict(), "nbh", rc_bhopcap.value ? "0" : "1" );	// ReCoF (B131)
 	RcSetPhysicsKey( edict(), "dkt", rc_ducktap.value ? "1" : "0" );	// ReCoF (B132)
+	RcSetPhysicsKey( edict(), "rpc", RcPlayersCollide() ? "1" : "0" );	// ReCoF (B500): pm_shared reads it
 
 	// ReCoF (rc_hlmovement): Half-Life 1 movement. The mode reaches pm_shared on both sides through physinfo
 	// "hlm"; Half-Life runs at sv_maxspeed 320 (Cry of Fear's autoexec.cfg sets 300), and sprint is off
@@ -4203,7 +4230,9 @@ void CBasePlayer::PreThink(void)
 		{
 			if ( pSolid )
 			{
-				if ( Intersects( pSolid ) && pSolid != this )
+				// ReCoF (B500): with rc_player_collide only a player inside a living one goes through, to get out;
+				// players that merely touch stay solid (retail: any touch, which made a bump pass through after it)
+				if ( pSolid != this && ( RcPlayersCollide() ? pSolid->IsAlive() && RcPlayersInterpenetrate( this, pSolid ) : Intersects( pSolid ) ) )
 					insideanyplayer = true;
 			}
 		}
@@ -15471,6 +15500,8 @@ void CBasePlayer::MultiplayerTouch( CBaseEntity *pOther )
 
 	if ( pOther->IsPlayer() )
 	{
+		if ( RcPlayersCollide() )
+			return;	// ReCoF (B500): players stay solid to each other
 		pev->solid = SOLID_NOT;
 		pOther->pev->solid = SOLID_NOT;
 	}

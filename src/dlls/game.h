@@ -45,6 +45,7 @@ extern cvar_t	rc_retail_gameplay;	// ReCoF: 1 restores the retail behavior of th
 extern cvar_t	rc_bhopcap;			// ReCoF: 0 removes the bunny hop speed cap
 extern cvar_t	rc_ducktap;			// ReCoF: 1 brings back the Half-Life ducktap
 extern cvar_t	rc_infinite_stamina;	// ReCoF: 1 gives infinite stamina
+extern cvar_t	rc_player_collide;	// ReCoF (B500)
 extern cvar_t	rc_hlmovement;		// ReCoF: 1 gives Half-Life 1 movement
 extern cvar_t	rc_door_skip;		// ReCoF: 1 skips the fade of the inter_door doors
 extern cvar_t	rc_disable_changelevel;	// ReCoF (B317): 1 keeps level changes from starting

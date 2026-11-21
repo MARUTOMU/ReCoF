@@ -280,6 +280,8 @@ static const RcOption s_RcOptions[] =
 		"Host: extra monster health for each player beyond the first." },
 	{ "mp_coop", "rc_coop_autosave", RC_BOOL, "Autosave on each level", "1", 0, 0, NULL,
 		"Host: saves the group's game as coop_auto once everyone is in on a new level." },
+	{ "mp_coop", "rc_player_collide", RC_BOOL, "Players collide", "1", 0, 0, NULL,	// B500
+		"Players are solid to each other. Off, they pass through each other. The host's setting counts." },
 	{ "mp_coop", "rc_coop_skip_vote", RC_BOOL, "Friends vote to skip scenes", "1", 0, 0, NULL,
 		"Host: a scene is skipped once everyone watching presses Enter." },
 	{ "mp_coop", "rc_voice_3d", RC_BOOL, "Voices from where friends stand", "1", 0, 0, NULL,

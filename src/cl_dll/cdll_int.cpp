@@ -159,20 +159,8 @@ void DLLEXPORT HUD_PlayerMove( struct playermove_s *ppmove, int server )
 	if ( !server )
 		ppmove->fuser3 = ppmove->vuser4[0];
 
-	if ( !server && gEngfuncs.GetMaxClients() > 1 )
-	{
-		int iKept = 0;
-		for ( int i = 0; i < ppmove->numphysent; i++ )
-		{
-			if ( ppmove->physents[i].player )
-				continue;
-			if ( iKept != i )
-				ppmove->physents[iKept] = ppmove->physents[i];
-			iKept++;
-		}
-		ppmove->numphysent = iKept;
-	}
-
+	// B500: whether the other players block the move is pm_shared's now (PM_Move, physinfo "rpc"), the same on
+	// the server and here
 	PM_Move( ppmove, server );
 }
 

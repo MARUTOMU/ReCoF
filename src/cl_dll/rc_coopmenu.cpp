@@ -284,9 +284,10 @@ struct RcLobbySetting_t
 	const char	*names[8];
 };
 
-#define RC_SET_HOST	6
-#define RC_SET_ALL	10
+#define RC_SET_HOST	7
+#define RC_SET_ALL	11
 #define RC_SET_SIMON	5
+#define RC_SET_COLLIDE	6	// B500: for every game, story co-op or not
 
 static const RcLobbySetting_t s_RcSet[RC_SET_ALL] =
 {
@@ -296,6 +297,7 @@ static const RcLobbySetting_t s_RcSet[RC_SET_ALL] =
 	{ "Autosave on each level", "rc_coop_autosave", true, 2, { 0, 1 }, { "Off", "On" } },
 	{ "Vote to skip scenes", "rc_coop_skip_vote", true, 2, { 0, 1 }, { "Off", "On" } },
 	{ "Players are", "rc_coop_simon", true, 2, { 1, 0 }, { "Simon", "Police officers" } },
+	{ "Players collide", "rc_player_collide", true, 2, { 1, 0 }, { "On, solid", "Off, pass through" } },	// B500
 	{ "Voices from where friends stand", "rc_voice_3d", false, 2, { 0, 1 }, { "Off", "On" } },
 	{ "Voice range", "rc_voice_range", false, 4, { 800, 1400, 2000, 3000 }, { "Short", "Normal", "Long", "Very long" } },
 	{ "Voices behind walls", "rc_voice_wall", false, 5, { 0, 10, 25, 50, 100 }, { "Silent", "10%", "25%", "50%", "Full" } },
@@ -464,6 +466,7 @@ public:
 		ReadCampaigns();
 		for ( int s = RC_SET_HOST; s < RC_SET_ALL; s++ )
 			m_iSet[s] = RcSetIndex( s, (int)gEngfuncs.pfnGetCvarFloat( (char *)s_RcSet[s].cvar ) );
+		m_iSet[RC_SET_COLLIDE] = RcSetIndex( RC_SET_COLLIDE, (int)gEngfuncs.pfnGetCvarFloat( "rc_player_collide" ) );	// B500
 		m_pLaunch->setRcText( "Copy Steam launch options" );
 		Layout();
 		Refresh();
@@ -695,6 +698,9 @@ public:
 			if ( strstr( gEngfuncs.pfnGetLevelName(), "game_menu" ) )
 				IrrKlangStop_guess( 1 );
 			// rc_coop_start <map> <difficulty> <exit wait> <back after dying> <autosave> <monster health> <skip vote> <simon>
+			_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_player_collide %d\n", v[RC_SET_COLLIDE] );	// B500: the host's own cvar
+			szCmd[sizeof( szCmd ) - 1] = 0;
+			gEngfuncs.pfnClientCmd( szCmd );
 			if ( m_Campaign[m_iCampaign].classic )	// B498: rc_coop_mp <map> <back after dying> <game starts after>
 				_snprintf( szCmd, sizeof( szCmd ) - 1, "rc_coop_mp %s %d %d\n", m_Campaign[m_iCampaign].firstmap,
 					s_RcSetMp[0].values[m_iMp[0]], s_RcSetMp[1].values[m_iMp[1]] );
@@ -762,7 +768,7 @@ public:
 			SetData( "difficulty", sz );
 			SetData( "game", bContinue ? "continue" : "new" );
 			SetData( "campaign", pszCampaign );
-			_snprintf( sz, sizeof( sz ) - 1, "%d %d %d %d %d %d", iRule[0], iRule[1], iRule[2], iRule[3], iRule[4], iRule[5] );
+			_snprintf( sz, sizeof( sz ) - 1, "%d %d %d %d %d %d %d", iRule[0], iRule[1], iRule[2], iRule[3], iRule[4], iRule[5], iRule[6] );
 			sz[sizeof( sz ) - 1] = 0;
 			SetData( "rules", sz );
 			bClassic = m_Campaign[m_iCampaign].classic && !bContinue;
@@ -779,7 +785,7 @@ public:
 			bContinue = !strcmp( RcLobby_Data( "game" ), "continue" );
 			pszCampaign = RcLobby_Data( "campaign" );
 			memset( iRule, 0, sizeof( iRule ) );
-			sscanf( RcLobby_Data( "rules" ), "%d %d %d %d %d %d", &iRule[0], &iRule[1], &iRule[2], &iRule[3], &iRule[4], &iRule[5] );
+			sscanf( RcLobby_Data( "rules" ), "%d %d %d %d %d %d %d", &iRule[0], &iRule[1], &iRule[2], &iRule[3], &iRule[4], &iRule[5], &iRule[6] );
 			bClassic = !strcmp( RcLobby_Data( "mode" ), "classic" );
 			iMp[0] = iMp[1] = 0;
 			sscanf( RcLobby_Data( "mprules" ), "%d %d", &iMp[0], &iMp[1] );
@@ -822,7 +828,7 @@ public:
 				i = 0;
 			m_pSetValue[s]->setRcText( s_RcSet[s].names[i] );
 			bool bCan = !s_RcSet[s].host || bHost;
-			bool bShown = s >= RC_SET_HOST || !bClassic;	// B498: story co-op's rules only for story co-op
+			bool bShown = s >= RC_SET_HOST || !bClassic || s == RC_SET_COLLIDE;	// B498: story co-op's rules only for story co-op
 			m_pSetLabel[s]->setVisible( bShown );
 			m_pSetValue[s]->setVisible( bShown );
 			m_pSetPrev[s]->setVisible( bCan && bShown );
@@ -930,13 +936,15 @@ public:
 	void LayoutSettings( bool bClassic )
 	{
 		m_bLaidClassic = bClassic;
-		int pad = RcUiS( 24 ), cw = m_iW - 2 * pad, pitch = RcUiS( 32 ), y = 0;
+		int pad = RcUiS( 24 ), cw = m_iW - 2 * pad, pitch = RcUiS( 30 ), y = 0;
 		m_pHostCap->setBounds( pad, y, cw, RcUiS( 20 ) );
 		y += RcUiS( 22 );
 		if ( bClassic )
 		{
 			for ( int s = 0; s < RC_SETMP; s++, y += pitch )
 				RowBounds( m_pMpLabel[s], m_pMpPrev[s], m_pMpValue[s], m_pMpNext[s], y );
+			RowBounds( m_pSetLabel[RC_SET_COLLIDE], m_pSetPrev[RC_SET_COLLIDE], m_pSetValue[RC_SET_COLLIDE], m_pSetNext[RC_SET_COLLIDE], y );	// B500
+			y += pitch;
 		}
 		else
 		{

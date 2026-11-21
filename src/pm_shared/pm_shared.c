@@ -4096,6 +4096,23 @@ void PM_Move ( struct playermove_s *ppmove, int server )
 
 	pmove = ppmove;
 
+	// ReCoF (B500): in multiplayer the other players block this move only when the server says players collide
+	// (physinfo "rpc" 1, rc_player_collide); otherwise they are left out, on the server and in the prediction alike
+	// (B417 left them out of the prediction only, so a bump stopped a player on the server and not on his screen)
+	if ( pmove->multiplayer && atoi( pmove->PM_Info_ValueForKey( pmove->physinfo, "rpc" ) ) == 0 )
+	{
+		int i, kept = 0;
+		for ( i = 0; i < pmove->numphysent; i++ )
+		{
+			if ( pmove->physents[i].player )
+				continue;
+			if ( kept != i )
+				pmove->physents[kept] = pmove->physents[i];
+			kept++;
+		}
+		pmove->numphysent = kept;
+	}
+
 //	ppmove->Con_Printf("clientmaxspeed: %f\n", ppmove->clientmaxspeed);
 	
 	PM_PlayerMove( ( server != 0 ) ? true : false );
