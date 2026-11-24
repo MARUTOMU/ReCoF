@@ -1,0 +1,172 @@
+# build-client.yml — FINAL (PoC-2)
+#
+# Builds the fork's client.dll (ReCoF + Japanese subtitle hook) on a
+# GitHub-hosted Windows runner and uploads it as an artifact.
+# Location in the fork: .github/workflows/build-client.yml
+#
+# Architecture (decided 2026-11-25):
+# * This repo (MARUTOMU/ReCoF, public) holds only code + this workflow.
+# * Build inputs that cannot be public live in the PRIVATE repo
+#   MARUTOMU/cof-build-inputs and are checked out with a fine-grained PAT
+#   stored as the repo secret INPUTS_TOKEN (Contents: read-only, that
+#   repo only). The inputs repo root mirrors the layout the build expects:
+#       versions/1.6a/...   retail DLLs (implib sources + compare target)
+#       refs/...             halflife vgui.lib, irrklang-1.6.0, id3lib-3.8.3
+#   See work/poc2/upload-manifest.md for the exact file lists.
+#
+# What the build itself needs (verified 2026-11-25 against upstream
+# caixax/ReCoF main: tools/build.py, tools/units.json, tools/msvc1444.py,
+# tools/implib.py, docs/tooling.md, DeCoF README "Building it yourself"):
+# * No VS solution exists. The build is Python-driven:
+#       python tools/build.py link client      ->  build/bin/client.dll
+# * Submodules discord-rpc + RapidJSON must be fetched (only submodules
+#   the repo has; refs/ is NOT covered by submodules).
+# * client.dll toolchain is hardcoded in tools/msvc1444.py:
+#     VS 2022 Build Tools at
+#       C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools
+#     MSVC exactly 14.44.35207 (VC\Tools\MSVC\14.44.35207)
+#     Windows SDK 10.0.26100.0 under C:\Program Files (x86)\Windows Kits\10
+#   The windows-2022 image's preinstalled VS 2022 lives at a different
+#   path (...\Microsoft Visual Studio\2022\Enterprise), so Build Tools is
+#   installed to the expected path below.
+# * tools/implib.py imports tools/msvc.py (MSVC 14.27.29112 at
+#   I:\Tools\msvc-14.27.29112), which does not exist on runners. Per
+#   APPLY.md §7, the CI applies the one-line workaround of pointing
+#   implib.py at msvc1444 (its lib.exe only turns a .def into a .lib,
+#   which is not toolset-version sensitive). This is done in the
+#   workflow, NOT committed to the fork.
+# * Python 3 with pefile + capstone is required by the scripts.
+
+name: build-client
+
+on:
+  workflow_dispatch: {}
+  # Optionally build on pushes that touch the hook sources:
+  # push:
+  #   paths:
+  #     - 'src/cl_dll/**'
+  #     - 'tools/units.json'
+  #     - '.github/workflows/build-client.yml'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout fork (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # src/external/discord-rpc, src/external/rapidjson
+
+      - name: Checkout private build inputs
+        uses: actions/checkout@v4
+        with:
+          repository: MARUTOMU/cof-build-inputs
+          token: ${{ secrets.INPUTS_TOKEN }}
+          path: cof-build-inputs
+
+      - name: Place build inputs (versions/ and refs/)
+        shell: pwsh
+        run: |
+          if (Test-Path 'cof-build-inputs\build-inputs.zip') {
+            Expand-Archive -Force 'cof-build-inputs\build-inputs.zip' -DestinationPath 'cof-build-inputs'
+          }
+          if (-not (Test-Path 'cof-build-inputs\versions\1.6a')) {
+            throw 'cof-build-inputs checkout looks wrong: versions\1.6a not found. Check the INPUTS_TOKEN secret and the inputs repo layout.'
+          }
+          Copy-Item -Recurse -Force 'cof-build-inputs\versions' 'versions'
+          Copy-Item -Recurse -Force 'cof-build-inputs\refs' 'refs'
+          $expect = @(
+            'versions\1.6a\steam_api.dll',
+            'versions\1.6a\cg.dll',
+            'versions\1.6a\cgGL.dll',
+            'versions\1.6a\id3lib.dll',
+            'versions\1.6a\devil.dll',
+            'versions\1.6a\cryoffear\cl_dlls\client.dll',
+            'refs\halflife\utils\vgui\lib\win32_vc6\vgui.lib',
+            'refs\irrklang-1.6.0\include\irrKlang.h',
+            'refs\irrklang-1.6.0\lib\Win32-visualStudio\irrKlang.lib',
+            'refs\id3lib-3.8.3\include\id3.h'
+          )
+          $missing = $expect | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "Missing build inputs: $($missing -join ', ')" }
+          Write-Host 'All build inputs in place.'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python build deps
+        run: pip install pefile capstone
+
+      # --- Toolchain -------------------------------------------------------
+      # tools/msvc1444.py hardcodes MSVC 14.44.35207 under the BuildTools
+      # path. Install VS 2022 Build Tools there with the 14.44 toolset and
+      # the Windows 11 SDK 10.0.26100, unless already present.
+      - name: Install VS 2022 Build Tools (MSVC 14.44.35207, Win11 SDK 10.0.26100)
+        shell: pwsh
+        run: |
+          $bt = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools'
+          $msvcDir = "$bt\VC\Tools\MSVC\14.44.35207"
+          if (Test-Path "$msvcDir\bin\Hostx86\x86\cl.exe") {
+            Write-Host 'MSVC 14.44.35207 already present, skipping install.'
+          } else {
+            Invoke-WebRequest 'https://aka.ms/vs/17/release/vs_BuildTools.exe' -OutFile "$env:TEMP\vs_BuildTools.exe"
+            $args = @(
+              '--quiet', '--wait', '--norestart',
+              '--installPath', $bt,
+              '--add', 'Microsoft.VisualStudio.Workload.VCTools',
+              '--add', 'Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64',
+              '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.26100'
+            )
+            $p = Start-Process "$env:TEMP\vs_BuildTools.exe" -Wait -PassThru -ArgumentList $args
+            if ($p.ExitCode -notin 0, 3010) { throw "VS Build Tools installer failed ($($p.ExitCode))" }
+          }
+          if (-not (Test-Path "$msvcDir\bin\Hostx86\x86\cl.exe")) {
+            Get-ChildItem "$bt\VC\Tools\MSVC" -ErrorAction SilentlyContinue | Select-Object -Expand Name
+            throw 'MSVC 14.44.35207 not found after install (toolset component ID may have changed).'
+          }
+          if (-not (Test-Path 'C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\ucrt\x86\libucrt.lib')) {
+            throw 'Windows SDK 10.0.26100.0 not found after install.'
+          }
+
+      - name: Show cl.exe version (expect 19.44.x / 14.44.35207)
+        shell: pwsh
+        run: |
+          $cl = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx86\x86\cl.exe'
+          & $cl 2>&1 | Select-Object -First 2
+
+      # --- implib.py workaround (APPLY.md §7, CI-only, not committed) -----
+      # implib.py does `import msvc` (14.27.29112 at I:\Tools\...). Point it
+      # at msvc1444 so it uses the 14.44 lib.exe + environment.
+      - name: Point tools/implib.py at MSVC 14.44 (workaround)
+        shell: pwsh
+        run: |
+          $path = 'tools\implib.py'
+          $src = [IO.File]::ReadAllText($path)
+          $new = $src -replace '(?m)^import msvc\s+.*$', 'import msvc1444 as msvc  # noqa: E402 (CI workaround: 14.44 lib.exe, see APPLY.md)'
+          if ($new -eq $src) { throw 'implib.py: import line not found, upstream may have changed it.' }
+          [IO.File]::WriteAllText($path, $new, [Text.UTF8Encoding]::new($false))
+          Select-String -Path $path -Pattern 'msvc1444 as msvc' | ForEach-Object { $_.Line }
+
+      # --- Build ------------------------------------------------------------
+      - name: Build client.dll
+        shell: pwsh
+        run: python tools/build.py link client
+
+      - name: Upload client.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dll
+          path: build/bin/client.dll
+          if-no-files-found: error
+
+      - name: Upload link logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/link/client/*.log
+            build/bin/*.log
+          if-no-files-found: ignore
