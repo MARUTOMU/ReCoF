@@ -39,6 +39,7 @@
 #include "vgui_subtitles.h"
 #include "VGUI_TextImage.h"
 #include "VGUI_Font.h"
+#include "VGUI_SurfaceBase.h"	// full SurfaceBase definition; VGUI_Panel.h only forward-declares it, but JpEnsureGlyph() calls createNewTextureID() through getSurfaceBase()
 #include "jp_subtitle_render.h"
 
 #include <string.h>
