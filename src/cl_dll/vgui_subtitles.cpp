@@ -3,6 +3,13 @@
 //		written by BUzer
 // ====================================
 
+// JP-POC: modified for the PoC-2 Japanese subtitle renderer.
+// Changes vs upstream ReCoF main are marked with "JP-POC":
+//   1. new cvar jp_poc (declared + registered in SubtitleInit)
+//   2. CSubtitle::AddMessage keeps the display string on the panel and
+//      measures through the JP renderer when the gate is on
+//   3. CSubtitleTextPanel::paint branches to the JP renderer
+
 #include "hud.h"
 #include "cl_util.h"
 #include "const.h"
@@ -18,6 +25,7 @@ cvar_t *time_max;
 cvar_t *subtitles_enabled;
 cvar_t *scroll_speed;
 cvar_t *fade_speed;
+cvar_t *jp_poc;	// JP-POC
 
 
 Font* FontFromMessage(const char* &ptext)
@@ -62,6 +70,7 @@ void SubtitleInit()
 	subtitles_enabled = gEngfuncs.pfnRegisterVariable( "subtitles", "1", 0 );
 	scroll_speed = gEngfuncs.pfnRegisterVariable( "subt_scrollspd", "250", 0 );
 	fade_speed = gEngfuncs.pfnRegisterVariable( "subt_fadespd", "0.2", 0 );
+	jp_poc = gEngfuncs.pfnRegisterVariable( "jp_poc", "0", 0 );	// JP-POC
 }
 
 
@@ -83,7 +92,7 @@ void CSubtitleTextPanel::paintBackground()
 			getBgColor(r, g, b ,a);
 			drawSetColor(r, g, b, 255 - (alpha * bkalpha));
 			drawFilledRect(0, 0, getWide(), getTall());
-		}*/		
+		}*/
 		return;
 	}
 
@@ -112,6 +121,11 @@ void CSubtitleTextPanel::paintBackground()
 
 void CSubtitleTextPanel::paint()
 {
+	// JP-POC: Japanese path. JpPaintText returns false on any failure,
+	// in which case the retail TextImage path below runs unchanged.
+	if (m_bJpActive && JpPaintText())
+		return;
+
 	int mr, mg, mb, ma;
 	int ix, iy;
 	getFgColor(mr, mg, mb, ma);
@@ -126,7 +140,7 @@ void CSubtitleTextPanel::paint()
 
 
 CSubtitle::CSubtitle() : Panel(XRES(10), YRES(10), XRES(330), YRES(300))
-{	
+{
 	m_pLayer = new Panel;
 	m_pLayer->setParent(this);
 	m_pLayer->setPaintBackgroundEnabled(false);
@@ -151,7 +165,7 @@ void CSubtitle::Initialize()
 void CSubtitle::AddMessage( client_textmessage_t *msg )
 {
 	float time = gEngfuncs.GetClientTime();
-	float holdtime = msg->holdtime;	
+	float holdtime = msg->holdtime;
 	if (time_min->value && (holdtime < time_min->value)) holdtime = time_min->value;
 	if (time_max->value && (holdtime > time_max->value)) holdtime = time_max->value;
 
@@ -184,7 +198,15 @@ void CSubtitle::AddMessage( client_textmessage_t *msg )
 //	text->bkalpha = msg->fadeout;
 //	gEngfuncs.Con_Printf("added bkalpha: %d\n", text->bkalpha);
 	text->setFgColor(msg->r1, msg->g1, msg->b1, 0);
-	text->getTextImage()->getTextSizeWrapped( tw, th );
+	// JP-POC: keep the display string (prefixes already stripped above) and,
+	// when the jp_poc gate is on and the string is Japanese UTF-8, measure
+	// with the JP renderer. The decision is frozen on the panel
+	// (m_bJpActive) so toggling the cvar mid-display cannot corrupt layout.
+	text->SetJpText(pText);
+	if (jp_poc && jp_poc->value && text->m_bJpText && text->JpMeasureText( tw, th ))
+		text->m_bJpActive = true;
+	else
+		text->getTextImage()->getTextSizeWrapped( tw, th );
 	text->getTextImage()->setPos(0, 5);
 	th += 10;
 	text->setSize( getWide(), th );
@@ -217,7 +239,7 @@ void CSubtitle::AddMessage( client_textmessage_t *msg )
 }
 
 void CSubtitle::paintBackground()
-{	
+{
 	float curtime = gEngfuncs.GetClientTime();
 	if (lasttime == 0) lasttime = curtime;
 	float deltatime = curtime - lasttime;
@@ -269,7 +291,7 @@ void CSubtitle::paintBackground()
 					layerpos = getTall() - m_pCur->getTall();
 					m_pLayer->setBounds(0, layerpos, getWide(), m_pCur->getTall());
 					m_pCur->setPos(0,0);
-					m_pCur->m_fBirthTime = curtime;					
+					m_pCur->m_fBirthTime = curtime;
 					m_pCur->setVisible(true);
 
 					m_pWait = NULL;
@@ -283,7 +305,7 @@ void CSubtitle::paintBackground()
 							m_pWait->setPos(0, lt);
 							break;
 						}
-					}					
+					}
 				}
 				else
 				{
@@ -298,7 +320,7 @@ void CSubtitle::paintBackground()
 	if (m_pWait)
 	{
 		float rest = layerpos + m_pLayer->getTall() - getTall();
-		float spd = rest > 40 ? 0.5 : (rest / 40 * 0.5); spd += 0.5;	
+		float spd = rest > 40 ? 0.5 : (rest / 40 * 0.5); spd += 0.5;
 		layerpos -= (deltatime * scroll_speed->value * spd);
 	//	gEngfuncs.Con_Printf("layerpos: %f, spd: %f, deltatime: %f, cvarspeed: %f\n", layerpos, spd, deltatime, scroll_speed->value);
 		if (layerpos + m_pLayer->getTall() <= getTall())
