@@ -26,6 +26,20 @@ cvar_t *subtitles_enabled;
 cvar_t *scroll_speed;
 cvar_t *fade_speed;
 cvar_t *jp_poc;	// JP-POC
+// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+static void JpLog(const char *fmt, ...)
+{
+	FILE *f = fopen("jp_debug.log", "a");
+	if (!f) return;
+	va_list ap; va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fputc('\n', f);
+	fclose(f);
+}
 
 
 Font* FontFromMessage(const char* &ptext)
@@ -70,7 +84,8 @@ void SubtitleInit()
 	subtitles_enabled = gEngfuncs.pfnRegisterVariable( "subtitles", "1", 0 );
 	scroll_speed = gEngfuncs.pfnRegisterVariable( "subt_scrollspd", "250", 0 );
 	fade_speed = gEngfuncs.pfnRegisterVariable( "subt_fadespd", "0.2", 0 );
-	jp_poc = gEngfuncs.pfnRegisterVariable( "jp_poc", "0", 0 );	// JP-POC
+	jp_poc = gEngfuncs.pfnRegisterVariable( "jp_poc", "1", 0 );	// JP-POC (PoC: default ON, config-independent)
+		JpLog("SubtitleInit done");
 }
 
 
@@ -207,6 +222,13 @@ void CSubtitle::AddMessage( client_textmessage_t *msg )
 		text->m_bJpActive = true;
 	else
 		text->getTextImage()->getTextSizeWrapped( tw, th );
+{
+			char hexbuf[80]; hexbuf[0] = 0;
+			const unsigned char *hb = (const unsigned char *)pText;
+			for (int i = 0; i < 12 && hb[i]; i++) { char tmp[4]; sprintf(tmp, "%02X ", hb[i]); strcat(hexbuf, tmp); }
+			JpLog("AddMessage: jp_poc=%.1f bJp=%d active=%d bytes=%s text=%.40s",
+							jp_poc ? (double)jp_poc->value : -1.0, text->m_bJpText ? 1 : 0, text->m_bJpActive ? 1 : 0, hexbuf, pText);
+}
 	text->getTextImage()->setPos(0, 5);
 	th += 10;
 	text->setSize( getWide(), th );
