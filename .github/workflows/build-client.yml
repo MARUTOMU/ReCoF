@@ -128,13 +128,20 @@ jobs:
             Invoke-WebRequest 'https://aka.ms/vs/17/release/vs_BuildTools.exe' -OutFile "$env:TEMP\vs_BuildTools.exe"
             $args = @(
               '--quiet', '--wait', '--norestart',
-              '--installPath', $bt,
+              '--installPath', ('"' + $bt + '"'),
               '--add', 'Microsoft.VisualStudio.Workload.VCTools',
               '--add', 'Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64',
               '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.26100'
             )
             $p = Start-Process "$env:TEMP\vs_BuildTools.exe" -Wait -PassThru -ArgumentList $args
             if ($p.ExitCode -notin 0, 3010) { throw "VS Build Tools installer failed ($($p.ExitCode))" }
+            # The bootstrapper can return before setup.exe finishes; wait for
+            # any installer processes to drain (max ~10 min) before checking.
+            for ($i = 0; $i -lt 60; $i++) {
+              $busy = @(Get-Process -Name 'setup', 'vs_installer', 'vs_installershell' -ErrorAction SilentlyContinue)
+              if ($busy.Count -eq 0) { break }
+              Start-Sleep -Seconds 10
+            }
           }
 
           # Diagnostics: always list the toolsets that are actually installed.
