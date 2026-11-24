@@ -1278,6 +1278,18 @@
           "source": "src/cl_dll/vgui_subtitles.cpp"
         },
         {
+          "name": "cl_dll/jp_subtitle_render",
+          "source": "src/cl_dll/jp_subtitle_render.cpp"
+        },
+        {
+          "name": "cl_dll/jp_stb_impl",
+          "source": "src/cl_dll/jp_stb_impl.cpp"
+        },
+        {
+          "name": "cl_dll/jp_font_data",
+          "source": "src/cl_dll/jp_font_data.cpp"
+        },
+        {
           "name": "cl_dll/vgui_teammenu",
           "source": "src/cl_dll/vgui_teammenu.cpp"
         },
@@ -1823,6 +1835,9 @@
           "cl_dll/vgui_ServerBrowser",
           "cl_dll/vgui_SpectatorPanel",
           "cl_dll/vgui_subtitles",
+          "cl_dll/jp_subtitle_render",
+          "cl_dll/jp_stb_impl",
+          "cl_dll/jp_font_data",
           "cl_dll/vgui_tabpanel",
           "cl_dll/vgui_TeamFortressViewport",
           "cl_dll/vgui_teammenu",
