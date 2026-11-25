@@ -2046,8 +2046,8 @@ void CHUDControl::paint()
 				if ( s_iHintLogCount < 40 )
 				{
 					s_iHintLogCount++;
-					JpLogHud( "HINT draw: line=%d alpha=%d label=(%d,%d) px=%d w=%.1f",
-						m_iHintLine_guess, m_iHintAlpha_guess, iLabelX, iLabelY, iHintPx, (double)fHintW );
+					JpLogHud( "HINT draw: line=%d alpha=%d effAlpha=%d label=(%d,%d) px=%d w=%.1f",
+						m_iHintLine_guess, m_iHintAlpha_guess, 255 - m_iHintAlpha_guess, iLabelX, iLabelY, iHintPx, (double)fHintW );
 				}
 				if ( fHintW > 0 )
 				{
@@ -2099,7 +2099,7 @@ void CHUDControl::paint()
 								int dx = (int)( penX + 0.5f ) + g->xoff + ox;
 								int dy = iHintBase + g->yoff + oy;
 								drawSetTexture( g->texId );
-								drawSetColor( cr, cg, cb, m_iHintAlpha_guess );
+								drawSetColor( cr, cg, cb, 255 - m_iHintAlpha_guess );
 								drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
 							}
 							penX += g->adv;
