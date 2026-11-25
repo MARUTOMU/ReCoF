@@ -279,6 +279,19 @@ void CHudMessage::MessageDrawScan( client_textmessage_t *pMessage, float time )
 	if ( jp_poc && jp_poc->value != 0.0f && pMessage && pMessage->pMessage )
 	{
 		const char *pszJpTitle = JpLookupTitle( pMessage->pMessage );
+		if ( !pszJpTitle )
+		{
+			// JP-MOD: literal game_text / env_message strings are not in
+			// titles.txt, so fall back to the map-embedded text table
+			// (trailing whitespace is trimmed before the exact lookup).
+			static char szTrim[512];
+			strncpy( szTrim, pMessage->pMessage, sizeof(szTrim) - 1 );
+			szTrim[sizeof(szTrim) - 1] = 0;
+			int iTrimLen = (int)strlen( szTrim );
+			while ( iTrimLen > 0 && ( szTrim[iTrimLen - 1] == '\n' || szTrim[iTrimLen - 1] == '\r' || szTrim[iTrimLen - 1] == ' ' || szTrim[iTrimLen - 1] == '\t' ) )
+				szTrim[--iTrimLen] = 0;
+			pszJpTitle = JpLookupMapText( szTrim );
+		}
 		if ( pszJpTitle )
 		{
 			float flFadeIn = pMessage->fadein;
