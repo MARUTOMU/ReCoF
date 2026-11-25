@@ -59,4 +59,8 @@ void JpSharedSetGlyphTexture(const JpGlyph *g, int texId);
 // 1-based line number within that file. NULL when there is no translation.
 const char *JpLookupNoteLine(const char *pszFile, int iLine);
 
+// Japanese text of a titles.txt message: full English message text
+// (newlines as \n). NULL when there is no translation.
+const char *JpLookupTitle(const char *pszEnglish);
+
 #endif // JP_SUBTITLE_RENDER_H
