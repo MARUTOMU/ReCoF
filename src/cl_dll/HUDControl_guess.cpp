@@ -640,6 +640,32 @@ void ParseHintTokens( char *pszName, char *pszFile )
 	// pfile is NULL here: the loaded file is never freed
 	gEngfuncs.COM_FreeFile( pfile );
 
+	// JP-MOD: translate the raw hint lines (the '*' key token is still
+	// intact at this point; the substitution below then runs on the JP
+	// text exactly as it would on the EN text).
+	if ( jp_poc && jp_poc->value )
+	{
+		const char *pszJpLine;
+		pszJpLine = JpLookupHintLine( gViewPort->m_pHUDControl_guess->m_szHintLine1_guess );
+		if ( pszJpLine )
+		{
+			strncpy( gViewPort->m_pHUDControl_guess->m_szHintLine1_guess, pszJpLine, 255 );
+			gViewPort->m_pHUDControl_guess->m_szHintLine1_guess[255] = '\0';
+		}
+		pszJpLine = JpLookupHintLine( gViewPort->m_pHUDControl_guess->m_szHintLine2_guess );
+		if ( pszJpLine )
+		{
+			strncpy( gViewPort->m_pHUDControl_guess->m_szHintLine2_guess, pszJpLine, 255 );
+			gViewPort->m_pHUDControl_guess->m_szHintLine2_guess[255] = '\0';
+		}
+		pszJpLine = JpLookupHintLine( gViewPort->m_pHUDControl_guess->m_szHintLine3_guess );
+		if ( pszJpLine )
+		{
+			strncpy( gViewPort->m_pHUDControl_guess->m_szHintLine3_guess, pszJpLine, 255 );
+			gViewPort->m_pHUDControl_guess->m_szHintLine3_guess[255] = '\0';
+		}
+	}
+
 	if ( strlen( gViewPort->m_pHUDControl_guess->m_szHintLine1_guess ) > 2 )
 	{
 		bFound = false;
@@ -1973,6 +1999,99 @@ void CHUDControl::paint()
 							drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
 						}
 						penX += g->adv;
+					}
+				}
+			}
+		}
+	}
+
+	// JP-MOD: draw the hint / objective bar text with the JP renderer.
+	// The VGUI label cannot render UTF-8 Japanese (it mojibakes), so when
+	// the current hint line is JP, blank the label and draw the line here,
+	// centered in the label's 800x48 strip at its current slide position.
+	if ( jp_poc && jp_poc->value && m_bHint_guess && m_pHintLabel_guess )
+	{
+		const char *pszHintLine = NULL;
+		switch ( m_iHintLine_guess )
+		{
+		case 1: pszHintLine = m_szHintLine1_guess; break;
+		case 2: pszHintLine = m_szHintLine2_guess; break;
+		case 3: pszHintLine = m_szHintLine3_guess; break;
+		}
+		if ( pszHintLine && JpTextIsUtf8Japanese( pszHintLine ) )
+		{
+			char szHintDraw[256];
+			strncpy( szHintDraw, pszHintLine, 255 );
+			szHintDraw[255] = '\0';
+			for ( int ci = 0; szHintDraw[ci]; ci++ )
+			{
+				if ( szHintDraw[ci] == '@' )
+					szHintDraw[ci] = ' ';
+			}
+			m_pHintLabel_guess->setText( "" );
+			int iLabelX, iLabelY;
+			m_pHintLabel_guess->getPos( iLabelX, iLabelY );
+			int iHintPx = m_pCreditsFont_guess ? m_pCreditsFont_guess->getTall() : 0;
+			if ( iHintPx < 8 )
+				iHintPx = 16;
+			if ( JpSharedInitFont( iHintPx ) )
+			{
+				float fHintW = JpSharedMeasure( szHintDraw );
+				if ( fHintW > 0 )
+				{
+					int iHintBase = iLabelY + ( 48 - iHintPx ) / 2 + JpSharedAscentPx();
+					const unsigned char *pHintS = (const unsigned char *)szHintDraw;
+					int iHintLen = (int)strlen( szHintDraw );
+					for ( int pass = 0; pass < 2; pass++ )
+					{
+						int ox = ( pass == 0 ) ? 1 : 0;
+						int oy = ( pass == 0 ) ? 1 : 0;
+						int cr = ( pass == 0 ) ? 0 : 255;
+						int cg = ( pass == 0 ) ? 0 : 255;
+						int cb = ( pass == 0 ) ? 0 : 255;
+						float penX = ScreenWidth / 2.0f - fHintW / 2.0f;
+						int pos = 0;
+						while ( pos < iHintLen )
+						{
+							int cp;
+							if ( !JpSharedDecodeUtf8( pHintS, iHintLen, pos, cp ) )
+								break;
+							const JpGlyph *g = JpSharedGlyphMetrics( cp );
+							if ( !g )
+								break;
+							if ( g->texId < 0 )
+							{
+								unsigned char *rgba = NULL;
+								if ( JpSharedGlyphBitmap( cp, &rgba ) )
+								{
+									if ( rgba )
+									{
+										int texId = getSurfaceBase()->createNewTextureID();
+										if ( texId > 0 )
+										{
+											drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+											JpSharedSetGlyphTexture( g, texId );
+										}
+										else
+											JpSharedSetGlyphTexture( g, 0 );
+										free( rgba );
+									}
+									else
+										JpSharedSetGlyphTexture( g, 0 );
+								}
+								else
+									JpSharedSetGlyphTexture( g, 0 );
+							}
+							if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+							{
+								int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+								int dy = iHintBase + g->yoff + oy;
+								drawSetTexture( g->texId );
+								drawSetColor( cr, cg, cb, m_iHintAlpha_guess );
+								drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+							}
+							penX += g->adv;
+						}
 					}
 				}
 			}
