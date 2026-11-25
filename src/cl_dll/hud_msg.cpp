@@ -28,6 +28,20 @@
 #include "event_api.h"
 #include "vgui_TeamFortressViewport.h"
 #include "HUDControl_guess.h"
+
+// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
+#include <stdio.h>
+#include <stdarg.h>
+static void JpLogMsg(const char *fmt, ...)
+{
+	FILE *f = fopen("jp_debug.log", "a");
+	if (!f) return;
+	va_list ap; va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fputc('\n', f);
+	fclose(f);
+}
 #include "RECBInventory_guess.h"
 #include "Documents_guess.h"
 #include "glmanager.h"
@@ -741,6 +755,13 @@ int CHud :: MsgFunc_ProFont( const char *pszName, int iSize, void *pbuf )
 
 	int iType = READ_BYTE();
 	strncpy( szText, READ_STRING(), 256 );
+
+	{
+		char hexbuf[80]; hexbuf[0] = 0;
+		const unsigned char *hb = (const unsigned char *)szText;
+		for (int i = 0; i < 12 && hb[i]; i++) { char tmp[4]; sprintf(tmp, "%02X ", hb[i]); strcat(hexbuf, tmp); }
+		JpLogMsg("ProFont ARRIVE: type=%d bytes=%s text=%.40s", iType, hexbuf, szText);
+	}
 
 	if ( strstr( szText, "DEADNOTIFY" ) )
 	{

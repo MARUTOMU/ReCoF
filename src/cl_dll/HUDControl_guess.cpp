@@ -1721,6 +1721,20 @@ void CHUDControl::RenderMessages_guess()
 			// JP-POC: ProFont lines in Japanese UTF-8 are drawn by the JP
 			// renderer; the retail label cannot display them.
 			bool bJpMsg = (jp_poc && jp_poc->value && JpTextIsUtf8Japanese( m_szMessage_guess ));
+			{
+				static char s_szEvalLogged[256] = "";
+				if ( strcmp( s_szEvalLogged, m_szMessage_guess ) != 0 )
+				{
+					strncpy( s_szEvalLogged, m_szMessage_guess, 255 );
+					s_szEvalLogged[255] = 0;
+					char hexbuf[80]; hexbuf[0] = 0;
+					const unsigned char *hb = (const unsigned char *)m_szMessage_guess;
+					for (int i = 0; i < 12 && hb[i]; i++) { char tmp[4]; sprintf(tmp, "%02X ", hb[i]); strcat(hexbuf, tmp); }
+					JpLogHud( "RenderMsg EVAL: jp_poc=%.1f detect=%d bJp=%d bytes=%s text=%.40s",
+						jp_poc ? (double)jp_poc->value : -1.0,
+						JpTextIsUtf8Japanese( m_szMessage_guess ) ? 1 : 0, bJpMsg ? 1 : 0, hexbuf, m_szMessage_guess );
+				}
+			}
 			drawSetTextFont( m_pCreditsFont_guess );
 
 			switch ( m_iMessageType_guess )
