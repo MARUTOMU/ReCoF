@@ -66,6 +66,7 @@ const char *JpLookupTitle(const char *pszEnglish);
 // Japanese text of a map-embedded (BSP entity) string: full English text.
 // NULL when there is no translation.
 const char *JpLookupMapText(const char *pszEnglish);
+const char *JpLookupHintLine(const char *pszEnglish);
 
 // JP title draw request: message.cpp (CHudMessage::MessageDrawScan) fills
 // this in, CHUDControl::paint() consumes and draws it (SurfaceBase draw
