@@ -269,8 +269,22 @@ void GetCurrentPath( char *path )
 	_getcwd( path, 260 );
 }
 
+const char *JpLookupItemName( const char *pszFile );	// JP-MOD (jp_subtitle_render.cpp)
+
 char *CHud::CheckItem( char *pszName, char *pszFile )
 {
+	// JP-MOD: when JP mode is on, item display names come from the JP table.
+	if ( pszName && pszFile && strcmp( pszName, "nice_name" ) == 0 )
+	{
+		extern cvar_t *jp_poc;
+		if ( jp_poc && jp_poc->value != 0.0f )
+		{
+			const char *pszJpName = JpLookupItemName( pszFile );
+			if ( pszJpName )
+				return (char *)pszJpName;
+		}
+	}
+
 	int gSCounter = 0;
 	char szItemName[512];
 
@@ -1512,7 +1526,13 @@ int CHud :: MsgFunc_Inventory( const char *pszName, int iSize, void *pbuf )
 			if ( pszNiceName )
 			{
 				int iNotBook = strcmp( pszNiceName, "Simon's Book" );
-				sprintf( szText, iNotBook ? "You got the %s" : "You got %s", CheckItem( "nice_name", szItem ) );
+				{
+					extern cvar_t *jp_poc;
+					if ( jp_poc && jp_poc->value != 0.0f )
+						sprintf( szText, "%s\343\202\222\346\211\213\343\201\253\345\205\245\343\202\214\343\201\237", pszNiceName );
+					else
+						sprintf( szText, iNotBook ? "You got the %s" : "You got %s", CheckItem( "nice_name", szItem ) );
+				}
 
 				if ( gViewPort && gViewPort->m_pHUDControl_guess )
 				{

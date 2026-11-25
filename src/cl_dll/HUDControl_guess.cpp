@@ -1912,6 +1912,73 @@ void CHUDControl::paint()
 	}
 
 	RenderMessages_guess();
+
+	// JP-MOD: draw a pending JP title request (filled by CHudMessage).
+	if ( g_jpTitleRequest.bActive )
+	{
+		g_jpTitleRequest.bActive = false;
+		if ( gHUD.m_flTime - g_jpTitleRequest.flSetTime < 0.25f &&
+			JpSharedInitFont( g_jpTitleRequest.iPixelHeight ) )
+		{
+			for ( int li = 0; li < g_jpTitleRequest.iLineCount; li++ )
+			{
+				const unsigned char *s = (const unsigned char *)g_jpTitleRequest.szLine[li];
+				int iSLen = (int)strlen( g_jpTitleRequest.szLine[li] );
+				for ( int pass = 0; pass < 2; pass++ )
+				{
+					int ox = ( pass == 0 ) ? 1 : 0;
+					int oy = ( pass == 0 ) ? 1 : 0;
+					int cr = ( pass == 0 ) ? 0 : g_jpTitleRequest.iR;
+					int cg = ( pass == 0 ) ? 0 : g_jpTitleRequest.iG;
+					int cb = ( pass == 0 ) ? 0 : g_jpTitleRequest.iB;
+					float penX = (float)g_jpTitleRequest.iLineX[li];
+					int pos = 0;
+					while ( pos < iSLen )
+					{
+						int cp;
+						if ( !JpSharedDecodeUtf8( s, iSLen, pos, cp ) )
+							break;
+						const JpGlyph *g = JpSharedGlyphMetrics( cp );
+						if ( !g )
+							break;
+						if ( g->texId < 0 )
+						{
+							unsigned char *rgba = NULL;
+							if ( JpSharedGlyphBitmap( cp, &rgba ) )
+							{
+								if ( rgba )
+								{
+									int texId = getSurfaceBase()->createNewTextureID();
+									if ( texId > 0 )
+									{
+										drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+										JpSharedSetGlyphTexture( g, texId );
+									}
+									else
+										JpSharedSetGlyphTexture( g, 0 );
+									free( rgba );
+								}
+								else
+									JpSharedSetGlyphTexture( g, 0 );
+							}
+							else
+								JpSharedSetGlyphTexture( g, 0 );
+						}
+						if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+						{
+							int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+							int dy = g_jpTitleRequest.iLineBaseY[li] + g->yoff + oy;
+							drawSetTexture( g->texId );
+							drawSetColor( cr, cg, cb, g_jpTitleRequest.iAlpha );
+							drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+						}
+						penX += g->adv;
+					}
+				}
+			}
+		}
+	}
+
 	Panel::paint();
 }
 

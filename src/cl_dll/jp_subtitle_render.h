@@ -67,4 +67,24 @@ const char *JpLookupTitle(const char *pszEnglish);
 // NULL when there is no translation.
 const char *JpLookupMapText(const char *pszEnglish);
 
+// JP title draw request: message.cpp (CHudMessage::MessageDrawScan) fills
+// this in, CHUDControl::paint() consumes and draws it (SurfaceBase draw
+// methods are protected, so titles cannot draw from the HUD element).
+#define JP_TITLE_MAX_LINES 4
+struct JpTitleRequest
+{
+	bool bActive;
+	float flSetTime;
+	int iLineCount;
+	int iR, iG, iB, iAlpha, iPixelHeight;
+	int iLineX[JP_TITLE_MAX_LINES];
+	int iLineBaseY[JP_TITLE_MAX_LINES];
+	char szLine[JP_TITLE_MAX_LINES][512];
+};
+extern JpTitleRequest g_jpTitleRequest;
+
+// Japanese nice_name of an inventory item: item file path
+// (e.g. "inventoryitems/apartmentkey.txt"). NULL when none.
+const char *JpLookupItemName(const char *pszFile);
+
 #endif // JP_SUBTITLE_RENDER_H

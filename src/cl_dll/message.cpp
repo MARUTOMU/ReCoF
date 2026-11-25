@@ -25,8 +25,6 @@
 #include "parsemsg.h"
 #include <math.h>
 #include "jp_subtitle_render.h"	// JP-MOD
-#include "VGUI_SurfaceBase.h"	// JP-MOD
-#include "vgui_TeamFortressViewport.h"	// JP-MOD: gViewPort type
 #include <stdarg.h>	// JP-MOD-DEBUG
 #include <stdlib.h>	// JP-MOD
 
@@ -283,114 +281,64 @@ void CHudMessage::MessageDrawScan( client_textmessage_t *pMessage, float time )
 		const char *pszJpTitle = JpLookupTitle( pMessage->pMessage );
 		if ( pszJpTitle )
 		{
-			vgui::SurfaceBase *pSurf = gViewPort ? gViewPort->getSurfaceBase() : NULL;
-			if ( pSurf )
+			float flFadeIn = pMessage->fadein;
+			if ( pMessage->effect == 2 )
+				flFadeIn = pMessage->fadein * (float)strlen( pMessage->pMessage );
+			float flVis = FadeBlend( flFadeIn, pMessage->fadeout, pMessage->holdtime, time );
+			if ( flVis > 0.001f )
 			{
-				float flFadeIn = pMessage->fadein;
-				if ( pMessage->effect == 2 )
-					flFadeIn = pMessage->fadein * (float)strlen( pMessage->pMessage );
-				float flVis = FadeBlend( flFadeIn, pMessage->fadeout, pMessage->holdtime, time );
-				if ( flVis > 0.001f )
+				int iAlpha = (int)( ( 1.0f - flVis ) * 255.0f + 0.5f );
+				int pixelHeight = gHUD.m_scrinfo.iCharHeight;
+				if ( pixelHeight < 16 )
+					pixelHeight = 16;
+				if ( JpSharedInitFont( pixelHeight ) )
 				{
-					int iAlpha = (int)( ( 1.0f - flVis ) * 255.0f + 0.5f );
-					int pixelHeight = gHUD.m_scrinfo.iCharHeight;
-					if ( pixelHeight < 16 )
-						pixelHeight = 16;
-					if ( JpSharedInitFont( pixelHeight ) )
+					char szLineBuf[512];
+					const char *pCur = pszJpTitle;
+					int iLines = 0;
+					float fTotalW = 0;
+					while ( 1 )
 					{
-						// split into lines and measure
-						char szLineBuf[512];
-						const char *pCur = pszJpTitle;
-						int iLines = 0;
-						float fTotalW = 0;
-						while ( 1 )
-						{
-							const char *pNl = strchr( pCur, '\n' );
-							int iLen = pNl ? (int)( pNl - pCur ) : (int)strlen( pCur );
-							if ( iLen > 511 ) iLen = 511;
-							memcpy( szLineBuf, pCur, iLen ); szLineBuf[iLen] = 0;
-							float w = JpSharedMeasure( szLineBuf );
-							if ( w > fTotalW ) fTotalW = w;
-							iLines++;
-							if ( !pNl ) break;
-							pCur = pNl + 1;
-						}
-						int iLineH = pixelHeight + 2;
-						int iStartY = YPosition( pMessage->y, iLines * iLineH );
-						if ( time < 0.1f )
-							JpLogTitle( "TITLE JP draw: name=[%s] alpha=%d y=%d lines=%d", pMessage->pName ? pMessage->pName : "?", iAlpha, iStartY, iLines );
-						pCur = pszJpTitle;
-						int iLineIdx = 0;
-						while ( 1 )
-						{
-							const char *pNl = strchr( pCur, '\n' );
-							int iLen = pNl ? (int)( pNl - pCur ) : (int)strlen( pCur );
-							if ( iLen > 511 ) iLen = 511;
-							memcpy( szLineBuf, pCur, iLen ); szLineBuf[iLen] = 0;
-							float fLineW = JpSharedMeasure( szLineBuf );
-							int iLineX = XPosition( pMessage->x, (int)( fLineW + 0.5f ), (int)( fTotalW + 0.5f ) );
-							int iBaseY = iStartY + iLineIdx * iLineH + JpSharedAscentPx();
-							const unsigned char *s = (const unsigned char *)szLineBuf;
-							int iSLen = (int)strlen( szLineBuf );
-							for ( int pass = 0; pass < 2; pass++ )
-							{
-								int ox = ( pass == 0 ) ? 1 : 0;
-								int oy = ( pass == 0 ) ? 1 : 0;
-								int cr = ( pass == 0 ) ? 0 : pMessage->r1;
-								int cg = ( pass == 0 ) ? 0 : pMessage->g1;
-								int cb = ( pass == 0 ) ? 0 : pMessage->b1;
-								float penX = (float)iLineX;
-								int pos = 0;
-								while ( pos < iSLen )
-								{
-									int cp;
-									if ( !JpSharedDecodeUtf8( s, iSLen, pos, cp ) )
-										break;
-									const JpGlyph *g = JpSharedGlyphMetrics( cp );
-									if ( !g )
-										break;
-									if ( g->texId < 0 )
-									{
-										unsigned char *rgba = NULL;
-										if ( JpSharedGlyphBitmap( cp, &rgba ) )
-										{
-											if ( rgba )
-											{
-												int texId = pSurf->createNewTextureID();
-												if ( texId > 0 )
-												{
-													pSurf->drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
-													JpSharedSetGlyphTexture( g, texId );
-												}
-												else
-													JpSharedSetGlyphTexture( g, 0 );
-												free( rgba );
-											}
-											else
-												JpSharedSetGlyphTexture( g, 0 );
-										}
-										else
-											JpSharedSetGlyphTexture( g, 0 );
-									}
-									if ( g->texId > 0 && g->w > 0 && g->h > 0 )
-									{
-										int dx = (int)( penX + 0.5f ) + g->xoff + ox;
-										int dy = iBaseY + g->yoff + oy;
-										pSurf->drawSetTexture( g->texId );
-										pSurf->drawSetColor( cr, cg, cb, iAlpha );
-										pSurf->drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
-									}
-									penX += g->adv;
-								}
-							}
-							iLineIdx++;
-							if ( !pNl ) break;
-							pCur = pNl + 1;
-						}
+						const char *pNl = strchr( pCur, '\n' );
+						int iLen = pNl ? (int)( pNl - pCur ) : (int)strlen( pCur );
+						if ( iLen > 511 ) iLen = 511;
+						memcpy( szLineBuf, pCur, iLen ); szLineBuf[iLen] = 0;
+						float w = JpSharedMeasure( szLineBuf );
+						if ( w > fTotalW ) fTotalW = w;
+						iLines++;
+						if ( !pNl ) break;
+						pCur = pNl + 1;
 					}
+					if ( iLines > JP_TITLE_MAX_LINES ) iLines = JP_TITLE_MAX_LINES;
+					int iLineH = pixelHeight + 2;
+					int iStartY = YPosition( pMessage->y, iLines * iLineH );
+					g_jpTitleRequest.bActive = true;
+					g_jpTitleRequest.flSetTime = gHUD.m_flTime;
+					g_jpTitleRequest.iLineCount = iLines;
+					g_jpTitleRequest.iR = pMessage->r1;
+					g_jpTitleRequest.iG = pMessage->g1;
+					g_jpTitleRequest.iB = pMessage->b1;
+					g_jpTitleRequest.iAlpha = iAlpha;
+					g_jpTitleRequest.iPixelHeight = pixelHeight;
+					pCur = pszJpTitle;
+					for ( int li = 0; li < iLines; li++ )
+					{
+						const char *pNl = strchr( pCur, '\n' );
+						int iLen = pNl ? (int)( pNl - pCur ) : (int)strlen( pCur );
+						if ( iLen > 511 ) iLen = 511;
+						memcpy( g_jpTitleRequest.szLine[li], pCur, iLen );
+						g_jpTitleRequest.szLine[li][iLen] = 0;
+						float fLineW = JpSharedMeasure( g_jpTitleRequest.szLine[li] );
+						g_jpTitleRequest.iLineX[li] = XPosition( pMessage->x, (int)( fLineW + 0.5f ), (int)( fTotalW + 0.5f ) );
+						g_jpTitleRequest.iLineBaseY[li] = iStartY + li * iLineH + JpSharedAscentPx();
+						if ( !pNl ) break;
+						pCur = pNl + 1;
+					}
+					if ( time < 0.1f )
+						JpLogTitle( "TITLE JP req: name=[%s] alpha=%d lines=%d", pMessage->pName ? pMessage->pName : "?", iAlpha, iLines );
 				}
-				return;
 			}
+			return;
 		}
 	}
 
