@@ -15,6 +15,19 @@
 #include "..\game_shared\vgui_loadtga.h"
 #include "jp_subtitle_render.h"
 #include "VGUI_SurfaceBase.h"
+#include <stdarg.h>
+
+// JP-MOD-DEBUG: append diagnostics to jp_debug.log in the game root.
+static void JpLogNote(const char *fmt, ...)
+{
+	FILE *f = fopen("jp_debug.log", "a");
+	if (!f) return;
+	va_list ap; va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fputc('\n', f);
+	fclose(f);
+}
 
 // JP-MOD: Japanese rendering of the current note line (see SetText_guess).
 static char g_szJpNoteLine[512];
@@ -204,6 +217,7 @@ int MsgNoteDoc_guess( const char *pszName, int iSize, void *pbuf )
 		strcpy( gViewPort->m_pNoteDocument_guess->m_szImage3_guess, READ_STRING() );
 		strcpy( gViewPort->m_pNoteDocument_guess->m_szImage4_guess, READ_STRING() );
 		strcpy( szText1, READ_STRING() );
+		JpLogNote( "NOTE msg: szText1=[%s]", szText1 );
 		strcpy( szText2, READ_STRING() );
 		strcpy( szText3, READ_STRING() );
 		strcpy( szText4, READ_STRING() );
@@ -671,6 +685,7 @@ void CNoteDocument::SetText_guess()
 	g_bJpNoteLine = false;
 	g_szJpNoteLine[0] = 0;
 	extern cvar_t *jp_poc;
+	JpLogNote( "NOTE settext enter: page=%d line=%d jp_poc=%s", m_iPage_guess, m_iLine_guess, jp_poc ? "set" : "null" );
 	if ( jp_poc && jp_poc->value != 0.0f )
 	{
 		const char *pszFile = NULL;
@@ -687,6 +702,7 @@ void CNoteDocument::SetText_guess()
 			for ( const char *p = pszFile; *p; p++ )
 				if ( *p == '/' || *p == '\\' )
 					pszBase = p + 1;
+			JpLogNote( "NOTE settext: page=%d line=%d file=[%s] base=[%s]", m_iPage_guess, m_iLine_guess, pszFile, pszBase );
 			const char *pszJp = JpLookupNoteLine( pszBase, m_iLine_guess );
 			if ( pszJp )
 			{
@@ -695,6 +711,8 @@ void CNoteDocument::SetText_guess()
 				g_bJpNoteLine = true;
 				gEngfuncs.Con_Printf( "JP note line: %s #%d\n", pszBase, m_iLine_guess );
 			}
+			else
+				JpLogNote( "NOTE settext: MISS base=[%s] line=%d", pszBase, m_iLine_guess );
 		}
 	}
 }
