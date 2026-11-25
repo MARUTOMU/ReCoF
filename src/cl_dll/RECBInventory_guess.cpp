@@ -126,7 +126,7 @@ public:
 		static int s_iObjLog = 0;
 		if ( s_iObjLog < 6 )
 		{
-			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount );
+			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d fw0=%.1f base=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount, iLineCount > 0 ? JpSharedMeasure( szLines[0] ) : -1.0f, ( iTall - ( iLineCount * ( iPx + 6 ) - 6 ) ) / 2 + JpSharedAscentPx() );
 			s_iObjLog++;
 		}
 		if ( !bInitOk )
@@ -142,6 +142,7 @@ public:
 				continue;
 			const unsigned char *pS = (const unsigned char *)szDraw;
 			int iLen = (int)strlen( szDraw );
+			bool bFirstGlyph = true;
 			for ( int pass = 0; pass < 2; pass++ )
 			{
 				int ox = ( pass == 0 ) ? 1 : 0;
@@ -167,6 +168,8 @@ public:
 							if ( rgba )
 							{
 								int texId = getSurfaceBase()->createNewTextureID();
+								if ( s_iObjLog < 6 )
+									JpLogObj( "OBJ newtex: cp=%d ret=%d wh=%dx%d\n", cp, texId, g->w, g->h );
 								if ( texId > 0 )
 								{
 									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
@@ -182,8 +185,12 @@ public:
 						else
 							JpSharedSetGlyphTexture( g, 0 );
 					}
-					if ( pass == 1 && li == 0 && pos == 0 && s_iObjLog < 6 )
-						JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv );
+					if ( pass == 1 && li == 0 && bFirstGlyph )
+					{
+						bFirstGlyph = false;
+						if ( s_iObjLog < 6 )
+							JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f dx=%d dy=%d\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv, (int)( penX + 0.5f ) + g->xoff + ox, iBase + g->yoff + oy );
+					}
 					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
 					{
 						int dx = (int)( penX + 0.5f ) + g->xoff + ox;
