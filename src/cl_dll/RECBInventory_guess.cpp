@@ -132,28 +132,38 @@ public:
 		if ( !bInitOk )
 			return;
 
-		// BUILD34 DIAGNOSTIC: absolute position of this label + test marks.
-		// Red/white filled rects at the label's top-left corner: if they do
-		// not appear, this paint surface region is clipped or overpainted;
-		// if they appear but glyphs do not, the texture path is at fault.
+		// BUILD35: the working JP renderers in this codebase (objective
+		// banner, note document) draw in ABSOLUTE surface coordinates, not
+		// panel-local ones. Compute this label's surface origin: sum of the
+		// parent chain minus the top ancestor (the game panel carries the
+		// window's screen offset). Glyphs are drawn at origin + local.
+		int iOrgX = 0, iOrgY = 0;
 		{
-			static int s_iAbsLog = 0;
-			if ( s_iAbsLog < 6 )
+			int ax = 0, ay = 0, tx = 0, ty = 0;
+			for ( Panel *pp = this; pp; pp = pp->getParent() )
 			{
-				int ax = 0, ay = 0, chain = 0;
-				for ( Panel *pp = this; pp && chain < 8; pp = pp->getParent() )
+				int px, py;
+				pp->getPos( px, py );
+				ax += px; ay += py;
+				if ( !pp->getParent() )
 				{
-					int px, py;
-					pp->getPos( px, py );
-					ax += px; ay += py; chain++;
+					tx = px; ty = py;
 				}
-				JpLogObj( "OBJ abs: x=%d y=%d chain=%d\n", ax, ay, chain );
-				s_iAbsLog++;
 			}
+			iOrgX = ax - tx;
+			iOrgY = ay - ty;
+			static int s_iOrgLog = 0;
+			if ( s_iOrgLog < 6 )
+			{
+				s_iOrgLog++;
+				JpLogObj( "OBJ org: ax=%d ay=%d tx=%d ty=%d co=%d,%d\n", ax, ay, tx, ty, iOrgX, iOrgY );
+			}
+			// test marks: red at the computed client origin, green at the
+			// raw chain-sum position. Whichever shows reveals the transform.
 			drawSetColor( 255, 0, 0, 255 );
-			drawFilledRect( 0, 0, 40, 12 );
-			drawSetColor( 255, 255, 255, 255 );
-			drawFilledRect( 45, 0, 85, 12 );
+			drawFilledRect( iOrgX, iOrgY, iOrgX + 60, iOrgY + 20 );
+			drawSetColor( 0, 255, 0, 255 );
+			drawFilledRect( ax, ay, ax + 60, ay + 20 );
 		}
 		const int iLineH = iPx + 6;
 		int iTotalH = iLineCount * iLineH - 6;
@@ -217,8 +227,8 @@ public:
 					}
 					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
 					{
-						int dx = (int)( penX + 0.5f ) + g->xoff + ox;
-						int dy = iBase + g->yoff + oy;
+						int dx = iOrgX + (int)( penX + 0.5f ) + g->xoff + ox;
+						int dy = iOrgY + iBase + g->yoff + oy;
 						drawSetTexture( g->texId );
 						drawSetColor( cr, cg, cb, 255 );
 						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
