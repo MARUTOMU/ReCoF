@@ -772,6 +772,8 @@ int CHud :: MsgFunc_ProFont( const char *pszName, int iSize, void *pbuf )
 		if ( jp_poc->value != 0.0f )
 		{
 			const char *pszJp = JpLookupSubtitle( szText );
+			if ( !pszJp )
+				pszJp = JpLookupMapText( szText );
 			if ( pszJp )
 			{
 				strncpy( szText, pszJp, sizeof(szText) - 1 );

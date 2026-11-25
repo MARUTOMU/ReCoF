@@ -63,4 +63,8 @@ const char *JpLookupNoteLine(const char *pszFile, int iLine);
 // (newlines as \n). NULL when there is no translation.
 const char *JpLookupTitle(const char *pszEnglish);
 
+// Japanese text of a map-embedded (BSP entity) string: full English text.
+// NULL when there is no translation.
+const char *JpLookupMapText(const char *pszEnglish);
+
 #endif // JP_SUBTITLE_RENDER_H
