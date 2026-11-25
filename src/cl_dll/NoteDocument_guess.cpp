@@ -423,6 +423,41 @@ void CNoteDocument::NextLine_guess()
 
 		i++;
 	}
+
+	// JP-MOD: resolve Japanese text for the navigated line (same as SetText_guess).
+	{
+		extern cvar_t *jp_poc;
+		g_bJpNoteLine = false;
+		g_szJpNoteLine[0] = 0;
+		if ( jp_poc && jp_poc->value != 0.0f )
+		{
+			const char *pszFile = NULL;
+			switch ( m_iPage_guess )
+			{
+			case 1: pszFile = m_szText1_guess; break;
+			case 2: pszFile = m_szText2_guess; break;
+			case 3: pszFile = m_szText3_guess; break;
+			case 4: pszFile = m_szText4_guess; break;
+			}
+			if ( pszFile && pszFile[0] )
+			{
+				const char *pszBase = pszFile;
+				for ( const char *pp = pszFile; *pp; pp++ )
+					if ( *pp == '/' || *pp == '\\' )
+						pszBase = pp + 1;
+				const char *pszJp = JpLookupNoteLine( pszBase, m_iLine_guess );
+				if ( pszJp )
+				{
+					strncpy( g_szJpNoteLine, pszJp, sizeof(g_szJpNoteLine) - 1 );
+					g_szJpNoteLine[sizeof(g_szJpNoteLine) - 1] = 0;
+					g_bJpNoteLine = true;
+					JpLogNote( "NOTE nav: HIT base=[%s] line=%d", pszBase, m_iLine_guess );
+				}
+				else
+					JpLogNote( "NOTE nav: MISS base=[%s] line=%d", pszBase, m_iLine_guess );
+			}
+		}
+	}
 }
 
 void CNoteDocument::NextPage_guess()
@@ -519,6 +554,41 @@ void CNoteDocument::PrevLine_guess()
 		}
 
 		i++;
+	}
+
+	// JP-MOD: resolve Japanese text for the navigated line (same as SetText_guess).
+	{
+		extern cvar_t *jp_poc;
+		g_bJpNoteLine = false;
+		g_szJpNoteLine[0] = 0;
+		if ( jp_poc && jp_poc->value != 0.0f )
+		{
+			const char *pszFile = NULL;
+			switch ( m_iPage_guess )
+			{
+			case 1: pszFile = m_szText1_guess; break;
+			case 2: pszFile = m_szText2_guess; break;
+			case 3: pszFile = m_szText3_guess; break;
+			case 4: pszFile = m_szText4_guess; break;
+			}
+			if ( pszFile && pszFile[0] )
+			{
+				const char *pszBase = pszFile;
+				for ( const char *pp = pszFile; *pp; pp++ )
+					if ( *pp == '/' || *pp == '\\' )
+						pszBase = pp + 1;
+				const char *pszJp = JpLookupNoteLine( pszBase, m_iLine_guess );
+				if ( pszJp )
+				{
+					strncpy( g_szJpNoteLine, pszJp, sizeof(g_szJpNoteLine) - 1 );
+					g_szJpNoteLine[sizeof(g_szJpNoteLine) - 1] = 0;
+					g_bJpNoteLine = true;
+					JpLogNote( "NOTE nav: HIT base=[%s] line=%d", pszBase, m_iLine_guess );
+				}
+				else
+					JpLogNote( "NOTE nav: MISS base=[%s] line=%d", pszBase, m_iLine_guess );
+			}
+		}
 	}
 }
 
