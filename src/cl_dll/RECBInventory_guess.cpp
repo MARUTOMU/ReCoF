@@ -131,6 +131,30 @@ public:
 		}
 		if ( !bInitOk )
 			return;
+
+		// BUILD34 DIAGNOSTIC: absolute position of this label + test marks.
+		// Red/white filled rects at the label's top-left corner: if they do
+		// not appear, this paint surface region is clipped or overpainted;
+		// if they appear but glyphs do not, the texture path is at fault.
+		{
+			static int s_iAbsLog = 0;
+			if ( s_iAbsLog < 6 )
+			{
+				int ax = 0, ay = 0, chain = 0;
+				for ( Panel *pp = this; pp && chain < 8; pp = pp->getParent() )
+				{
+					int px, py;
+					pp->getPos( px, py );
+					ax += px; ay += py; chain++;
+				}
+				JpLogObj( "OBJ abs: x=%d y=%d chain=%d\n", ax, ay, chain );
+				s_iAbsLog++;
+			}
+			drawSetColor( 255, 0, 0, 255 );
+			drawFilledRect( 0, 0, 40, 12 );
+			drawSetColor( 255, 255, 255, 255 );
+			drawFilledRect( 45, 0, 85, 12 );
+		}
 		const int iLineH = iPx + 6;
 		int iTotalH = iLineCount * iLineH - 6;
 		int iBase = ( iTall - iTotalH ) / 2 + JpSharedAscentPx();
