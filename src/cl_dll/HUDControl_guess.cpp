@@ -664,6 +664,11 @@ void ParseHintTokens( char *pszName, char *pszFile )
 			strncpy( gViewPort->m_pHUDControl_guess->m_szHintLine3_guess, pszJpLine, 255 );
 			gViewPort->m_pHUDControl_guess->m_szHintLine3_guess[255] = '\0';
 		}
+		JpLogHud( "HINT xlate: l1jp=%d l2jp=%d l3jp=%d l1=%.40s",
+			JpTextIsUtf8Japanese( gViewPort->m_pHUDControl_guess->m_szHintLine1_guess ) ? 1 : 0,
+			JpTextIsUtf8Japanese( gViewPort->m_pHUDControl_guess->m_szHintLine2_guess ) ? 1 : 0,
+			JpTextIsUtf8Japanese( gViewPort->m_pHUDControl_guess->m_szHintLine3_guess ) ? 1 : 0,
+			gViewPort->m_pHUDControl_guess->m_szHintLine1_guess );
 	}
 
 	if ( strlen( gViewPort->m_pHUDControl_guess->m_szHintLine1_guess ) > 2 )
@@ -2037,6 +2042,13 @@ void CHUDControl::paint()
 			if ( JpSharedInitFont( iHintPx ) )
 			{
 				float fHintW = JpSharedMeasure( szHintDraw );
+				static int s_iHintLogCount = 0;
+				if ( s_iHintLogCount < 40 )
+				{
+					s_iHintLogCount++;
+					JpLogHud( "HINT draw: line=%d alpha=%d label=(%d,%d) px=%d w=%.1f",
+						m_iHintLine_guess, m_iHintAlpha_guess, iLabelX, iLabelY, iHintPx, (double)fHintW );
+				}
 				if ( fHintW > 0 )
 				{
 					int iHintBase = iLabelY + ( 48 - iHintPx ) / 2 + JpSharedAscentPx();
