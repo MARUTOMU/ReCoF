@@ -55,4 +55,8 @@ bool JpSharedGlyphBitmap(int cp, unsigned char **ppRgba);
 // Store a texture id created by the caller into the shared cache entry.
 void JpSharedSetGlyphTexture(const JpGlyph *g, int texId);
 
+// Japanese text of one note line: file basename (e.g. "apnote1.txt") and
+// 1-based line number within that file. NULL when there is no translation.
+const char *JpLookupNoteLine(const char *pszFile, int iLine);
+
 #endif // JP_SUBTITLE_RENDER_H

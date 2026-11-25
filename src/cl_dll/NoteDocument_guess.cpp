@@ -13,6 +13,11 @@
 #include "vgui_TeamFortressViewport.h"
 #include "NoteDocument_guess.h"
 #include "..\game_shared\vgui_loadtga.h"
+#include "jp_subtitle_render.h"
+
+// JP-MOD: Japanese rendering of the current note line (see SetText_guess).
+static char g_szJpNoteLine[512];
+static bool g_bJpNoteLine = false;
 
 CNoteDocument::CNoteDocument( int iTrans, int iRemoveMe, int x, int y, int wide, int tall ) : CMenuPanel( iTrans, iRemoveMe, x, y, wide, tall )
 {
@@ -659,6 +664,38 @@ void CNoteDocument::SetText_guess()
 
 		i++;
 	}
+
+	// JP-MOD: when JP mode is on, resolve the Japanese text of this line
+	// from the embedded note table (key: file basename + line number).
+	g_bJpNoteLine = false;
+	g_szJpNoteLine[0] = 0;
+	extern cvar_t *jp_poc;
+	if ( jp_poc && jp_poc->value != 0.0f )
+	{
+		const char *pszFile = NULL;
+		switch ( m_iPage_guess )
+		{
+		case 1: pszFile = m_szText1_guess; break;
+		case 2: pszFile = m_szText2_guess; break;
+		case 3: pszFile = m_szText3_guess; break;
+		case 4: pszFile = m_szText4_guess; break;
+		}
+		if ( pszFile && pszFile[0] )
+		{
+			const char *pszBase = pszFile;
+			for ( const char *p = pszFile; *p; p++ )
+				if ( *p == '/' || *p == '\\' )
+					pszBase = p + 1;
+			const char *pszJp = JpLookupNoteLine( pszBase, m_iLine_guess );
+			if ( pszJp )
+			{
+				strncpy( g_szJpNoteLine, pszJp, sizeof(g_szJpNoteLine) - 1 );
+				g_szJpNoteLine[sizeof(g_szJpNoteLine) - 1] = 0;
+				g_bJpNoteLine = true;
+				gEngfuncs.Con_Printf( "JP note line: %s #%d\n", pszBase, m_iLine_guess );
+			}
+		}
+	}
 }
 
 void CNoteDocument::paint()
@@ -678,7 +715,80 @@ void CNoteDocument::paint()
 		drawSetTextPos( ScreenWidth / 2 - wide / 2, ScreenHeight - tall * 2 );
 
 		m_pLineLabel_guess->setSize( ScreenWidth, 64 );
-		m_pLineLabel_guess->setText( m_szLine_guess );
+		if ( g_bJpNoteLine )
+		{
+			// JP-MOD: draw the Japanese line with the shared JP renderer,
+			// centered in the same strip the English label uses.
+			m_pLineLabel_guess->setText( "" );
+			int jr = 200, jg = 200, jb = 200;
+			if ( m_szLine_guess[0] == '*' || m_bTitle_guess )
+				jr = 255, jg = 255, jb = 0;
+			int pixelHeight = m_pFont_guess ? m_pFont_guess->getTall() : 0;
+			if ( pixelHeight < 8 )
+				pixelHeight = 20;
+			if ( JpSharedInitFont( pixelHeight ) )
+			{
+				float fWidth = JpSharedMeasure( g_szJpNoteLine );
+				if ( fWidth > 0 )
+				{
+					int topY = ScreenHeight - tall * 3 + ( 64 - pixelHeight ) / 2;
+					int baseline = topY + JpSharedAscentPx();
+					const unsigned char *s = (const unsigned char *)g_szJpNoteLine;
+					int len = (int)strlen( g_szJpNoteLine );
+					for ( int pass = 0; pass < 2; pass++ )
+					{
+						int ox = ( pass == 0 ) ? 1 : 0;
+						int oy = ( pass == 0 ) ? 1 : 0;
+						int cr = ( pass == 0 ) ? 0 : jr;
+						int cg = ( pass == 0 ) ? 0 : jg;
+						int cb = ( pass == 0 ) ? 0 : jb;
+						float penX = ScreenWidth / 2.0f - fWidth / 2.0f;
+						int pos = 0;
+						while ( pos < len )
+						{
+							int cp;
+							if ( !JpSharedDecodeUtf8( s, len, pos, cp ) )
+								break;
+							const JpGlyph *g = JpSharedGlyphMetrics( cp );
+							if ( !g )
+								break;
+							if ( g->texId < 0 )
+							{
+								unsigned char *rgba = NULL;
+								if ( JpSharedGlyphBitmap( cp, &rgba ) )
+								{
+									if ( rgba )
+									{
+										int texId = getSurfaceBase()->createNewTextureID();
+										if ( texId > 0 )
+										{
+											drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+											JpSharedSetGlyphTexture( g, texId );
+										}
+										else
+											JpSharedSetGlyphTexture( g, 0 );
+										free( rgba );
+									}
+									else
+										JpSharedSetGlyphTexture( g, 0 );
+								}
+							}
+							if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+							{
+								int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+								int dy = baseline + g->yoff + oy;
+								drawSetTexture( g->texId );
+								drawSetColor( cr, cg, cb, 0 );
+								drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+							}
+							penX += g->adv;
+						}
+					}
+				}
+			}
+		}
+		else
+			m_pLineLabel_guess->setText( m_szLine_guess );
 		m_pLineLabel_guess->setPos( 0, ScreenHeight - tall * 3 );
 		m_pLineLabel_guess->setContentAlignment( Label::a_center );
 	}
