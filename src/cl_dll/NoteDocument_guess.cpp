@@ -14,6 +14,7 @@
 #include "NoteDocument_guess.h"
 #include "..\game_shared\vgui_loadtga.h"
 #include "jp_subtitle_render.h"
+#include "VGUI_SurfaceBase.h"
 
 // JP-MOD: Japanese rendering of the current note line (see SetText_guess).
 static char g_szJpNoteLine[512];
