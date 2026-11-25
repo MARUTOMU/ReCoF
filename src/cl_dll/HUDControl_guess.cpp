@@ -18,6 +18,24 @@
 #include <string.h>
 #include <stdio.h>
 #include "rc_client.h"	// ReCoF
+#include "jp_subtitle_render.h"	// JP-POC
+#include "VGUI_SurfaceBase.h"	// JP-POC: createNewTextureID via getSurfaceBase()
+#include <stdarg.h>	// JP-POC-DEBUG
+#include <stdlib.h>	// JP-POC
+
+extern cvar_t *jp_poc;	// JP-POC: defined in vgui_subtitles.cpp
+
+// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
+static void JpLogHud(const char *fmt, ...)
+{
+	FILE *f = fopen("jp_debug.log", "a");
+	if (!f) return;
+	va_list ap; va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fputc('\n', f);
+	fclose(f);
+}
 
 // a method of CHud in 1.6a (called with ecx = &gHUD): the key bound to a command, read from config.cfg
 
@@ -1373,6 +1391,83 @@ void CHUDControl::LogoUpdate_guess()
 	}
 }
 
+// JP-POC: draw a ProFont message line with the JP renderer (embedded
+// Noto Sans JP subset, one texture per glyph, shared cache). The line is
+// centered in the same strip the retail label uses. Two passes: shadow
+// (+1,+1 black) then body, mirroring the subtitle panel renderer.
+bool CHUDControl::JpDrawProMessage_guess( const char *text, int r, int g, int b, int opacity )
+{
+	int pixelHeight = m_pCreditsFont_guess ? m_pCreditsFont_guess->getTall() : 0;
+	if ( pixelHeight < 8 )
+		pixelHeight = 16;
+	if ( !JpSharedInitFont( pixelHeight ) )
+		return false;
+
+	float width = JpSharedMeasure( text );
+	if ( width <= 0 )
+		return false;
+
+	int topY = ScreenHeight - g_iLetterboxHeight_guess * 3 + ( 64 - pixelHeight ) / 2;
+	int baseline = topY + JpSharedAscentPx();
+
+	const unsigned char *s = (const unsigned char *)text;
+	int len = (int)strlen( text );
+
+	for ( int pass = 0; pass < 2; pass++ )
+	{
+		int ox = ( pass == 0 ) ? 1 : 0;
+		int oy = ( pass == 0 ) ? 1 : 0;
+		int cr = ( pass == 0 ) ? 0 : r;
+		int cg = ( pass == 0 ) ? 0 : g;
+		int cb = ( pass == 0 ) ? 0 : b;
+
+		float penX = ScreenWidth / 2.0f - width / 2.0f;
+		int pos = 0;
+		while ( pos < len )
+		{
+			if ( s[pos] == '*' )
+				break;
+			int cp;
+			if ( !JpSharedDecodeUtf8( s, len, pos, cp ) )
+				break;
+			const JpGlyph *g = JpSharedGlyphMetrics( cp );
+			if ( !g )
+				break;
+			if ( g->texId < 0 )
+			{
+				unsigned char *rgba = NULL;
+				if ( JpSharedGlyphBitmap( cp, &rgba ) )
+				{
+					if ( rgba )
+					{
+						int texId = getSurfaceBase()->createNewTextureID();
+						if ( texId > 0 )
+						{
+							drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+							JpSharedSetGlyphTexture( g, texId );
+						}
+						else
+							JpSharedSetGlyphTexture( g, 0 );
+						free( rgba );
+					}
+					else
+						JpSharedSetGlyphTexture( g, 0 );
+				}
+			}
+			if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+			{
+				int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+				int dy = baseline + g->yoff + oy;
+				drawSetTexture( g->texId );
+				drawSetColor( cr, cg, cb, opacity );
+				drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+			}
+			penX += g->adv;
+		}
+	}
+	return true;
+}
+
 void CHUDControl::RenderMessages_guess()
 {
 	float flTime = gEngfuncs.GetClientTime();
@@ -1622,6 +1717,10 @@ void CHUDControl::RenderMessages_guess()
 			}
 
 			int a = m_flMessageAlpha_guess;
+
+			// JP-POC: ProFont lines in Japanese UTF-8 are drawn by the JP
+			// renderer; the retail label cannot display them.
+			bool bJpMsg = (jp_poc && jp_poc->value && JpTextIsUtf8Japanese( m_szMessage_guess ));
 			drawSetTextFont( m_pCreditsFont_guess );
 
 			switch ( m_iMessageType_guess )
@@ -1664,7 +1763,10 @@ void CHUDControl::RenderMessages_guess()
 			drawSetTextPos( x, iLen2 > 1 ? y - h : y );
 
 			m_pMessageLabel_guess->setSize( ScreenWidth, 64 );
-			m_pMessageLabel_guess->setText( m_szMessage_guess );
+			if ( bJpMsg )
+				m_pMessageLabel_guess->setText( " " );
+			else
+				m_pMessageLabel_guess->setText( m_szMessage_guess );
 			m_pCreditsFont_guess->getTextSize( m_szMessage_guess, w, h );
 			m_pMessageLabel_guess->setPos( 0, ScreenHeight - g_iLetterboxHeight_guess * 3 );
 			m_pMessageLabel_guess->setContentAlignment( Label::a_center );
@@ -1688,6 +1790,26 @@ void CHUDControl::RenderMessages_guess()
 			case 6:
 				m_pMessageLabel_guess->setFgColor( 255, 0, 0, a );
 				break;
+			}
+
+			if ( bJpMsg )
+			{
+				int jr = 200, jg = 200, jb = 200;
+				switch ( m_iMessageType_guess )
+				{
+				case 0: case 3: jr = 255; jg = 255; jb = 0; break;
+				case 1: jr = 0; jg = 128; jb = 255; break;
+				case 4: jr = 0; jg = 255; jb = 0; break;
+				case 2: case 6: jr = 255; jg = 0; jb = 0; break;
+				}
+				JpDrawProMessage_guess( m_szMessage_guess, jr, jg, jb, 255 - a );
+				static char s_szJpLogged[256] = "";
+				if ( strcmp( s_szJpLogged, m_szMessage_guess ) != 0 )
+				{
+					strncpy( s_szJpLogged, m_szMessage_guess, 255 );
+					s_szJpLogged[255] = 0;
+					JpLogHud( "ProFont JP: type=%d a=%d text=%.40s", m_iMessageType_guess, a, m_szMessage_guess );
+				}
 			}
 
 			if ( iLen2 > 1 )

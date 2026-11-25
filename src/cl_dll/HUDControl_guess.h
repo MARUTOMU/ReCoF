@@ -17,6 +17,7 @@ public:
 	void HandleHUDVisibility_guess();
 	void LogoUpdate_guess();
 	void RenderMessages_guess();
+	bool JpDrawProMessage_guess( const char *text, int r, int g, int b, int opacity );	// JP-POC: JP renderer for ProFont lines
 	void ShowSMSIcon_guess( bool bShow );
 	void UpdateOnPlayerInfo_guess();
 

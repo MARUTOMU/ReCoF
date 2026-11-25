@@ -154,15 +154,8 @@ static bool JpIsLineStartProhibited(int cp)
 // Font state and glyph cache (process-wide, shared by all panels)
 // ---------------------------------------------------------------------------
 
-struct JpGlyph
-{
-	int   cp;
-	int   texId;	// VGUI1 texture id; -1 = metrics only, 0 = blank (no bitmap)
-	int   w, h;		// bitmap size in pixels
-	int   xoff;		// bitmap left edge relative to the pen position
-	int   yoff;		// bitmap top edge relative to the baseline
-	float adv;		// pen advance in pixels
-};
+// (JpGlyph is declared in jp_subtitle_render.h; the cache is shared with
+// CHUDControl for the ProFont message strip.)
 
 #define JP_MAX_GLYPHS 2048
 
@@ -455,4 +448,101 @@ bool CSubtitleTextPanel::JpPaintText()
 		}
 	}
 	return true;
+}
+
+// ---------------------------------------------------------------------------
+// Shared entry points (used by CHUDControl for the ProFont message strip)
+// ---------------------------------------------------------------------------
+
+bool JpSharedInitFont(int pixelHeight)
+{
+	return JpInitFont(pixelHeight);
+}
+
+const JpGlyph *JpSharedGlyphMetrics(int cp)
+{
+	return JpGlyphMetrics(cp);
+}
+
+bool JpSharedDecodeUtf8(const unsigned char *s, int len, int &pos, int &cp)
+{
+	return JpDecodeUtf8(s, len, pos, cp);
+}
+
+int JpSharedAscentPx()
+{
+	return s_iAscentPx;
+}
+
+float JpSharedMeasure(const char *text)
+{
+	if (!text)
+		return 0.0f;
+	const unsigned char *s = (const unsigned char *)text;
+	int len = (int)strlen(text);
+	int pos = 0;
+	float w = 0.0f;
+	while (pos < len)
+	{
+		if (s[pos] == '*')
+			break;
+		int cp;
+		if (!JpDecodeUtf8(s, len, pos, cp))
+			break;
+		const JpGlyph *g = JpGlyphMetrics(cp);
+		if (!g)
+			break;
+		w += g->adv;
+	}
+	return w;
+}
+
+bool JpSharedGlyphBitmap(int cp, unsigned char **ppRgba)
+{
+	*ppRgba = NULL;
+	const JpGlyph *found = JpGlyphMetrics(cp);
+	if (!found)
+		return false;
+	JpGlyph *g = const_cast<JpGlyph *>(found);
+
+	int x0, y0, x1, y1;
+	stbtt_GetCodepointBitmapBox(&s_font, cp, s_fScale, s_fScale, &x0, &y0, &x1, &y1);
+	g->xoff = x0;
+	g->yoff = y0;
+	g->w = x1 - x0;
+	g->h = y1 - y0;
+	if (g->w <= 0 || g->h <= 0)
+	{
+		g->w = 0;
+		g->h = 0;
+		return true;	// blank glyph, no bitmap
+	}
+
+	unsigned char *bitmap = (unsigned char *)malloc(g->w * g->h);
+	unsigned char *rgba = (unsigned char *)malloc(g->w * g->h * 4);
+	if (!bitmap || !rgba)
+	{
+		free(bitmap);
+		free(rgba);
+		g->w = 0;
+		g->h = 0;
+		return true;	// skip this glyph
+	}
+	stbtt_MakeCodepointBitmap(&s_font, bitmap, g->w, g->h, g->w, s_fScale, s_fScale, cp);
+	for (int i = 0; i < g->w * g->h; i++)
+	{
+		rgba[i * 4 + 0] = 255;
+		rgba[i * 4 + 1] = 255;
+		rgba[i * 4 + 2] = 255;
+		rgba[i * 4 + 3] = bitmap[i];
+	}
+	free(bitmap);
+	*ppRgba = rgba;
+	return true;
+}
+
+void JpSharedSetGlyphTexture(const JpGlyph *g, int texId)
+{
+	if (g)
+		const_cast<JpGlyph *>(g)->texId = texId;
 }
