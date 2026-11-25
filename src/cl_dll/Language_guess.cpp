@@ -10,6 +10,8 @@
 #include "..\game_shared\vgui_loadtga.h"
 #include "event_api.h"
 
+extern cvar_t *jp_poc;
+
 CLanguage::CLanguage() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 {
 	int x, y;
@@ -57,6 +59,10 @@ CLanguage::CLanguage() : Panel( 0, 0, ScreenWidth, ScreenHeight )
 	pButton->setParent( m_pBackground_guess );
 	pButton->addActionSignal( new CLanguageHandler_Command( this, 6 ) );
 
+	pButton = new CommandButton( "", 241, 298, 158, 117, true, true );
+	pButton->setParent( m_pBackground_guess );
+	pButton->addActionSignal( new CLanguageHandler_Command( this, 8 ) );
+
 	setBgColor( 0, 0, 0, 255 );
 
 	Initialize();
@@ -74,6 +80,7 @@ void CLanguage::ActionSignal( int cmd )
 	case 0:
 		break;
 	case 1:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 1" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -81,6 +88,7 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 2:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 2" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -88,6 +96,7 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 3:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 3" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -95,6 +104,7 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 4:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 4" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -102,6 +112,7 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 5:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 5" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -109,6 +120,7 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 6:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 6" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
@@ -116,7 +128,16 @@ void CLanguage::ActionSignal( int cmd )
 		gViewPort->UpdateCursorState();
 		break;
 	case 7:
+		if ( jp_poc ) jp_poc->value = 0.0f;
 		gEngfuncs.pfnServerCmd( "subtitleset 7" );
+		setVisible( false );
+		gViewPort->ShowVGUIMenu( 37 );
+		gEngfuncs.pEventAPI->EV_PlaySound( -1, pPlayer->curstate.origin, CHAN_WEAPON, "ui/3d_click.wav", 1.0, 0.8, 0, PITCH_NORM );
+		gViewPort->UpdateCursorState();
+		break;
+	case 8:
+		if ( jp_poc ) jp_poc->value = 1.0f;
+		gEngfuncs.pfnServerCmd( "subtitleset 1" );
 		setVisible( false );
 		gViewPort->ShowVGUIMenu( 37 );
 		gEngfuncs.pEventAPI->EV_PlaySound( -1, pPlayer->curstate.origin, CHAN_WEAPON, "ui/3d_click.wav", 1.0, 0.8, 0, PITCH_NORM );
