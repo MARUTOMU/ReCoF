@@ -281,8 +281,13 @@ char *CHud::CheckItem( char *pszName, char *pszFile )
 		if ( jp_poc && jp_poc->value != 0.0f )
 		{
 			const char *pszJpName = JpLookupItemName( pszFile );
+			JpLogMsg( "ITEM nice_name: file=[%s] hit=%d", pszFile, pszJpName ? 1 : 0 );
 			if ( pszJpName )
 				return (char *)pszJpName;
+		}
+		else
+		{
+			JpLogMsg( "ITEM nice_name: file=[%s] jp_poc OFF", pszFile );
 		}
 	}
 

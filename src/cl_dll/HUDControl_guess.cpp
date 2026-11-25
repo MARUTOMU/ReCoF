@@ -411,6 +411,19 @@ int MsgIntrodn_guess( const char *pszName, int iSize, void *pbuf )
 		gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess->setColor( Color( 255, 255, 255, 255 ) );
 		gViewPort->m_pHUDControl_guess->m_bIntroductionFadeIn_guess = true;
 
+		// JP: when the Japanese subtitle mode is on, load the Japanese
+		// introduction cards (the stock switch has no case for us).
+		if ( jp_poc && jp_poc->value )
+		{
+			if ( iType == 0 )
+				gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess = vgui_LoadTGA( "gfx/vgui/introductions/japanese/japanese_sp.TGA" );
+			else if ( iType == 1 )
+				gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess = vgui_LoadTGA( "gfx/vgui/introductions/japanese/japanese_doc.TGA" );
+			else if ( iType == 2 )
+				gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess = vgui_LoadTGA( "gfx/vgui/introductions/japanese/japanese_coop.TGA" );
+		}
+		else
+		{
 		switch ( iLanguage )
 		{
 		case 0:
@@ -477,6 +490,7 @@ int MsgIntrodn_guess( const char *pszName, int iSize, void *pbuf )
 			else if ( iType == 2 )
 				gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess = vgui_LoadTGA( "gfx/vgui/introductions/english/english_coop.TGA" );
 			break;
+		}
 		}
 
 		gViewPort->m_pHUDControl_guess->m_pIntroduction_guess->setImage( gViewPort->m_pHUDControl_guess->m_pIntroductionImage_guess );
@@ -1797,6 +1811,25 @@ void CHUDControl::RenderMessages_guess()
 			}
 		}
 
+		// JP: chapter titles come from cof_chapter entities; translate via
+		// the map-text table and draw with the shared JP renderer instead
+		// of the VGUI label (which cannot render Japanese).
+		const char *pszChapterJp = NULL;
+		if ( jp_poc && jp_poc->value )
+			pszChapterJp = JpLookupMapText( m_szChapter_guess );
+		int iChapterPx = 0;
+		float fChapterJw = 0;
+		if ( pszChapterJp )
+		{
+			iChapterPx = m_pChapterTitleFont_guess ? m_pChapterTitleFont_guess->getTall() : 0;
+			if ( iChapterPx < 8 )
+				iChapterPx = 16;
+			if ( JpSharedInitFont( iChapterPx ) )
+				fChapterJw = JpSharedMeasure( pszChapterJp );
+			if ( fChapterJw <= 0 )
+				pszChapterJp = NULL;
+		}
+
 		drawSetTextFont( m_pChapterTitleFont_guess );
 		if ( m_iChapterType_guess <= 5 )
 			drawSetTextColor( 255, 255, 255, (int)m_flChapterAlpha_guess );
@@ -1807,17 +1840,90 @@ void CHUDControl::RenderMessages_guess()
 		y = ScreenHeight / 2 - h / 2;
 		drawSetTextPos( x, y );
 
+		if ( pszChapterJp )
+		{
+			w = (int)( fChapterJw + 0.5f );
+			h = iChapterPx;
+			x = ScreenWidth / 2 - w / 2;
+			y = ScreenHeight / 2 - h / 2;
+		}
+
 		if ( m_szChapter_guess[0] && m_iChapterType_guess <= 5 )
 			gEngfuncs.pfnFillRGBA( x, y + h, (int)( m_iChapterChars_guess / (float)strlen( m_szChapter_guess ) * w ), 2, 255, 255, 255, (int)( 255.0f - m_flChapterAlpha_guess ) );
 
 		m_pMessageLabel2_guess->setSize( ScreenWidth, 64 );
-		m_pMessageLabel2_guess->setText( m_szChapter_guess );
+		m_pMessageLabel2_guess->setText( pszChapterJp ? "" : m_szChapter_guess );
 		m_pMessageLabel2_guess->setPos( 0, ScreenHeight / 2 - 32 );
 		m_pMessageLabel2_guess->setContentAlignment( Label::a_center );
 		if ( m_iChapterType_guess <= 5 )
 			m_pMessageLabel2_guess->setFgColor( 255, 255, 255, (int)m_flChapterAlpha_guess );
 		else
 			m_pMessageLabel2_guess->setFgColor( 255, 0, 0, (int)m_flChapterAlpha_guess );
+
+		if ( pszChapterJp )
+		{
+			int iCR = 255, iCG = 255, iCB = 255;
+			if ( m_iChapterType_guess > 5 )
+			{
+				iCG = 0;
+				iCB = 0;
+			}
+			int iAlpha = (int)m_flChapterAlpha_guess;
+			int iBase = ScreenHeight / 2 - iChapterPx / 2 + JpSharedAscentPx();
+			const unsigned char *pS = (const unsigned char *)pszChapterJp;
+			int iLen = (int)strlen( pszChapterJp );
+			for ( int pass = 0; pass < 2; pass++ )
+			{
+				int ox = ( pass == 0 ) ? 1 : 0;
+				int oy = ( pass == 0 ) ? 1 : 0;
+				int cr = ( pass == 0 ) ? 0 : iCR;
+				int cg = ( pass == 0 ) ? 0 : iCG;
+				int cb = ( pass == 0 ) ? 0 : iCB;
+				float penX = ScreenWidth / 2.0f - fChapterJw / 2.0f;
+				int pos = 0;
+				while ( pos < iLen )
+				{
+					int cp;
+					if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+						break;
+					const JpGlyph *g = JpSharedGlyphMetrics( cp );
+					if ( !g )
+						break;
+					if ( g->texId < 0 )
+					{
+						unsigned char *rgba = NULL;
+						if ( JpSharedGlyphBitmap( cp, &rgba ) )
+						{
+							if ( rgba )
+							{
+								int texId = getSurfaceBase()->createNewTextureID();
+								if ( texId > 0 )
+								{
+									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+									JpSharedSetGlyphTexture( g, texId );
+								}
+								else
+									JpSharedSetGlyphTexture( g, 0 );
+								free( rgba );
+							}
+							else
+								JpSharedSetGlyphTexture( g, 0 );
+						}
+						else
+							JpSharedSetGlyphTexture( g, 0 );
+					}
+					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+					{
+						int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+						int dy = iBase + g->yoff + oy;
+						drawSetTexture( g->texId );
+						drawSetColor( cr, cg, cb, iAlpha );
+						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+					}
+					penX += g->adv;
+				}
+			}
+		}
 	}
 
 	// message strip
