@@ -31,6 +31,7 @@
 
 // JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
 #include <stdio.h>
+#include "jp_subtitle_table.h"
 #include <stdarg.h>
 static void JpLogMsg(const char *fmt, ...)
 {
@@ -761,6 +762,23 @@ int CHud :: MsgFunc_ProFont( const char *pszName, int iSize, void *pbuf )
 		const unsigned char *hb = (const unsigned char *)szText;
 		for (int i = 0; i < 12 && hb[i]; i++) { char tmp[4]; sprintf(tmp, "%02X ", hb[i]); strcat(hexbuf, tmp); }
 		JpLogMsg("ProFont ARRIVE: type=%d bytes=%s text=%.40s", iType, hexbuf, szText);
+	}
+
+	// JP MOD (build #10): when JP mode is on, translate the English line the
+	// server sent into Japanese via the client-side lookup table. The game
+	// data files stay untouched; only the displayed text is replaced.
+	{
+		extern cvar_t *jp_poc;
+		if ( jp_poc->value != 0.0f )
+		{
+			const char *pszJp = JpLookupSubtitle( szText );
+			if ( pszJp )
+			{
+				strncpy( szText, pszJp, sizeof(szText) - 1 );
+				szText[sizeof(szText) - 1] = '\0';
+				JpLogMsg( "ProFont XLT ok" );
+			}
+		}
 	}
 
 	if ( strstr( szText, "DEADNOTIFY" ) )
