@@ -10,6 +10,8 @@
 #include "RECBInventory_guess.h"
 #include "Documents_guess.h"
 #include "HUDControl_guess.h"
+#include "jp_subtitle_render.h"	// JP-MOD (objective label)
+extern cvar_t *jp_poc;	// JP-MOD: defined in jp_subtitle_render.cpp
 #include "..\game_shared\vgui_loadtga.h"
 
 extern int iWheelchair_guess;
@@ -21,6 +23,122 @@ void InventorySound_guess( char *pszSound, float flVolume )
 {
 	gEngfuncs.pfnPlaySoundByName( pszSound, flVolume );
 }
+
+// JP-MOD: objective label subclass. The stock Label renders the UTF-8
+// Japanese objective line byte-by-byte (mojibake). When JP mode is on,
+// paint() draws the line with the shared JP renderer instead, reading
+// the text from the same source the caller uses (the HUD hint line 1,
+// where '@' separates lines). Otherwise the retail paint runs.
+class JpObjectiveLabel : public Label
+{
+public:
+	JpObjectiveLabel( const char *text, int x, int y, int wide, int tall )
+		: Label( text, x, y, wide, tall )
+	{
+	}
+
+	virtual void paint()
+	{
+		const char *pszLine = NULL;
+		if ( jp_poc && jp_poc->value && gViewPort && gViewPort->m_pHUDControl_guess )
+			pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
+		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
+		{
+			Label::paint();
+			return;
+		}
+		int iWide, iTall;
+		getSize( iWide, iTall );
+		if ( iWide <= 0 || iTall <= 0 )
+			return;
+		// split into lines on '@' / '\n'
+		char szAll[256];
+		strncpy( szAll, pszLine, 255 );
+		szAll[255] = '\0';
+		char *szLines[4];
+		int iLineCount = 0;
+		char *pCur = szAll;
+		while ( iLineCount < 4 && pCur )
+		{
+			szLines[iLineCount++] = pCur;
+			char *pSep = pCur;
+			while ( *pSep && *pSep != '@' && *pSep != '\n' )
+				pSep++;
+			if ( !*pSep )
+				break;
+			*pSep = '\0';
+			pCur = pSep + 1;
+		}
+		if ( iLineCount == 0 )
+			return;
+		const int iPx = 16;
+		if ( !JpSharedInitFont( iPx ) )
+			return;
+		const int iLineH = iPx + 6;
+		int iTotalH = iLineCount * iLineH - 6;
+		int iBase = ( iTall - iTotalH ) / 2 + JpSharedAscentPx();
+		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
+		{
+			const char *szDraw = szLines[li];
+			float fW = JpSharedMeasure( szDraw );
+			if ( fW <= 0 )
+				continue;
+			const unsigned char *pS = (const unsigned char *)szDraw;
+			int iLen = (int)strlen( szDraw );
+			for ( int pass = 0; pass < 2; pass++ )
+			{
+				int ox = ( pass == 0 ) ? 1 : 0;
+				int oy = ( pass == 0 ) ? 1 : 0;
+				int cr = ( pass == 0 ) ? 0 : 255;
+				int cg = ( pass == 0 ) ? 0 : 255;
+				int cb = ( pass == 0 ) ? 0 : 255;
+				float penX = ( iWide - fW ) / 2.0f;
+				int pos = 0;
+				while ( pos < iLen )
+				{
+					int cp;
+					if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+						break;
+					const JpGlyph *g = JpSharedGlyphMetrics( cp );
+					if ( !g )
+						break;
+					if ( g->texId < 0 )
+					{
+						unsigned char *rgba = NULL;
+						if ( JpSharedGlyphBitmap( cp, &rgba ) )
+						{
+							if ( rgba )
+							{
+								int texId = getSurfaceBase()->createNewTextureID();
+								if ( texId > 0 )
+								{
+									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+									JpSharedSetGlyphTexture( g, texId );
+								}
+								else
+									JpSharedSetGlyphTexture( g, 0 );
+								free( rgba );
+							}
+							else
+								JpSharedSetGlyphTexture( g, 0 );
+						}
+						else
+							JpSharedSetGlyphTexture( g, 0 );
+					}
+					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+					{
+						int dx = (int)( penX + 0.5f ) + g->xoff + ox;
+						int dy = iBase + g->yoff + oy;
+						drawSetTexture( g->texId );
+						drawSetColor( cr, cg, cb, 255 );
+						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+					}
+					penX += g->adv;
+				}
+			}
+		}
+	}
+};
 
 CRECBInventory::CRECBInventory( int iTrans, int iRemoveMe, int x, int y, int wide, int tall ) : CMenuPanel( iTrans, iRemoveMe, x, y, wide, tall )
 {
@@ -273,7 +391,7 @@ CRECBInventory::CRECBInventory( int iTrans, int iRemoveMe, int x, int y, int wid
 	SchemeHandle_t hInventoryScheme = pSchemes->getSchemeHandle( "inventory" );
 	Font *pInventoryFont = pSchemes->getFont( hInventoryScheme );
 
-	m_pObjectiveLabel_guess = new Label( "", 404, 354, 301, 97 );
+	m_pObjectiveLabel_guess = new JpObjectiveLabel( "", 404, 354, 301, 97 );
 	m_pObjectiveLabel_guess->setParent( m_pInventory_guess );
 	m_pObjectiveLabel_guess->setBgColor( 0, 0, 0, 255 );
 	m_pObjectiveLabel_guess->setFgColor( 255, 255, 255, 0 );
