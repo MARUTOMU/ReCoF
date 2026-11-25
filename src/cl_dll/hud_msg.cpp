@@ -270,6 +270,7 @@ void GetCurrentPath( char *path )
 }
 
 const char *JpLookupItemName( const char *pszFile );	// JP-MOD (jp_subtitle_render.cpp)
+const char *JpLookupMapText( const char *pszEnglish );	// JP-MOD (jp_subtitle_render.cpp)
 
 char *CHud::CheckItem( char *pszName, char *pszFile )
 {
