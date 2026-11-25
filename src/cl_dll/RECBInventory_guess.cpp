@@ -11,7 +11,9 @@
 #include "Documents_guess.h"
 #include "HUDControl_guess.h"
 #include "jp_subtitle_render.h"
-#include "VGUI_SurfaceBase.h"	// JP-MOD: full SurfaceBase definition (createNewTextureID)	// JP-MOD (objective label)
+#include "VGUI_SurfaceBase.h"
+#include <stdarg.h>	// JP-MOD: objective label setText capture
+#include <stdio.h>	// JP-MOD: objective label debug log	// JP-MOD: full SurfaceBase definition (createNewTextureID)	// JP-MOD (objective label)
 extern cvar_t *jp_poc;	// JP-MOD: defined in jp_subtitle_render.cpp
 #include "..\game_shared\vgui_loadtga.h"
 
@@ -30,19 +32,66 @@ void InventorySound_guess( char *pszSound, float flVolume )
 // paint() draws the line with the shared JP renderer instead, reading
 // the text from the same source the caller uses (the HUD hint line 1,
 // where '@' separates lines). Otherwise the retail paint runs.
+// JP-MOD: debug log for the objective label (verification builds only).
+static void JpLogObj( const char *fmt, ... )
+{
+	FILE *f = fopen( "jp_debug.log", "a" );
+	if ( !f )
+		return;
+	va_list ap;
+	va_start( ap, fmt );
+	vfprintf( f, fmt, ap );
+	va_end( ap );
+	fclose( f );
+}
+
 class JpObjectiveLabel : public Label
 {
+	char m_szJpText[256];
 public:
 	JpObjectiveLabel( const char *text, int x, int y, int wide, int tall )
 		: Label( text, x, y, wide, tall )
 	{
+		m_szJpText[0] = '\0';
+	}
+
+	// JP-MOD: capture the text the game sets on this label (the objective
+	// line). paint() must use this copy: the HUD hint buffer it was copied
+	// from is volatile and may hold another line by paint time.
+	virtual void setText( int textBufferLen, const char *text )
+	{
+		if ( text )
+		{
+			strncpy( m_szJpText, text, 255 );
+			m_szJpText[255] = '\0';
+		}
+		Label::setText( textBufferLen, text );
+	}
+
+	virtual void setText( const char *format, ... )
+	{
+		char buf[256];
+		va_list ap;
+		va_start( ap, format );
+		vsnprintf( buf, sizeof( buf ), format, ap );
+		va_end( ap );
+		buf[sizeof( buf ) - 1] = '\0';
+		strncpy( m_szJpText, buf, 255 );
+		m_szJpText[255] = '\0';
+		Label::setText( "%s", buf );
 	}
 
 	virtual void paint()
 	{
 		const char *pszLine = NULL;
-		if ( jp_poc && jp_poc->value && gViewPort && gViewPort->m_pHUDControl_guess )
-			pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
+		if ( jp_poc && jp_poc->value )
+		{
+			if ( m_szJpText[0] )
+				pszLine = m_szJpText;
+			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
+				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
+		}
+		JpLogObj( "OBJ paint: line=[%s] isjp=%d\n", pszLine ? pszLine : "(null)", ( pszLine && JpTextIsUtf8Japanese( pszLine ) ) ? 1 : 0 );
 		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
 		{
 			Label::paint();
