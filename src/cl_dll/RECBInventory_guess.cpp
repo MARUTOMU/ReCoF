@@ -122,7 +122,14 @@ public:
 		if ( iLineCount == 0 )
 			return;
 		const int iPx = 16;
-		if ( !JpSharedInitFont( iPx ) )
+		bool bInitOk = JpSharedInitFont( iPx ) ? true : false;
+		static int s_iObjLog = 0;
+		if ( s_iObjLog < 6 )
+		{
+			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount );
+			s_iObjLog++;
+		}
+		if ( !bInitOk )
 			return;
 		const int iLineH = iPx + 6;
 		int iTotalH = iLineCount * iLineH - 6;
@@ -175,6 +182,8 @@ public:
 						else
 							JpSharedSetGlyphTexture( g, 0 );
 					}
+					if ( pass == 1 && li == 0 && pos == 0 && s_iObjLog < 6 )
+						JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv );
 					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
 					{
 						int dx = (int)( penX + 0.5f ) + g->xoff + ox;
