@@ -10,7 +10,8 @@
 #include "RECBInventory_guess.h"
 #include "Documents_guess.h"
 #include "HUDControl_guess.h"
-#include "jp_subtitle_render.h"	// JP-MOD (objective label)
+#include "jp_subtitle_render.h"
+#include "VGUI_SurfaceBase.h"	// JP-MOD: full SurfaceBase definition (createNewTextureID)	// JP-MOD (objective label)
 extern cvar_t *jp_poc;	// JP-MOD: defined in jp_subtitle_render.cpp
 #include "..\game_shared\vgui_loadtga.h"
 
