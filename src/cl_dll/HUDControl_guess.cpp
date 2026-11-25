@@ -1395,6 +1395,10 @@ void CHUDControl::LogoUpdate_guess()
 // Noto Sans JP subset, one texture per glyph, shared cache). The line is
 // centered in the same strip the retail label uses. Two passes: shadow
 // (+1,+1 black) then body, mirroring the subtitle panel renderer.
+// NOTE: this VGUI surface uses INVERTED alpha (0 = opaque, 255 =
+// transparent), same as the label fgColor. Pass the message alpha
+// through unchanged; build #8 passed 255-a and the line was only
+// visible as flashes during the fades (flicker / instant disappear).
 bool CHUDControl::JpDrawProMessage_guess( const char *text, int r, int g, int b, int opacity )
 {
 	int pixelHeight = m_pCreditsFont_guess ? m_pCreditsFont_guess->getTall() : 0;
@@ -1816,7 +1820,7 @@ void CHUDControl::RenderMessages_guess()
 				case 4: jr = 0; jg = 255; jb = 0; break;
 				case 2: case 6: jr = 255; jg = 0; jb = 0; break;
 				}
-				JpDrawProMessage_guess( m_szMessage_guess, jr, jg, jb, 255 - a );
+				JpDrawProMessage_guess( m_szMessage_guess, jr, jg, jb, a );
 				static char s_szJpLogged[256] = "";
 				if ( strcmp( s_szJpLogged, m_szMessage_guess ) != 0 )
 				{
