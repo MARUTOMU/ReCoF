@@ -238,6 +238,137 @@ public:
 			}
 		}
 	}
+	virtual void paintBackground()
+	{
+		const char *pszLine = NULL;
+		if ( jp_poc && jp_poc->value )
+		{
+			if ( m_szJpText[0] )
+				pszLine = m_szJpText;
+			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
+				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
+		}
+		JpLogObj( "OBJ bgpaint: line=[%s] isjp=%d\n", pszLine ? pszLine : "(null)", ( pszLine && JpTextIsUtf8Japanese( pszLine ) ) ? 1 : 0 );
+		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
+		{
+			Label::paintBackground();
+			return;
+		}
+		int iWide, iTall;
+		getSize( iWide, iTall );
+		if ( iWide <= 0 || iTall <= 0 )
+			return;
+		// split into lines on '@' / '\n'
+		char szAll[256];
+		strncpy( szAll, pszLine, 255 );
+		szAll[255] = '\0';
+		char *szLines[4];
+		int iLineCount = 0;
+		char *pCur = szAll;
+		while ( iLineCount < 4 && pCur )
+		{
+			szLines[iLineCount++] = pCur;
+			char *pSep = pCur;
+			while ( *pSep && *pSep != '@' && *pSep != '\n' )
+				pSep++;
+			if ( !*pSep )
+				break;
+			*pSep = '\0';
+			pCur = pSep + 1;
+		}
+		if ( iLineCount == 0 )
+			return;
+		const int iPx = 16;
+		bool bInitOk = JpSharedInitFont( iPx ) ? true : false;
+		static int s_iObjLog = 0;
+		if ( s_iObjLog < 6 )
+		{
+			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d fw0=%.1f base=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount, iLineCount > 0 ? JpSharedMeasure( szLines[0] ) : -1.0f, ( iTall - ( iLineCount * ( iPx + 6 ) - 6 ) ) / 2 + JpSharedAscentPx() );
+			s_iObjLog++;
+		}
+		if ( !bInitOk )
+			return;
+
+		// BUILD36: draw in paintBackground with LOCAL coordinates, the
+		// same way ImagePanel/CRcImagePanel render in this panel tree.
+		int iOrgX = 0, iOrgY = 0;
+		{
+			drawSetColor( 255, 0, 255, 255 );
+			drawFilledRect( 0, 0, 60, 20 );
+		}
+		const int iLineH = iPx + 6;
+		int iTotalH = iLineCount * iLineH - 6;
+		int iBase = ( iTall - iTotalH ) / 2 + JpSharedAscentPx();
+		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
+		{
+			const char *szDraw = szLines[li];
+			float fW = JpSharedMeasure( szDraw );
+			if ( fW <= 0 )
+				continue;
+			const unsigned char *pS = (const unsigned char *)szDraw;
+			int iLen = (int)strlen( szDraw );
+			bool bFirstGlyph = true;
+			for ( int pass = 0; pass < 2; pass++ )
+			{
+				int ox = ( pass == 0 ) ? 1 : 0;
+				int oy = ( pass == 0 ) ? 1 : 0;
+				int cr = ( pass == 0 ) ? 0 : 255;
+				int cg = ( pass == 0 ) ? 0 : 255;
+				int cb = ( pass == 0 ) ? 0 : 255;
+				float penX = ( iWide - fW ) / 2.0f;
+				int pos = 0;
+				while ( pos < iLen )
+				{
+					int cp;
+					if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+						break;
+					const JpGlyph *g = JpSharedGlyphMetrics( cp );
+					if ( !g )
+						break;
+					if ( g->texId < 0 )
+					{
+						unsigned char *rgba = NULL;
+						if ( JpSharedGlyphBitmap( cp, &rgba ) )
+						{
+							if ( rgba )
+							{
+								int texId = getSurfaceBase()->createNewTextureID();
+								if ( s_iObjLog < 6 )
+									JpLogObj( "OBJ newtex: cp=%d ret=%d wh=%dx%d\n", cp, texId, g->w, g->h );
+								if ( texId > 0 )
+								{
+									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
+									JpSharedSetGlyphTexture( g, texId );
+								}
+								else
+									JpSharedSetGlyphTexture( g, 0 );
+								free( rgba );
+							}
+							else
+								JpSharedSetGlyphTexture( g, 0 );
+						}
+						else
+							JpSharedSetGlyphTexture( g, 0 );
+					}
+					if ( pass == 1 && li == 0 && bFirstGlyph )
+					{
+						bFirstGlyph = false;
+						if ( s_iObjLog < 6 )
+							JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f dx=%d dy=%d\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv, (int)( penX + 0.5f ) + g->xoff + ox, iBase + g->yoff + oy );
+					}
+					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
+					{
+						int dx = iOrgX + (int)( penX + 0.5f ) + g->xoff + ox;
+						int dy = iOrgY + iBase + g->yoff + oy;
+						drawSetTexture( g->texId );
+						drawSetColor( cr, cg, cb, 255 );
+						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
+					}
+					penX += g->adv;
+				}
+			}
+		}
+	}
 };
 
 CRECBInventory::CRECBInventory( int iTrans, int iRemoveMe, int x, int y, int wide, int tall ) : CMenuPanel( iTrans, iRemoveMe, x, y, wide, tall )
