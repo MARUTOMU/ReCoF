@@ -270,10 +270,28 @@ public:
 			if ( !BuildImages( pszLine ) )
 				return;
 		}
+		// BUILD41 CONTROL: the exact build37 probe (file TGA) drawn
+		// first, then strip A over it at y=60. If the note image shows
+		// but strip A does not, the memory-TGA object/content is the
+		// problem; if neither shows, this paint() is not the one on
+		// screen.
+		{
+			static Image *s_pProbe = NULL;
+			static bool s_bTried = false;
+			if ( !s_bTried )
+			{
+				s_bTried = true;
+				s_pProbe = vgui_LoadTGA( "gfx/vgui/640_apnote1.tga" );
+				JpLogObj( "OBJ probe: img=%p\n", (void *)s_pProbe );
+			}
+			if ( s_pProbe )
+				s_pProbe->doPaint( this );
+		}
 		if ( m_pImgA )
+		{
+			m_pImgA->setPos( 0, 60 );
 			m_pImgA->doPaint( this );
-		if ( m_pImgB )
-			m_pImgB->doPaint( this );
+		}
 	}
 };
 
