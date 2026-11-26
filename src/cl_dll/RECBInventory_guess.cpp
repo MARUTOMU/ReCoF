@@ -46,52 +46,69 @@ static void JpLogObj( const char *fmt, ... )
 	fclose( f );
 }
 
-class JpObjectiveBitmap : public Bitmap
+// BUILD40: the stock Bitmap filled via setSize/_rgba never showed
+// (builds 38/39), while a BitmapTGA from vgui_LoadTGA did (build37
+// probe). So build the text image through the exact TGA path, from
+// memory (vgui_LoadTGAFromMemory). This build draws the same line
+// twice to settle the alpha convention: strip A stores alpha inverted
+// (255-coverage, the Valve file convention the loader then inverts),
+// strip B stores alpha straight.
+static unsigned char *JpMakeTGA( const unsigned char *rgbaTopDown, int w, int h, bool invertAlpha, int &outLen )
 {
-public:
-	// BUILD39: do not rely on setRGBA landing in _rgba (stock Bitmap
-	// internals are in the prebuilt vgui lib and cannot be inspected).
-	// Write the pixel buffer directly; allocate it ourselves if the
-	// base class left it null.
-	void InitSize( int w, int h ) { setSize( w, h ); }
-	void Blit( const unsigned char *buf, int w, int h )
+	outLen = 18 + w * h * 4;
+	unsigned char *tga = (unsigned char *)malloc( outLen );
+	if ( !tga )
+		return NULL;
+	memset( tga, 0, 18 );
+	tga[2] = 2;
+	tga[12] = (unsigned char)( w & 0xff );
+	tga[13] = (unsigned char)( ( w >> 8 ) & 0xff );
+	tga[14] = (unsigned char)( h & 0xff );
+	tga[15] = (unsigned char)( ( h >> 8 ) & 0xff );
+	tga[16] = 32;
+	tga[17] = 8;
+	unsigned char *px = tga + 18;
+	for ( int y = 0; y < h; y++ )
 	{
-		if ( !_rgba )
-			_rgba = new uchar[(size_t)w * h * 4];
-		if ( _rgba )
-			memcpy( _rgba, buf, (size_t)w * h * 4 );
-	}
-	int CountOpaque( int w, int h )
-	{
-		if ( !_rgba )
-			return -1;
-		int n = 0;
-		for ( int i = 0; i < w * h; i++ )
+		const unsigned char *srow = rgbaTopDown + (size_t)( h - 1 - y ) * w * 4;
+		for ( int x = 0; x < w; x++ )
 		{
-			if ( _rgba[i * 4 + 3] )
-				n++;
+			unsigned char r = srow[x * 4 + 0];
+			unsigned char g = srow[x * 4 + 1];
+			unsigned char b = srow[x * 4 + 2];
+			unsigned char a = srow[x * 4 + 3];
+			if ( invertAlpha )
+				a = (unsigned char)( 255 - a );
+			unsigned char *d = px + ( (size_t)y * w + x ) * 4;
+			d[0] = b;
+			d[1] = g;
+			d[2] = r;
+			d[3] = a;
 		}
-		return n;
 	}
-};
+	return tga;
+}
 
 class JpObjectiveLabel : public Label
 {
 	char m_szJpText[256];
 	char m_szRendered[256];
-	JpObjectiveBitmap *m_pBmp;
+	vgui::BitmapTGA *m_pImgA;
+	vgui::BitmapTGA *m_pImgB;
 public:
 	JpObjectiveLabel( const char *text, int x, int y, int wide, int tall )
 		: Label( text, x, y, wide, tall )
 	{
 		m_szJpText[0] = '\0';
 		m_szRendered[0] = '\0';
-		m_pBmp = NULL;
+		m_pImgA = NULL;
+		m_pImgB = NULL;
 	}
 
 	virtual ~JpObjectiveLabel()
 	{
-		delete m_pBmp;
+		delete m_pImgA;
+		delete m_pImgB;
 	}
 
 	// JP-MOD: capture the text the game sets on this label (the objective
@@ -120,134 +137,116 @@ public:
 		Label::setText( "%s", buf );
 	}
 
-	// JP-MOD (build38/39): raw surface draw calls from this label never reach
-	// the framebuffer in the inventory panel tree (proven by builds
-	// 33-36: correct metrics, textures and coordinates, in paint() and
-	// paintBackground(), local and absolute -- nothing appears). What
-	// does render here is Image::doPaint (build37 probe: a BitmapTGA
-	// drawn from this label's paint() appeared, clipped to the label).
-	// So the objective text is rasterized CPU-side into a Bitmap and
-	// shown through doPaint, the same mechanism as the item icons.
-	bool BuildBitmap( const char *pszLine )
+	bool BuildImages( const char *pszLine )
 	{
 		int iWide, iTall;
 		getSize( iWide, iTall );
 		if ( iWide <= 0 || iTall <= 0 )
 			return false;
 
-		char szAll[256];
-		strncpy( szAll, pszLine, 255 );
-		szAll[255] = '\0';
-		char *szLines[4];
-		int iLineCount = 0;
-		char *pCur = szAll;
-		while ( iLineCount < 4 && pCur )
+		char szLine[256];
+		strncpy( szLine, pszLine, 255 );
+		szLine[255] = '\0';
+		for ( char *p = szLine; *p; p++ )
 		{
-			szLines[iLineCount++] = pCur;
-			char *pSep = pCur;
-			while ( *pSep && *pSep != '@' && *pSep != '\n' )
-				pSep++;
-			if ( !*pSep )
-				break;
-			*pSep = '\0';
-			pCur = pSep + 1;
-		}
-		if ( iLineCount == 0 )
-			return false;
-
-		int iPx = 16;
-		if ( !JpSharedInitFont( iPx ) )
-			return false;
-		for ( int li = 0; li < iLineCount; li++ )
-		{
-			if ( JpSharedMeasure( szLines[li] ) > (float)( iWide - 8 ) )
+			if ( *p == '@' || *p == '\n' )
 			{
-				iPx = 13;
-				if ( !JpSharedInitFont( iPx ) )
-					return false;
+				*p = '\0';
 				break;
 			}
 		}
 
-		unsigned char *buf = (unsigned char *)calloc( (size_t)iWide * iTall, 4 );
+		const int iPx = 16;
+		if ( !JpSharedInitFont( iPx ) )
+			return false;
+
+		const int iStripH = 30;
+		unsigned char *buf = (unsigned char *)calloc( (size_t)iWide * iStripH, 4 );
 		if ( !buf )
 			return false;
 
-		const int iLineH = iPx + 6;
-		int iBase = ( iTall - ( iLineCount * iLineH - 6 ) ) / 2 + JpSharedAscentPx();
-		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
+		float fW = JpSharedMeasure( szLine );
+		float penX = ( iWide - fW ) / 2.0f;
+		int iBase = iStripH / 2 + JpSharedAscentPx() - 8;
+		const unsigned char *pS = (const unsigned char *)szLine;
+		int iLen = (int)strlen( szLine );
+		int pos = 0;
+		while ( pos < iLen )
 		{
-			float fW = JpSharedMeasure( szLines[li] );
-			if ( fW <= 0 )
-				continue;
-			float penX = ( iWide - fW ) / 2.0f;
-			const unsigned char *pS = (const unsigned char *)szLines[li];
-			int iLen = (int)strlen( szLines[li] );
-			int pos = 0;
-			while ( pos < iLen )
+			int cp;
+			if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+				break;
+			const JpGlyph *g = JpSharedGlyphMetrics( cp );
+			if ( !g )
+				break;
+			unsigned char *rgba = NULL;
+			if ( JpSharedGlyphBitmap( cp, &rgba ) && rgba && g->w > 0 && g->h > 0 )
 			{
-				int cp;
-				if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
-					break;
-				const JpGlyph *g = JpSharedGlyphMetrics( cp );
-				if ( !g )
-					break;
-				unsigned char *rgba = NULL;
-				if ( JpSharedGlyphBitmap( cp, &rgba ) && rgba && g->w > 0 && g->h > 0 )
+				for ( int pass = 0; pass < 2; pass++ )
 				{
-					// pass 0: shadow (black, +1/+1); pass 1: body (white)
-					for ( int pass = 0; pass < 2; pass++ )
+					int ox = ( pass == 0 ) ? 1 : 0;
+					int oy = ( pass == 0 ) ? 1 : 0;
+					int sc = ( pass == 0 ) ? 0 : 255;
+					int gx0 = (int)( penX + 0.5f ) + g->xoff + ox;
+					int gy0 = iBase + g->yoff + oy;
+					for ( int gy = 0; gy < g->h; gy++ )
 					{
-						int ox = ( pass == 0 ) ? 1 : 0;
-						int oy = ( pass == 0 ) ? 1 : 0;
-						int sc = ( pass == 0 ) ? 0 : 255;
-						int gx0 = (int)( penX + 0.5f ) + g->xoff + ox;
-						int gy0 = iBase + g->yoff + oy;
-						for ( int gy = 0; gy < g->h; gy++ )
+						int dy = gy0 + gy;
+						if ( dy < 0 || dy >= iStripH )
+							continue;
+						for ( int gx = 0; gx < g->w; gx++ )
 						{
-							int dy = gy0 + gy;
-							if ( dy < 0 || dy >= iTall )
+							int dx = gx0 + gx;
+							if ( dx < 0 || dx >= iWide )
 								continue;
-							for ( int gx = 0; gx < g->w; gx++ )
-							{
-								int dx = gx0 + gx;
-								if ( dx < 0 || dx >= iWide )
-									continue;
-								int sa = rgba[( gy * g->w + gx ) * 4 + 3];
-								if ( !sa )
-									continue;
-								unsigned char *d = buf + ( (size_t)dy * iWide + dx ) * 4;
-								float fa = sa / 255.0f;
-								float da = d[3] / 255.0f;
-								float oa = fa + da * ( 1.0f - fa );
-								if ( oa <= 0.0f )
-									continue;
-								d[0] = (unsigned char)( ( sc * fa + d[0] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-								d[1] = (unsigned char)( ( sc * fa + d[1] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-								d[2] = (unsigned char)( ( sc * fa + d[2] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-								d[3] = (unsigned char)( oa * 255.0f + 0.5f );
-							}
+							int sa = rgba[( gy * g->w + gx ) * 4 + 3];
+							if ( !sa )
+								continue;
+							unsigned char *d = buf + ( (size_t)dy * iWide + dx ) * 4;
+							float fa = sa / 255.0f;
+							float da = d[3] / 255.0f;
+							float oa = fa + da * ( 1.0f - fa );
+							if ( oa <= 0.0f )
+								continue;
+							d[0] = (unsigned char)( ( sc * fa + d[0] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+							d[1] = (unsigned char)( ( sc * fa + d[1] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+							d[2] = (unsigned char)( ( sc * fa + d[2] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+							d[3] = (unsigned char)( oa * 255.0f + 0.5f );
 						}
 					}
-					free( rgba );
 				}
-				penX += g->adv;
+				free( rgba );
 			}
+			penX += g->adv;
 		}
 
-		JpObjectiveBitmap *pBmp = new JpObjectiveBitmap();
-		pBmp->InitSize( iWide, iTall );
-		pBmp->setPos( 0, 0 );
-		pBmp->setColor( Color( 255, 255, 255, 255 ) );
-		pBmp->Blit( buf, iWide, iTall );
-		JpLogObj( "OBJ bmp: opaque=%d of %d\n", pBmp->CountOpaque( iWide, iTall ), iWide * iTall );
+		int lenA = 0, lenB = 0;
+		unsigned char *tgaA = JpMakeTGA( buf, iWide, iStripH, true, lenA );
+		unsigned char *tgaB = JpMakeTGA( buf, iWide, iStripH, false, lenB );
 		free( buf );
-
-		delete m_pBmp;
-		m_pBmp = pBmp;
+		vgui::BitmapTGA *pA = tgaA ? vgui_LoadTGAFromMemory( tgaA, lenA ) : NULL;
+		vgui::BitmapTGA *pB = tgaB ? vgui_LoadTGAFromMemory( tgaB, lenB ) : NULL;
+		free( tgaA );
+		free( tgaB );
+		if ( !pA && !pB )
+			return false;
+		if ( pA )
+		{
+			pA->setPos( 0, 4 );
+			pA->setColor( Color( 255, 255, 255, 255 ) );
+		}
+		if ( pB )
+		{
+			pB->setPos( 0, 52 );
+			pB->setColor( Color( 255, 255, 255, 255 ) );
+		}
+		delete m_pImgA;
+		delete m_pImgB;
+		m_pImgA = pA;
+		m_pImgB = pB;
 		strncpy( m_szRendered, pszLine, 255 );
 		m_szRendered[255] = '\0';
-		JpLogObj( "OBJ bmp: built [%s] %dx%d px=%d\n", pszLine, iWide, iTall, iPx );
+		JpLogObj( "OBJ tga: A=%p B=%p [%s]\n", (void *)pA, (void *)pB, pszLine );
 		return true;
 	}
 
@@ -266,13 +265,15 @@ public:
 			Label::paint();
 			return;
 		}
-		if ( !m_pBmp || strcmp( m_szRendered, pszLine ) != 0 )
+		if ( ( !m_pImgA && !m_pImgB ) || strcmp( m_szRendered, pszLine ) != 0 )
 		{
-			if ( !BuildBitmap( pszLine ) )
+			if ( !BuildImages( pszLine ) )
 				return;
 		}
-		if ( m_pBmp )
-			m_pBmp->doPaint( this );
+		if ( m_pImgA )
+			m_pImgA->doPaint( this );
+		if ( m_pImgB )
+			m_pImgB->doPaint( this );
 	}
 };
 
