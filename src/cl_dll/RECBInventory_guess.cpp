@@ -49,10 +49,29 @@ static void JpLogObj( const char *fmt, ... )
 class JpObjectiveBitmap : public Bitmap
 {
 public:
+	// BUILD39: do not rely on setRGBA landing in _rgba (stock Bitmap
+	// internals are in the prebuilt vgui lib and cannot be inspected).
+	// Write the pixel buffer directly; allocate it ourselves if the
+	// base class left it null.
 	void InitSize( int w, int h ) { setSize( w, h ); }
-	void Put( int x, int y, int r, int g, int b, int a )
+	void Blit( const unsigned char *buf, int w, int h )
 	{
-		setRGBA( x, y, (uchar)r, (uchar)g, (uchar)b, (uchar)a );
+		if ( !_rgba )
+			_rgba = new uchar[(size_t)w * h * 4];
+		if ( _rgba )
+			memcpy( _rgba, buf, (size_t)w * h * 4 );
+	}
+	int CountOpaque( int w, int h )
+	{
+		if ( !_rgba )
+			return -1;
+		int n = 0;
+		for ( int i = 0; i < w * h; i++ )
+		{
+			if ( _rgba[i * 4 + 3] )
+				n++;
+		}
+		return n;
 	}
 };
 
@@ -101,7 +120,7 @@ public:
 		Label::setText( "%s", buf );
 	}
 
-	// JP-MOD (build38): raw surface draw calls from this label never reach
+	// JP-MOD (build38/39): raw surface draw calls from this label never reach
 	// the framebuffer in the inventory panel tree (proven by builds
 	// 33-36: correct metrics, textures and coordinates, in paint() and
 	// paintBackground(), local and absolute -- nothing appears). What
@@ -220,15 +239,8 @@ public:
 		pBmp->InitSize( iWide, iTall );
 		pBmp->setPos( 0, 0 );
 		pBmp->setColor( Color( 255, 255, 255, 255 ) );
-		for ( int y = 0; y < iTall; y++ )
-		{
-			for ( int x = 0; x < iWide; x++ )
-			{
-				unsigned char *s = buf + ( (size_t)y * iWide + x ) * 4;
-				if ( s[3] )
-					pBmp->Put( x, y, s[0], s[1], s[2], s[3] );
-			}
-		}
+		pBmp->Blit( buf, iWide, iTall );
+		JpLogObj( "OBJ bmp: opaque=%d of %d\n", pBmp->CountOpaque( iWide, iTall ), iWide * iTall );
 		free( buf );
 
 		delete m_pBmp;
