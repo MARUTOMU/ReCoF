@@ -25,17 +25,8 @@
 
 extern cvar_t *jp_poc;	// JP-POC: defined in vgui_subtitles.cpp
 
-// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
-static void JpLogHud(const char *fmt, ...)
-{
-	FILE *f = fopen("jp_debug.log", "a");
-	if (!f) return;
-	va_list ap; va_start(ap, fmt);
-	vfprintf(f, fmt, ap);
-	va_end(ap);
-	fputc('\n', f);
-	fclose(f);
-}
+// JP-RELEASE: diagnostics disabled in the release build.
+static void JpLogHud(const char *fmt, ...) { (void)fmt; }
 
 // JP-MOD: hint label subclass. The stock Label cannot render UTF-8
 // Japanese, and JP text drawn from CHUDControl::paint() is painted over

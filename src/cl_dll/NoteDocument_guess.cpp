@@ -17,17 +17,8 @@
 #include "VGUI_SurfaceBase.h"
 #include <stdarg.h>
 
-// JP-MOD-DEBUG: append diagnostics to jp_debug.log in the game root.
-static void JpLogNote(const char *fmt, ...)
-{
-	FILE *f = fopen("jp_debug.log", "a");
-	if (!f) return;
-	va_list ap; va_start(ap, fmt);
-	vfprintf(f, fmt, ap);
-	va_end(ap);
-	fputc('\n', f);
-	fclose(f);
-}
+// JP-RELEASE: diagnostics disabled in the release build.
+static void JpLogNote(const char *fmt, ...) { (void)fmt; }
 
 // JP-MOD: Japanese rendering of the current note line (see SetText_guess).
 static char g_szJpNoteLine[512];
@@ -362,6 +353,37 @@ int MsgNoteDoc_guess( const char *pszName, int iSize, void *pbuf )
 				strcpy( gViewPort->m_pNoteDocument_guess->m_szText4_guess, "languages/swedish/" );
 				strcat( gViewPort->m_pNoteDocument_guess->m_szText4_guess, szText4 );
 				break;
+			}
+		}
+
+		// JP-MOD: route blood notes and image-only documents through the
+		// note text system (Japanese lines come from the JP note table).
+		{
+			extern cvar_t *jp_poc;
+			if ( jp_poc && jp_poc->value != 0.0f )
+			{
+				// The vanilla whitelist above drops "bizarrenote" (the blood
+				// notes under notes/darkydude/); accept it so its on-disk
+				// text is shown, translated by the JP note table.
+				if ( !gViewPort->m_pNoteDocument_guess->m_szText1_guess[0] && strstr( szText1, "bizarrenote" ) )
+					strcpy( gViewPort->m_pNoteDocument_guess->m_szText1_guess, szText1 );
+				if ( !gViewPort->m_pNoteDocument_guess->m_szText2_guess[0] && strstr( szText2, "bizarrenote" ) )
+					strcpy( gViewPort->m_pNoteDocument_guess->m_szText2_guess, szText2 );
+				if ( !gViewPort->m_pNoteDocument_guess->m_szText3_guess[0] && strstr( szText3, "bizarrenote" ) )
+					strcpy( gViewPort->m_pNoteDocument_guess->m_szText3_guess, szText3 );
+				if ( !gViewPort->m_pNoteDocument_guess->m_szText4_guess[0] && strstr( szText4, "bizarrenote" ) )
+					strcpy( gViewPort->m_pNoteDocument_guess->m_szText4_guess, szText4 );
+
+				// Image-only documents (the server sends no note text):
+				// synthesize the text file name from the page image so the
+				// shipped jp_*.txt lines are displayed under the picture.
+				if ( !gViewPort->m_pNoteDocument_guess->m_szText1_guess[0] )
+				{
+					if ( !strcmp( gViewPort->m_pNoteDocument_guess->m_szImage1_guess, "herstoppain" ) )
+						strcpy( gViewPort->m_pNoteDocument_guess->m_szText1_guess, "jp_herstoppain.txt" );
+					else if ( !strcmp( gViewPort->m_pNoteDocument_guess->m_szImage1_guess, "tostrap1" ) )
+						strcpy( gViewPort->m_pNoteDocument_guess->m_szText1_guess, "jp_tostrap1.txt" );
+				}
 			}
 		}
 

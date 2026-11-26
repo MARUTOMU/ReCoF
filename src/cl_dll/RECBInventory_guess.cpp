@@ -30,21 +30,13 @@ void InventorySound_guess( char *pszSound, float flVolume )
 
 // JP-MOD: objective label subclass. The stock Label renders the UTF-8
 // Japanese objective line byte-by-byte (mojibake). When JP mode is on,
-// paint() draws the line with the shared JP renderer instead, reading
-// the text from the same source the caller uses (the HUD hint line 1,
-// where '@' separates lines). Otherwise the retail paint runs.
-// JP-MOD: debug log for the objective label (verification builds only).
-static void JpLogObj( const char *fmt, ... )
-{
-	FILE *f = fopen( "jp_debug.log", "a" );
-	if ( !f )
-		return;
-	va_list ap;
-	va_start( ap, fmt );
-	vfprintf( f, fmt, ap );
-	va_end( ap );
-	fclose( f );
-}
+// paint() shows the line as a CPU-rasterized image instead (an
+// in-memory TGA created like rc_coopmenu.cpp's RcCoopLabel, drawn
+// with Image::doPaint), reading the text captured by setText below
+// (the HUD hint line 1, where '@' separates lines). Otherwise the
+// retail paint runs.
+// JP-MOD: debug log hook for the objective label (no-op in release builds).
+static void JpLogObj( const char *fmt, ... ) { (void)fmt; }
 
 class JpObjectiveLabel : public Label
 {

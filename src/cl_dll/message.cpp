@@ -30,17 +30,8 @@
 
 extern cvar_t *jp_poc;	// JP-MOD: defined in vgui_subtitles.cpp
 
-// JP-MOD-DEBUG: append diagnostics to jp_debug.log in the game root.
-static void JpLogTitle(const char *fmt, ...)
-{
-	FILE *f = fopen("jp_debug.log", "a");
-	if (!f) return;
-	va_list ap; va_start(ap, fmt);
-	vfprintf(f, fmt, ap);
-	va_end(ap);
-	fputc('\n', f);
-	fclose(f);
-}
+// JP-RELEASE: diagnostics disabled in the release build.
+static void JpLogTitle(const char *fmt, ...) { (void)fmt; }
 
 #undef fabs
 

@@ -26,20 +26,8 @@ cvar_t *subtitles_enabled;
 cvar_t *scroll_speed;
 cvar_t *fade_speed;
 cvar_t *jp_poc;	// JP-POC
-// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-static void JpLog(const char *fmt, ...)
-{
-	FILE *f = fopen("jp_debug.log", "a");
-	if (!f) return;
-	va_list ap; va_start(ap, fmt);
-	vfprintf(f, fmt, ap);
-	va_end(ap);
-	fputc('\n', f);
-	fclose(f);
-}
+// JP-RELEASE: diagnostics disabled in the release build.
+static void JpLog(const char *fmt, ...) { (void)fmt; }
 
 
 Font* FontFromMessage(const char* &ptext)

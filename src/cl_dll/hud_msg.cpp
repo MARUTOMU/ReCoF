@@ -29,20 +29,8 @@
 #include "vgui_TeamFortressViewport.h"
 #include "HUDControl_guess.h"
 
-// JP-POC-DEBUG: append diagnostics to jp_debug.log in the game root.
-#include <stdio.h>
-#include "jp_subtitle_table.h"
-#include <stdarg.h>
-static void JpLogMsg(const char *fmt, ...)
-{
-	FILE *f = fopen("jp_debug.log", "a");
-	if (!f) return;
-	va_list ap; va_start(ap, fmt);
-	vfprintf(f, fmt, ap);
-	va_end(ap);
-	fputc('\n', f);
-	fclose(f);
-}
+// JP-RELEASE: diagnostics disabled in the release build.
+static void JpLogMsg(const char *fmt, ...) { (void)fmt; }
 #include "RECBInventory_guess.h"
 #include "Documents_guess.h"
 #include "glmanager.h"
