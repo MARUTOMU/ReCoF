@@ -12,6 +12,7 @@
 #include "HUDControl_guess.h"
 #include "jp_subtitle_render.h"
 #include "VGUI_SurfaceBase.h"
+#include "VGUI_Bitmap.h"	// JP-MOD (build38): objective text Bitmap
 #include <stdarg.h>	// JP-MOD: objective label setText capture
 #include <stdio.h>	// JP-MOD: objective label debug log	// JP-MOD: full SurfaceBase definition (createNewTextureID)	// JP-MOD (objective label)
 extern cvar_t *jp_poc;	// JP-MOD: defined in jp_subtitle_render.cpp
@@ -45,14 +46,33 @@ static void JpLogObj( const char *fmt, ... )
 	fclose( f );
 }
 
+class JpObjectiveBitmap : public Bitmap
+{
+public:
+	void InitSize( int w, int h ) { setSize( w, h ); }
+	void Put( int x, int y, int r, int g, int b, int a )
+	{
+		setRGBA( x, y, (uchar)r, (uchar)g, (uchar)b, (uchar)a );
+	}
+};
+
 class JpObjectiveLabel : public Label
 {
 	char m_szJpText[256];
+	char m_szRendered[256];
+	JpObjectiveBitmap *m_pBmp;
 public:
 	JpObjectiveLabel( const char *text, int x, int y, int wide, int tall )
 		: Label( text, x, y, wide, tall )
 	{
 		m_szJpText[0] = '\0';
+		m_szRendered[0] = '\0';
+		m_pBmp = NULL;
+	}
+
+	virtual ~JpObjectiveLabel()
+	{
+		delete m_pBmp;
 	}
 
 	// JP-MOD: capture the text the game sets on this label (the objective
@@ -81,6 +101,144 @@ public:
 		Label::setText( "%s", buf );
 	}
 
+	// JP-MOD (build38): raw surface draw calls from this label never reach
+	// the framebuffer in the inventory panel tree (proven by builds
+	// 33-36: correct metrics, textures and coordinates, in paint() and
+	// paintBackground(), local and absolute -- nothing appears). What
+	// does render here is Image::doPaint (build37 probe: a BitmapTGA
+	// drawn from this label's paint() appeared, clipped to the label).
+	// So the objective text is rasterized CPU-side into a Bitmap and
+	// shown through doPaint, the same mechanism as the item icons.
+	bool BuildBitmap( const char *pszLine )
+	{
+		int iWide, iTall;
+		getSize( iWide, iTall );
+		if ( iWide <= 0 || iTall <= 0 )
+			return false;
+
+		char szAll[256];
+		strncpy( szAll, pszLine, 255 );
+		szAll[255] = '\0';
+		char *szLines[4];
+		int iLineCount = 0;
+		char *pCur = szAll;
+		while ( iLineCount < 4 && pCur )
+		{
+			szLines[iLineCount++] = pCur;
+			char *pSep = pCur;
+			while ( *pSep && *pSep != '@' && *pSep != '\n' )
+				pSep++;
+			if ( !*pSep )
+				break;
+			*pSep = '\0';
+			pCur = pSep + 1;
+		}
+		if ( iLineCount == 0 )
+			return false;
+
+		int iPx = 16;
+		if ( !JpSharedInitFont( iPx ) )
+			return false;
+		for ( int li = 0; li < iLineCount; li++ )
+		{
+			if ( JpSharedMeasure( szLines[li] ) > (float)( iWide - 8 ) )
+			{
+				iPx = 13;
+				if ( !JpSharedInitFont( iPx ) )
+					return false;
+				break;
+			}
+		}
+
+		unsigned char *buf = (unsigned char *)calloc( (size_t)iWide * iTall, 4 );
+		if ( !buf )
+			return false;
+
+		const int iLineH = iPx + 6;
+		int iBase = ( iTall - ( iLineCount * iLineH - 6 ) ) / 2 + JpSharedAscentPx();
+		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
+		{
+			float fW = JpSharedMeasure( szLines[li] );
+			if ( fW <= 0 )
+				continue;
+			float penX = ( iWide - fW ) / 2.0f;
+			const unsigned char *pS = (const unsigned char *)szLines[li];
+			int iLen = (int)strlen( szLines[li] );
+			int pos = 0;
+			while ( pos < iLen )
+			{
+				int cp;
+				if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+					break;
+				const JpGlyph *g = JpSharedGlyphMetrics( cp );
+				if ( !g )
+					break;
+				unsigned char *rgba = NULL;
+				if ( JpSharedGlyphBitmap( cp, &rgba ) && rgba && g->w > 0 && g->h > 0 )
+				{
+					// pass 0: shadow (black, +1/+1); pass 1: body (white)
+					for ( int pass = 0; pass < 2; pass++ )
+					{
+						int ox = ( pass == 0 ) ? 1 : 0;
+						int oy = ( pass == 0 ) ? 1 : 0;
+						int sc = ( pass == 0 ) ? 0 : 255;
+						int gx0 = (int)( penX + 0.5f ) + g->xoff + ox;
+						int gy0 = iBase + g->yoff + oy;
+						for ( int gy = 0; gy < g->h; gy++ )
+						{
+							int dy = gy0 + gy;
+							if ( dy < 0 || dy >= iTall )
+								continue;
+							for ( int gx = 0; gx < g->w; gx++ )
+							{
+								int dx = gx0 + gx;
+								if ( dx < 0 || dx >= iWide )
+									continue;
+								int sa = rgba[( gy * g->w + gx ) * 4 + 3];
+								if ( !sa )
+									continue;
+								unsigned char *d = buf + ( (size_t)dy * iWide + dx ) * 4;
+								float fa = sa / 255.0f;
+								float da = d[3] / 255.0f;
+								float oa = fa + da * ( 1.0f - fa );
+								if ( oa <= 0.0f )
+									continue;
+								d[0] = (unsigned char)( ( sc * fa + d[0] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[1] = (unsigned char)( ( sc * fa + d[1] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[2] = (unsigned char)( ( sc * fa + d[2] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[3] = (unsigned char)( oa * 255.0f + 0.5f );
+							}
+						}
+					}
+					free( rgba );
+				}
+				penX += g->adv;
+			}
+		}
+
+		JpObjectiveBitmap *pBmp = new JpObjectiveBitmap();
+		pBmp->InitSize( iWide, iTall );
+		pBmp->setPos( 0, 0 );
+		pBmp->setColor( Color( 255, 255, 255, 255 ) );
+		for ( int y = 0; y < iTall; y++ )
+		{
+			for ( int x = 0; x < iWide; x++ )
+			{
+				unsigned char *s = buf + ( (size_t)y * iWide + x ) * 4;
+				if ( s[3] )
+					pBmp->Put( x, y, s[0], s[1], s[2], s[3] );
+			}
+		}
+		free( buf );
+
+		delete m_pBmp;
+		m_pBmp = pBmp;
+		strncpy( m_szRendered, pszLine, 255 );
+		m_szRendered[255] = '\0';
+		JpLogObj( "OBJ bmp: built [%s] %dx%d px=%d\n", pszLine, iWide, iTall, iPx );
+		return true;
+	}
+
 	virtual void paint()
 	{
 		const char *pszLine = NULL;
@@ -91,301 +249,18 @@ public:
 			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
 				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
 		}
-		JpLogObj( "OBJ paint: line=[%s] isjp=%d\n", pszLine ? pszLine : "(null)", ( pszLine && JpTextIsUtf8Japanese( pszLine ) ) ? 1 : 0 );
 		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
 		{
 			Label::paint();
 			return;
 		}
-		// BUILD37 PROBE: does Image::doPaint (the mechanism the stock
-		// Label::paint uses for CImageLabel icons, which DO render in this
-		// panel tree) reach the screen from this label? Loads a full note
-		// page image; if it appears over the inventory, the doPaint route
-		// is the working one and the objective text will be composited
-		// into an Image instead of drawn with raw surface calls.
+		if ( !m_pBmp || strcmp( m_szRendered, pszLine ) != 0 )
 		{
-			static Image *s_pTestImg = NULL;
-			static bool s_bTried = false;
-			if ( !s_bTried )
-			{
-				s_bTried = true;
-				s_pTestImg = vgui_LoadTGA( "gfx/vgui/640_apnote1.tga" );
-				JpLogObj( "OBJ dopaint: img=%p\n", (void *)s_pTestImg );
-			}
-			if ( s_pTestImg )
-				s_pTestImg->doPaint( this );
+			if ( !BuildBitmap( pszLine ) )
+				return;
 		}
-		int iWide, iTall;
-		getSize( iWide, iTall );
-		if ( iWide <= 0 || iTall <= 0 )
-			return;
-		// split into lines on '@' / '\n'
-		char szAll[256];
-		strncpy( szAll, pszLine, 255 );
-		szAll[255] = '\0';
-		char *szLines[4];
-		int iLineCount = 0;
-		char *pCur = szAll;
-		while ( iLineCount < 4 && pCur )
-		{
-			szLines[iLineCount++] = pCur;
-			char *pSep = pCur;
-			while ( *pSep && *pSep != '@' && *pSep != '\n' )
-				pSep++;
-			if ( !*pSep )
-				break;
-			*pSep = '\0';
-			pCur = pSep + 1;
-		}
-		if ( iLineCount == 0 )
-			return;
-		const int iPx = 16;
-		bool bInitOk = JpSharedInitFont( iPx ) ? true : false;
-		static int s_iObjLog = 0;
-		if ( s_iObjLog < 6 )
-		{
-			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d fw0=%.1f base=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount, iLineCount > 0 ? JpSharedMeasure( szLines[0] ) : -1.0f, ( iTall - ( iLineCount * ( iPx + 6 ) - 6 ) ) / 2 + JpSharedAscentPx() );
-			s_iObjLog++;
-		}
-		if ( !bInitOk )
-			return;
-
-		// BUILD35: the working JP renderers in this codebase (objective
-		// banner, note document) draw in ABSOLUTE surface coordinates, not
-		// panel-local ones. Compute this label's surface origin: sum of the
-		// parent chain minus the top ancestor (the game panel carries the
-		// window's screen offset). Glyphs are drawn at origin + local.
-		int iOrgX = 0, iOrgY = 0;
-		{
-			int ax = 0, ay = 0, tx = 0, ty = 0;
-			for ( Panel *pp = this; pp; pp = pp->getParent() )
-			{
-				int px, py;
-				pp->getPos( px, py );
-				ax += px; ay += py;
-				if ( !pp->getParent() )
-				{
-					tx = px; ty = py;
-				}
-			}
-			iOrgX = ax - tx;
-			iOrgY = ay - ty;
-			static int s_iOrgLog = 0;
-			if ( s_iOrgLog < 6 )
-			{
-				s_iOrgLog++;
-				JpLogObj( "OBJ org: ax=%d ay=%d tx=%d ty=%d co=%d,%d\n", ax, ay, tx, ty, iOrgX, iOrgY );
-			}
-			// test marks: red at the computed client origin, green at the
-			// raw chain-sum position. Whichever shows reveals the transform.
-			drawSetColor( 255, 0, 0, 255 );
-			drawFilledRect( iOrgX, iOrgY, iOrgX + 60, iOrgY + 20 );
-			drawSetColor( 0, 255, 0, 255 );
-			drawFilledRect( ax, ay, ax + 60, ay + 20 );
-		}
-		const int iLineH = iPx + 6;
-		int iTotalH = iLineCount * iLineH - 6;
-		int iBase = ( iTall - iTotalH ) / 2 + JpSharedAscentPx();
-		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
-		{
-			const char *szDraw = szLines[li];
-			float fW = JpSharedMeasure( szDraw );
-			if ( fW <= 0 )
-				continue;
-			const unsigned char *pS = (const unsigned char *)szDraw;
-			int iLen = (int)strlen( szDraw );
-			bool bFirstGlyph = true;
-			for ( int pass = 0; pass < 2; pass++ )
-			{
-				int ox = ( pass == 0 ) ? 1 : 0;
-				int oy = ( pass == 0 ) ? 1 : 0;
-				int cr = ( pass == 0 ) ? 0 : 255;
-				int cg = ( pass == 0 ) ? 0 : 255;
-				int cb = ( pass == 0 ) ? 0 : 255;
-				float penX = ( iWide - fW ) / 2.0f;
-				int pos = 0;
-				while ( pos < iLen )
-				{
-					int cp;
-					if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
-						break;
-					const JpGlyph *g = JpSharedGlyphMetrics( cp );
-					if ( !g )
-						break;
-					if ( g->texId < 0 )
-					{
-						unsigned char *rgba = NULL;
-						if ( JpSharedGlyphBitmap( cp, &rgba ) )
-						{
-							if ( rgba )
-							{
-								int texId = getSurfaceBase()->createNewTextureID();
-								if ( s_iObjLog < 6 )
-									JpLogObj( "OBJ newtex: cp=%d ret=%d wh=%dx%d\n", cp, texId, g->w, g->h );
-								if ( texId > 0 )
-								{
-									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
-									JpSharedSetGlyphTexture( g, texId );
-								}
-								else
-									JpSharedSetGlyphTexture( g, 0 );
-								free( rgba );
-							}
-							else
-								JpSharedSetGlyphTexture( g, 0 );
-						}
-						else
-							JpSharedSetGlyphTexture( g, 0 );
-					}
-					if ( pass == 1 && li == 0 && bFirstGlyph )
-					{
-						bFirstGlyph = false;
-						if ( s_iObjLog < 6 )
-							JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f dx=%d dy=%d\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv, (int)( penX + 0.5f ) + g->xoff + ox, iBase + g->yoff + oy );
-					}
-					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
-					{
-						int dx = iOrgX + (int)( penX + 0.5f ) + g->xoff + ox;
-						int dy = iOrgY + iBase + g->yoff + oy;
-						drawSetTexture( g->texId );
-						drawSetColor( cr, cg, cb, 255 );
-						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
-					}
-					penX += g->adv;
-				}
-			}
-		}
-	}
-	virtual void paintBackground()
-	{
-		const char *pszLine = NULL;
-		if ( jp_poc && jp_poc->value )
-		{
-			if ( m_szJpText[0] )
-				pszLine = m_szJpText;
-			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
-				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
-		}
-		JpLogObj( "OBJ bgpaint: line=[%s] isjp=%d\n", pszLine ? pszLine : "(null)", ( pszLine && JpTextIsUtf8Japanese( pszLine ) ) ? 1 : 0 );
-		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
-		{
-			Label::paintBackground();
-			return;
-		}
-		int iWide, iTall;
-		getSize( iWide, iTall );
-		if ( iWide <= 0 || iTall <= 0 )
-			return;
-		// split into lines on '@' / '\n'
-		char szAll[256];
-		strncpy( szAll, pszLine, 255 );
-		szAll[255] = '\0';
-		char *szLines[4];
-		int iLineCount = 0;
-		char *pCur = szAll;
-		while ( iLineCount < 4 && pCur )
-		{
-			szLines[iLineCount++] = pCur;
-			char *pSep = pCur;
-			while ( *pSep && *pSep != '@' && *pSep != '\n' )
-				pSep++;
-			if ( !*pSep )
-				break;
-			*pSep = '\0';
-			pCur = pSep + 1;
-		}
-		if ( iLineCount == 0 )
-			return;
-		const int iPx = 16;
-		bool bInitOk = JpSharedInitFont( iPx ) ? true : false;
-		static int s_iObjLog = 0;
-		if ( s_iObjLog < 6 )
-		{
-			JpLogObj( "OBJ draw: wide=%d tall=%d init=%d lines=%d fw0=%.1f base=%d\n", iWide, iTall, bInitOk ? 1 : 0, iLineCount, iLineCount > 0 ? JpSharedMeasure( szLines[0] ) : -1.0f, ( iTall - ( iLineCount * ( iPx + 6 ) - 6 ) ) / 2 + JpSharedAscentPx() );
-			s_iObjLog++;
-		}
-		if ( !bInitOk )
-			return;
-
-		// BUILD36: draw in paintBackground with LOCAL coordinates, the
-		// same way ImagePanel/CRcImagePanel render in this panel tree.
-		int iOrgX = 0, iOrgY = 0;
-		{
-			drawSetColor( 255, 0, 255, 255 );
-			drawFilledRect( 0, 0, 60, 20 );
-		}
-		const int iLineH = iPx + 6;
-		int iTotalH = iLineCount * iLineH - 6;
-		int iBase = ( iTall - iTotalH ) / 2 + JpSharedAscentPx();
-		for ( int li = 0; li < iLineCount; li++, iBase += iLineH )
-		{
-			const char *szDraw = szLines[li];
-			float fW = JpSharedMeasure( szDraw );
-			if ( fW <= 0 )
-				continue;
-			const unsigned char *pS = (const unsigned char *)szDraw;
-			int iLen = (int)strlen( szDraw );
-			bool bFirstGlyph = true;
-			for ( int pass = 0; pass < 2; pass++ )
-			{
-				int ox = ( pass == 0 ) ? 1 : 0;
-				int oy = ( pass == 0 ) ? 1 : 0;
-				int cr = ( pass == 0 ) ? 0 : 255;
-				int cg = ( pass == 0 ) ? 0 : 255;
-				int cb = ( pass == 0 ) ? 0 : 255;
-				float penX = ( iWide - fW ) / 2.0f;
-				int pos = 0;
-				while ( pos < iLen )
-				{
-					int cp;
-					if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
-						break;
-					const JpGlyph *g = JpSharedGlyphMetrics( cp );
-					if ( !g )
-						break;
-					if ( g->texId < 0 )
-					{
-						unsigned char *rgba = NULL;
-						if ( JpSharedGlyphBitmap( cp, &rgba ) )
-						{
-							if ( rgba )
-							{
-								int texId = getSurfaceBase()->createNewTextureID();
-								if ( s_iObjLog < 6 )
-									JpLogObj( "OBJ newtex: cp=%d ret=%d wh=%dx%d\n", cp, texId, g->w, g->h );
-								if ( texId > 0 )
-								{
-									drawSetTextureRGBA( texId, (const char *)rgba, g->w, g->h );
-									JpSharedSetGlyphTexture( g, texId );
-								}
-								else
-									JpSharedSetGlyphTexture( g, 0 );
-								free( rgba );
-							}
-							else
-								JpSharedSetGlyphTexture( g, 0 );
-						}
-						else
-							JpSharedSetGlyphTexture( g, 0 );
-					}
-					if ( pass == 1 && li == 0 && bFirstGlyph )
-					{
-						bFirstGlyph = false;
-						if ( s_iObjLog < 6 )
-							JpLogObj( "OBJ glyph0: tex=%d w=%d h=%d xoff=%d yoff=%d adv=%.1f dx=%d dy=%d\n", g->texId, g->w, g->h, g->xoff, g->yoff, g->adv, (int)( penX + 0.5f ) + g->xoff + ox, iBase + g->yoff + oy );
-					}
-					if ( g->texId > 0 && g->w > 0 && g->h > 0 )
-					{
-						int dx = iOrgX + (int)( penX + 0.5f ) + g->xoff + ox;
-						int dy = iOrgY + iBase + g->yoff + oy;
-						drawSetTexture( g->texId );
-						drawSetColor( cr, cg, cb, 255 );
-						drawTexturedRect( dx, dy, dx + g->w, dy + g->h );
-					}
-					penX += g->adv;
-				}
-			}
-		}
+		if ( m_pBmp )
+			m_pBmp->doPaint( this );
 	}
 };
 
