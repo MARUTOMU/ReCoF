@@ -97,6 +97,24 @@ public:
 			Label::paint();
 			return;
 		}
+		// BUILD37 PROBE: does Image::doPaint (the mechanism the stock
+		// Label::paint uses for CImageLabel icons, which DO render in this
+		// panel tree) reach the screen from this label? Loads a full note
+		// page image; if it appears over the inventory, the doPaint route
+		// is the working one and the objective text will be composited
+		// into an Image instead of drawn with raw surface calls.
+		{
+			static Image *s_pTestImg = NULL;
+			static bool s_bTried = false;
+			if ( !s_bTried )
+			{
+				s_bTried = true;
+				s_pTestImg = vgui_LoadTGA( "gfx/vgui/640_apnote1.tga" );
+				JpLogObj( "OBJ dopaint: img=%p\n", (void *)s_pTestImg );
+			}
+			if ( s_pTestImg )
+				s_pTestImg->doPaint( this );
+		}
 		int iWide, iTall;
 		getSize( iWide, iTall );
 		if ( iWide <= 0 || iTall <= 0 )
