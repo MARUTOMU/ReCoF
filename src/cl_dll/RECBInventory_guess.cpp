@@ -252,47 +252,67 @@ public:
 
 	virtual void paint()
 	{
-		const char *pszLine = NULL;
-		if ( jp_poc && jp_poc->value )
+		// BUILD42: variable isolation. Three images, all doPaint at
+		// (0,0), drawn in order: memory 640x480 opaque red, file
+		// 303x99 check picture (known-good in item slots), memory
+		// 301x97 opaque green. The final look of the box tells which
+		// combinations render at all.
+		static vgui::BitmapTGA *s_pMemBig = NULL;
+		static vgui::BitmapTGA *s_pFileSmall = NULL;
+		static vgui::BitmapTGA *s_pMemBox = NULL;
+		static bool s_bTried = false;
+		if ( !s_bTried )
 		{
-			if ( m_szJpText[0] )
-				pszLine = m_szJpText;
-			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
-				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
-		}
-		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
-		{
-			Label::paint();
-			return;
-		}
-		if ( ( !m_pImgA && !m_pImgB ) || strcmp( m_szRendered, pszLine ) != 0 )
-		{
-			if ( !BuildImages( pszLine ) )
-				return;
-		}
-		// BUILD41 CONTROL: the exact build37 probe (file TGA) drawn
-		// first, then strip A over it at y=60. If the note image shows
-		// but strip A does not, the memory-TGA object/content is the
-		// problem; if neither shows, this paint() is not the one on
-		// screen.
-		{
-			static Image *s_pProbe = NULL;
-			static bool s_bTried = false;
-			if ( !s_bTried )
+			s_bTried = true;
 			{
-				s_bTried = true;
-				s_pProbe = vgui_LoadTGA( "gfx/vgui/640_apnote1.tga" );
-				JpLogObj( "OBJ probe: img=%p\n", (void *)s_pProbe );
+				unsigned char *buf = (unsigned char *)malloc( (size_t)640 * 480 * 4 );
+				for ( int i = 0; i < 640 * 480; i++ )
+				{
+					buf[i * 4 + 0] = 255;
+					buf[i * 4 + 1] = 0;
+					buf[i * 4 + 2] = 0;
+					buf[i * 4 + 3] = 255;
+				}
+				int len = 0;
+				unsigned char *tga = JpMakeTGA( buf, 640, 480, true, len );
+				free( buf );
+				s_pMemBig = tga ? vgui_LoadTGAFromMemory( tga, len ) : NULL;
+				free( tga );
 			}
-			if ( s_pProbe )
-				s_pProbe->doPaint( this );
+			s_pFileSmall = vgui_LoadTGA( "gfx/vgui/ammo/glock_check.tga" );
+			{
+				unsigned char *buf = (unsigned char *)malloc( (size_t)301 * 97 * 4 );
+				for ( int i = 0; i < 301 * 97; i++ )
+				{
+					buf[i * 4 + 0] = 0;
+					buf[i * 4 + 1] = 255;
+					buf[i * 4 + 2] = 0;
+					buf[i * 4 + 3] = 255;
+				}
+				int len = 0;
+				unsigned char *tga = JpMakeTGA( buf, 301, 97, true, len );
+				free( buf );
+				s_pMemBox = tga ? vgui_LoadTGAFromMemory( tga, len ) : NULL;
+				free( tga );
+			}
+			int w1 = -1, h1 = -1, w2 = -1, h2 = -1, w3 = -1, h3 = -1;
+			if ( s_pMemBig )
+				s_pMemBig->getSize( w1, h1 );
+			if ( s_pFileSmall )
+				s_pFileSmall->getSize( w2, h2 );
+			if ( s_pMemBox )
+				s_pMemBox->getSize( w3, h3 );
+			JpLogObj( "OBJ 42: membig=%p %dx%d file=%p %dx%d membox=%p %dx%d\n",
+				(void *)s_pMemBig, w1, h1, (void *)s_pFileSmall, w2, h2, (void *)s_pMemBox, w3, h3 );
 		}
-		if ( m_pImgA )
-		{
-			m_pImgA->setPos( 0, 60 );
-			m_pImgA->doPaint( this );
-		}
+		if ( s_pMemBig )
+			s_pMemBig->doPaint( this );
+		if ( s_pFileSmall )
+			s_pFileSmall->doPaint( this );
+		if ( s_pMemBox )
+			s_pMemBox->doPaint( this );
 	}
+
 };
 
 CRECBInventory::CRECBInventory( int iTrans, int iRemoveMe, int x, int y, int wide, int tall ) : CMenuPanel( iTrans, iRemoveMe, x, y, wide, tall )
