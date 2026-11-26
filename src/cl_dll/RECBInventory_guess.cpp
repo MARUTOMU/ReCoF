@@ -46,69 +46,23 @@ static void JpLogObj( const char *fmt, ... )
 	fclose( f );
 }
 
-// BUILD40: the stock Bitmap filled via setSize/_rgba never showed
-// (builds 38/39), while a BitmapTGA from vgui_LoadTGA did (build37
-// probe). So build the text image through the exact TGA path, from
-// memory (vgui_LoadTGAFromMemory). This build draws the same line
-// twice to settle the alpha convention: strip A stores alpha inverted
-// (255-coverage, the Valve file convention the loader then inverts),
-// strip B stores alpha straight.
-static unsigned char *JpMakeTGA( const unsigned char *rgbaTopDown, int w, int h, bool invertAlpha, int &outLen )
-{
-	outLen = 18 + w * h * 4;
-	unsigned char *tga = (unsigned char *)malloc( outLen );
-	if ( !tga )
-		return NULL;
-	memset( tga, 0, 18 );
-	tga[2] = 2;
-	tga[12] = (unsigned char)( w & 0xff );
-	tga[13] = (unsigned char)( ( w >> 8 ) & 0xff );
-	tga[14] = (unsigned char)( h & 0xff );
-	tga[15] = (unsigned char)( ( h >> 8 ) & 0xff );
-	tga[16] = 32;
-	tga[17] = 8;
-	unsigned char *px = tga + 18;
-	for ( int y = 0; y < h; y++ )
-	{
-		const unsigned char *srow = rgbaTopDown + (size_t)( h - 1 - y ) * w * 4;
-		for ( int x = 0; x < w; x++ )
-		{
-			unsigned char r = srow[x * 4 + 0];
-			unsigned char g = srow[x * 4 + 1];
-			unsigned char b = srow[x * 4 + 2];
-			unsigned char a = srow[x * 4 + 3];
-			if ( invertAlpha )
-				a = (unsigned char)( 255 - a );
-			unsigned char *d = px + ( (size_t)y * w + x ) * 4;
-			d[0] = b;
-			d[1] = g;
-			d[2] = r;
-			d[3] = a;
-		}
-	}
-	return tga;
-}
-
 class JpObjectiveLabel : public Label
 {
 	char m_szJpText[256];
 	char m_szRendered[256];
-	vgui::BitmapTGA *m_pImgA;
-	vgui::BitmapTGA *m_pImgB;
+	vgui::BitmapTGA *m_pImg;
 public:
 	JpObjectiveLabel( const char *text, int x, int y, int wide, int tall )
 		: Label( text, x, y, wide, tall )
 	{
 		m_szJpText[0] = '\0';
 		m_szRendered[0] = '\0';
-		m_pImgA = NULL;
-		m_pImgB = NULL;
+		m_pImg = NULL;
 	}
 
 	virtual ~JpObjectiveLabel()
 	{
-		delete m_pImgA;
-		delete m_pImgB;
+		delete m_pImg;
 	}
 
 	// JP-MOD: capture the text the game sets on this label (the objective
@@ -137,180 +91,200 @@ public:
 		Label::setText( "%s", buf );
 	}
 
-	bool BuildImages( const char *pszLine )
+	// JP-MOD (build38): raw surface draw calls from this label never reach
+	// the framebuffer in the inventory panel tree (proven by builds
+	// 33-36: correct metrics, textures and coordinates, in paint() and
+	// paintBackground(), local and absolute -- nothing appears). What
+	// does render here is Image::doPaint (build37 probe: a BitmapTGA
+	// drawn from this label's paint() appeared, clipped to the label).
+	// So the objective text is rasterized CPU-side into a Bitmap and
+	// shown through doPaint, the same mechanism as the item icons.
+	bool BuildImage( const char *pszLine )
 	{
 		int iWide, iTall;
 		getSize( iWide, iTall );
 		if ( iWide <= 0 || iTall <= 0 )
 			return false;
 
-		char szLine[256];
-		strncpy( szLine, pszLine, 255 );
-		szLine[255] = '\0';
-		for ( char *p = szLine; *p; p++ )
+		// split into lines on '@' / '\n' (max 4)
+		char szAll[256];
+		strncpy( szAll, pszLine, 255 );
+		szAll[255] = '\0';
+		const char *lines[4];
+		int starts[4];
+		int nLines = 0;
 		{
-			if ( *p == '@' || *p == '\n' )
+			int len = (int)strlen( szAll );
+			int start = 0;
+			for ( int i = 0; i <= len && nLines < 4; i++ )
 			{
-				*p = '\0';
+				if ( szAll[i] == '@' || szAll[i] == '\n' || szAll[i] == '\0' )
+				{
+					lines[nLines] = szAll + start;
+					starts[nLines] = i - start;
+					nLines++;
+					start = i + 1;
+				}
+			}
+		}
+		if ( nLines == 0 )
+			return false;
+
+		int iPx = 16;
+		if ( !JpSharedInitFont( iPx ) )
+			return false;
+		// shrink if any line is too wide for the box
+		for ( int li = 0; li < nLines; li++ )
+		{
+			char tmp[256];
+			int n = starts[li] < 255 ? starts[li] : 255;
+			memcpy( tmp, lines[li], n );
+			tmp[n] = '\0';
+			if ( JpSharedMeasure( tmp ) > (float)( iWide - 8 ) )
+			{
+				iPx = 13;
+				if ( !JpSharedInitFont( iPx ) )
+					return false;
 				break;
 			}
 		}
 
-		const int iPx = 16;
-		if ( !JpSharedInitFont( iPx ) )
-			return false;
-
-		const int iStripH = 30;
-		unsigned char *buf = (unsigned char *)calloc( (size_t)iWide * iStripH, 4 );
+		unsigned char *buf = (unsigned char *)calloc( (size_t)iWide * iTall, 4 );
 		if ( !buf )
 			return false;
 
-		float fW = JpSharedMeasure( szLine );
-		float penX = ( iWide - fW ) / 2.0f;
-		int iBase = iStripH / 2 + JpSharedAscentPx() - 8;
-		const unsigned char *pS = (const unsigned char *)szLine;
-		int iLen = (int)strlen( szLine );
-		int pos = 0;
-		while ( pos < iLen )
+		const int iLineH = 22;
+		int iTotalH = iPx + ( nLines - 1 ) * iLineH;
+		int iTop = ( iTall - iTotalH ) / 2;
+		for ( int li = 0; li < nLines; li++ )
 		{
-			int cp;
-			if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
-				break;
-			const JpGlyph *g = JpSharedGlyphMetrics( cp );
-			if ( !g )
-				break;
-			unsigned char *rgba = NULL;
-			if ( JpSharedGlyphBitmap( cp, &rgba ) && rgba && g->w > 0 && g->h > 0 )
+			char tmp[256];
+			int n = starts[li] < 255 ? starts[li] : 255;
+			memcpy( tmp, lines[li], n );
+			tmp[n] = '\0';
+			float fW = JpSharedMeasure( tmp );
+			float penX = ( iWide - fW ) / 2.0f;
+			int iBase = iTop + JpSharedAscentPx() + li * iLineH;
+			const unsigned char *pS = (const unsigned char *)tmp;
+			int iLen = (int)strlen( tmp );
+			int pos = 0;
+			while ( pos < iLen )
 			{
-				for ( int pass = 0; pass < 2; pass++ )
+				int cp;
+				if ( !JpSharedDecodeUtf8( pS, iLen, pos, cp ) )
+					break;
+				const JpGlyph *g = JpSharedGlyphMetrics( cp );
+				if ( !g )
+					break;
+				unsigned char *rgba = NULL;
+				if ( JpSharedGlyphBitmap( cp, &rgba ) && rgba && g->w > 0 && g->h > 0 )
 				{
-					int ox = ( pass == 0 ) ? 1 : 0;
-					int oy = ( pass == 0 ) ? 1 : 0;
-					int sc = ( pass == 0 ) ? 0 : 255;
-					int gx0 = (int)( penX + 0.5f ) + g->xoff + ox;
-					int gy0 = iBase + g->yoff + oy;
-					for ( int gy = 0; gy < g->h; gy++ )
+					for ( int pass = 0; pass < 2; pass++ )
 					{
-						int dy = gy0 + gy;
-						if ( dy < 0 || dy >= iStripH )
-							continue;
-						for ( int gx = 0; gx < g->w; gx++ )
+						int ox = ( pass == 0 ) ? 1 : 0;
+						int oy = ( pass == 0 ) ? 1 : 0;
+						int sc = ( pass == 0 ) ? 0 : 255;
+						int gx0 = (int)( penX + 0.5f ) + g->xoff + ox;
+						int gy0 = iBase + g->yoff + oy;
+						for ( int gy = 0; gy < g->h; gy++ )
 						{
-							int dx = gx0 + gx;
-							if ( dx < 0 || dx >= iWide )
+							int dy = gy0 + gy;
+							if ( dy < 0 || dy >= iTall )
 								continue;
-							int sa = rgba[( gy * g->w + gx ) * 4 + 3];
-							if ( !sa )
-								continue;
-							unsigned char *d = buf + ( (size_t)dy * iWide + dx ) * 4;
-							float fa = sa / 255.0f;
-							float da = d[3] / 255.0f;
-							float oa = fa + da * ( 1.0f - fa );
-							if ( oa <= 0.0f )
-								continue;
-							d[0] = (unsigned char)( ( sc * fa + d[0] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-							d[1] = (unsigned char)( ( sc * fa + d[1] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-							d[2] = (unsigned char)( ( sc * fa + d[2] * da * ( 1.0f - fa ) ) / oa + 0.5f );
-							d[3] = (unsigned char)( oa * 255.0f + 0.5f );
+							for ( int gx = 0; gx < g->w; gx++ )
+							{
+								int dx = gx0 + gx;
+								if ( dx < 0 || dx >= iWide )
+									continue;
+								int sa = rgba[( gy * g->w + gx ) * 4 + 3];
+								if ( !sa )
+									continue;
+								unsigned char *d = buf + ( (size_t)dy * iWide + dx ) * 4;
+								float fa = sa / 255.0f;
+								float da = d[3] / 255.0f;
+								float oa = fa + da * ( 1.0f - fa );
+								if ( oa <= 0.0f )
+									continue;
+								d[0] = (unsigned char)( ( sc * fa + d[0] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[1] = (unsigned char)( ( sc * fa + d[1] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[2] = (unsigned char)( ( sc * fa + d[2] * da * ( 1.0f - fa ) ) / oa + 0.5f );
+								d[3] = (unsigned char)( oa * 255.0f + 0.5f );
+							}
 						}
 					}
+					free( rgba );
 				}
-				free( rgba );
+				penX += g->adv;
 			}
-			penX += g->adv;
 		}
 
-		int lenA = 0, lenB = 0;
-		unsigned char *tgaA = JpMakeTGA( buf, iWide, iStripH, true, lenA );
-		unsigned char *tgaB = JpMakeTGA( buf, iWide, iStripH, false, lenB );
-		free( buf );
-		vgui::BitmapTGA *pA = tgaA ? vgui_LoadTGAFromMemory( tgaA, lenA ) : NULL;
-		vgui::BitmapTGA *pB = tgaB ? vgui_LoadTGAFromMemory( tgaB, lenB ) : NULL;
-		free( tgaA );
-		free( tgaB );
-		if ( !pA && !pB )
+		// BUILD43: package the pixels as an in-memory TGA and create the
+		// image exactly like rc_coopmenu.cpp's RcCoopLabel (the working
+		// from-memory BitmapTGA in this codebase): alpha stored straight
+		// (coverage), and setColor(255,255,255,0) afterwards.
+		int iTgaLen = 18 + iWide * iTall * 4;
+		unsigned char *tga = (unsigned char *)malloc( iTgaLen );
+		if ( !tga )
+		{
+			free( buf );
 			return false;
-		if ( pA )
-		{
-			pA->setPos( 0, 4 );
-			pA->setColor( Color( 255, 255, 255, 255 ) );
 		}
-		if ( pB )
+		memset( tga, 0, 18 );
+		tga[2] = 2;
+		tga[12] = (unsigned char)( iWide & 0xff );
+		tga[13] = (unsigned char)( ( iWide >> 8 ) & 0xff );
+		tga[14] = (unsigned char)( iTall & 0xff );
+		tga[15] = (unsigned char)( ( iTall >> 8 ) & 0xff );
+		tga[16] = 32;
+		tga[17] = 8;
+		unsigned char *px = tga + 18;
+		for ( int y = 0; y < iTall; y++ )
 		{
-			pB->setPos( 0, 52 );
-			pB->setColor( Color( 255, 255, 255, 255 ) );
+			const unsigned char *srow = buf + (size_t)( iTall - 1 - y ) * iWide * 4;
+			for ( int x = 0; x < iWide; x++ )
+			{
+				unsigned char *d = px + ( (size_t)y * iWide + x ) * 4;
+				d[0] = srow[x * 4 + 2];
+				d[1] = srow[x * 4 + 1];
+				d[2] = srow[x * 4 + 0];
+				d[3] = srow[x * 4 + 3];
+			}
 		}
-		delete m_pImgA;
-		delete m_pImgB;
-		m_pImgA = pA;
-		m_pImgB = pB;
+		free( buf );
+		vgui::BitmapTGA *pImg = vgui_LoadTGAFromMemory( tga, iTgaLen );
+		free( tga );
+		if ( !pImg )
+			return false;
+		pImg->setColor( Color( 255, 255, 255, 0 ) );
+		delete m_pImg;
+		m_pImg = pImg;
 		strncpy( m_szRendered, pszLine, 255 );
 		m_szRendered[255] = '\0';
-		JpLogObj( "OBJ tga: A=%p B=%p [%s]\n", (void *)pA, (void *)pB, pszLine );
+		JpLogObj( "OBJ img: built [%s] %dx%d px=%d lines=%d\n", pszLine, iWide, iTall, iPx, nLines );
 		return true;
 	}
 
 	virtual void paint()
 	{
-		// BUILD42: variable isolation. Three images, all doPaint at
-		// (0,0), drawn in order: memory 640x480 opaque red, file
-		// 303x99 check picture (known-good in item slots), memory
-		// 301x97 opaque green. The final look of the box tells which
-		// combinations render at all.
-		static vgui::BitmapTGA *s_pMemBig = NULL;
-		static vgui::BitmapTGA *s_pFileSmall = NULL;
-		static vgui::BitmapTGA *s_pMemBox = NULL;
-		static bool s_bTried = false;
-		if ( !s_bTried )
+		const char *pszLine = NULL;
+		if ( jp_poc && jp_poc->value )
 		{
-			s_bTried = true;
-			{
-				unsigned char *buf = (unsigned char *)malloc( (size_t)640 * 480 * 4 );
-				for ( int i = 0; i < 640 * 480; i++ )
-				{
-					buf[i * 4 + 0] = 255;
-					buf[i * 4 + 1] = 0;
-					buf[i * 4 + 2] = 0;
-					buf[i * 4 + 3] = 255;
-				}
-				int len = 0;
-				unsigned char *tga = JpMakeTGA( buf, 640, 480, true, len );
-				free( buf );
-				s_pMemBig = tga ? vgui_LoadTGAFromMemory( tga, len ) : NULL;
-				free( tga );
-			}
-			s_pFileSmall = vgui_LoadTGA( "gfx/vgui/ammo/glock_check.tga" );
-			{
-				unsigned char *buf = (unsigned char *)malloc( (size_t)301 * 97 * 4 );
-				for ( int i = 0; i < 301 * 97; i++ )
-				{
-					buf[i * 4 + 0] = 0;
-					buf[i * 4 + 1] = 255;
-					buf[i * 4 + 2] = 0;
-					buf[i * 4 + 3] = 255;
-				}
-				int len = 0;
-				unsigned char *tga = JpMakeTGA( buf, 301, 97, true, len );
-				free( buf );
-				s_pMemBox = tga ? vgui_LoadTGAFromMemory( tga, len ) : NULL;
-				free( tga );
-			}
-			int w1 = -1, h1 = -1, w2 = -1, h2 = -1, w3 = -1, h3 = -1;
-			if ( s_pMemBig )
-				s_pMemBig->getSize( w1, h1 );
-			if ( s_pFileSmall )
-				s_pFileSmall->getSize( w2, h2 );
-			if ( s_pMemBox )
-				s_pMemBox->getSize( w3, h3 );
-			JpLogObj( "OBJ 42: membig=%p %dx%d file=%p %dx%d membox=%p %dx%d\n",
-				(void *)s_pMemBig, w1, h1, (void *)s_pFileSmall, w2, h2, (void *)s_pMemBox, w3, h3 );
+			if ( m_szJpText[0] )
+				pszLine = m_szJpText;
+			else if ( gViewPort && gViewPort->m_pHUDControl_guess )
+				pszLine = gViewPort->m_pHUDControl_guess->m_szHintLine1_guess;
 		}
-		if ( s_pMemBig )
-			s_pMemBig->doPaint( this );
-		if ( s_pFileSmall )
-			s_pFileSmall->doPaint( this );
-		if ( s_pMemBox )
-			s_pMemBox->doPaint( this );
+		if ( !pszLine || !JpTextIsUtf8Japanese( pszLine ) )
+		{
+			Label::paint();
+			return;
+		}
+		if ( !m_pImg || strcmp( m_szRendered, pszLine ) != 0 )
+		{
+			if ( !BuildImage( pszLine ) )
+				return;
+		}
+		m_pImg->doPaint( this );
 	}
 
 };
